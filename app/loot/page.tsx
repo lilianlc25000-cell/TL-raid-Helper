@@ -20,6 +20,13 @@ type ActiveLootSession = {
   imageUrl?: string | null;
 };
 
+type RollEntry = {
+  userId: string;
+  playerName: string;
+  rollValue: number;
+  createdAt: string;
+};
+
 type ItemCategory = "armes" | "bagues" | "bracelets" | "ceintures" | "boucles";
 
 const weaponFiles = [
@@ -101,6 +108,15 @@ export default function PlayerLootPage() {
   const [selectedTraitByItem, setSelectedTraitByItem] = useState<
     Record<string, string>
   >({});
+  const [rollsModal, setRollsModal] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const [rollsBySession, setRollsBySession] = useState<
+    Record<string, RollEntry[]>
+  >({});
+  const [rollsLoading, setRollsLoading] = useState(false);
+  const [rollsError, setRollsError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -328,6 +344,62 @@ export default function PlayerLootPage() {
       ),
     );
     setSelectedTraitByItem((prev) => ({ ...prev, [session.id]: "" }));
+  };
+
+  const loadRolls = async (session: ActiveLootSession, title: string) => {
+    if (!userId) {
+      return;
+    }
+    setRollsError(null);
+    setRollsModal({ id: session.id, title });
+    if (rollsBySession[session.id]) {
+      return;
+    }
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      setRollsError("Supabase n'est pas configuré (URL / ANON KEY).");
+      return;
+    }
+    setRollsLoading(true);
+    const { data, error: fetchError } = (await supabase
+      .from("loot_rolls")
+      .select("user_id,roll_value,created_at")
+      .eq("loot_session_id", session.id)) as {
+      data:
+        | Array<{
+            user_id: string;
+            roll_value: number;
+            created_at: string;
+          }>
+        | null;
+      error: { message?: string } | null;
+    };
+    if (fetchError) {
+      setRollsError(fetchError.message || "Impossible de charger les rolls.");
+      setRollsLoading(false);
+      return;
+    }
+    const rows = data ?? [];
+    const userIds = rows.map((row) => row.user_id).filter(Boolean);
+    const { data: profilesData } = userIds.length
+      ? await supabase
+          .from("profiles")
+          .select("user_id,ingame_name")
+          .in("user_id", userIds)
+      : { data: [] };
+    const nameMap = new Map(
+      (profilesData ?? []).map((profile) => [profile.user_id, profile.ingame_name]),
+    );
+    const rolls = rows
+      .map((row) => ({
+        userId: row.user_id,
+        playerName: nameMap.get(row.user_id) ?? "Membre",
+        rollValue: row.roll_value,
+        createdAt: row.created_at,
+      }))
+      .sort((a, b) => b.rollValue - a.rollValue);
+    setRollsBySession((prev) => ({ ...prev, [session.id]: rolls }));
+    setRollsLoading(false);
   };
 
   const guildSessions = sessions.filter(
@@ -607,6 +679,13 @@ export default function PlayerLootPage() {
                         Non éligible (Pas dans votre Wishlist)
                       </div>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => loadRolls(session, title)}
+                      className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-text/70 transition hover:border-amber-400/40 hover:text-amber-100 sm:w-auto"
+                    >
+                      Voir les rolls
+                    </button>
                   </div>
                 </div>
               </div>
@@ -623,6 +702,68 @@ export default function PlayerLootPage() {
         onClose={() => setSelectedItem(null)}
         onSubmitRoll={handleSubmitRoll}
       />
+
+      {rollsModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-surface/90 p-6 text-zinc-100 shadow-[0_0_40px_rgba(0,0,0,0.6)] backdrop-blur">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+                  Rolls
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-text">
+                  {rollsModal.title}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setRollsModal(null);
+                  setRollsError(null);
+                }}
+                className="rounded-md border border-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-text/70 transition hover:text-text"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {rollsError ? (
+                <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                  {rollsError}
+                </div>
+              ) : rollsLoading ? (
+                <div className="rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/60">
+                  Chargement des rolls...
+                </div>
+              ) : (rollsBySession[rollsModal.id] ?? []).length === 0 ? (
+                <div className="rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/60">
+                  Aucun roll pour le moment.
+                </div>
+              ) : (
+                (rollsBySession[rollsModal.id] ?? []).map((roll, index) => (
+                  <div
+                    key={`${roll.userId}-${roll.createdAt}`}
+                    className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/80"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-text/40">
+                        #{index + 1}
+                      </span>
+                      <span className="font-medium text-text">
+                        {roll.playerName}
+                      </span>
+                    </div>
+                    <span className="rounded-full border border-amber-400/50 bg-amber-400/10 px-3 py-1 font-mono text-sm text-amber-200">
+                      {roll.rollValue}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isPickerOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">

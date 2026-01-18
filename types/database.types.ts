@@ -297,6 +297,26 @@ export type Database = {
           created_at?: string;
         };
       };
+      guild_messages: {
+        Row: {
+          id: string;
+          sender_id: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          sender_id: string;
+          body: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          sender_id?: string;
+          body?: string;
+          created_at?: string;
+        };
+      };
       notifications: {
         Row: {
           id: string;

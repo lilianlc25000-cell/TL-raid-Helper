@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { MoreVertical, Shield, ShieldCheck } from "lucide-react";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
@@ -195,6 +196,14 @@ export default function GuildPage() {
           <p className="mt-2 text-sm text-text/70">
             Vue en lecture seule, sans droits de gestion.
           </p>
+          <div className="mt-4">
+            <Link
+              href="/guild/messages"
+              className="inline-flex items-center rounded-full border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+            >
+              Messagerie générale de guilde
+            </Link>
+          </div>
         </header>
 
         {sortedMembers.length === 0 ? (
