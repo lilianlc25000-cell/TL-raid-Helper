@@ -169,7 +169,7 @@ export default function NotificationCenter() {
       </button>
 
       {isOpen ? (
-        <div className="absolute right-0 mt-3 w-80 rounded-2xl border border-white/10 bg-surface/95 p-4 shadow-[0_0_25px_rgba(0,0,0,0.45)] backdrop-blur">
+        <div className="absolute right-0 mt-3 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-surface/95 p-4 shadow-[0_0_25px_rgba(0,0,0,0.45)] backdrop-blur">
           <div className="flex items-center justify-between">
             <span className="text-xs uppercase tracking-[0.3em] text-text/60">
               Notifications
@@ -225,7 +225,7 @@ export default function NotificationCenter() {
       ) : null}
 
       {toast ? (
-        <div className="fixed top-6 left-1/2 z-[60] w-full max-w-md -translate-x-1/2 rounded-2xl border border-emerald-400/60 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-200 shadow-[0_0_25px_rgba(16,185,129,0.4)]">
+        <div className="fixed left-1/2 top-6 z-[60] w-full max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border border-emerald-400/60 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-200 shadow-[0_0_25px_rgba(16,185,129,0.4)] sm:max-w-md">
           💰 {toast}
         </div>
       ) : null}

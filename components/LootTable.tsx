@@ -56,7 +56,7 @@ export default function LootTable() {
       </header>
 
       <div className="mt-4 overflow-hidden rounded-xl border border-white/10">
-        <div className="grid grid-cols-12 gap-3 bg-black/40 px-4 py-2 text-[11px] uppercase tracking-[0.25em] text-text/50">
+        <div className="hidden grid-cols-12 gap-3 bg-black/40 px-4 py-2 text-[11px] uppercase tracking-[0.25em] text-text/50 sm:grid">
           <span className="col-span-4">Joueur</span>
           <span className="col-span-2 text-center">Cohésion</span>
           <span className="col-span-4">Item</span>
@@ -68,27 +68,48 @@ export default function LootTable() {
             return (
               <div
                 key={`${entry.joueur}-${entry.item_voulu}`}
-                className="grid grid-cols-12 gap-3 px-4 py-3 text-sm text-text/80"
+                className="flex flex-col gap-2 px-4 py-3 text-sm text-text/80 sm:grid sm:grid-cols-12 sm:gap-3"
               >
-                <div className="col-span-4 flex flex-wrap items-center gap-2">
-                  <span className={isEligible ? "text-emerald-300" : "text-red-400"}>
+                <div className="flex items-center justify-between sm:col-span-4 sm:justify-start sm:gap-2">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-text/50 sm:hidden">
+                    Joueur
+                  </span>
+                  <span
+                    className={[
+                      "font-medium",
+                      isEligible ? "text-emerald-300" : "text-red-400",
+                    ].join(" ")}
+                  >
                     {entry.joueur}
                   </span>
                   {!isEligible && (
-                    <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-red-300">
+                    <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-red-300 sm:ml-2">
                       Non Éligible
                     </span>
                   )}
                 </div>
-                <span className="col-span-2 text-center font-mono text-text/90">
-                  {entry.points_cohesion}
-                </span>
-                <span className="col-span-4 text-text/90">
-                  {entry.item_voulu}
-                </span>
-                <span className="col-span-2 text-right font-semibold text-gold">
-                  P{entry.priority}
-                </span>
+                <div className="flex items-center justify-between sm:col-span-2 sm:justify-center">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-text/50 sm:hidden">
+                    Cohésion
+                  </span>
+                  <span className="font-mono text-text/90">
+                    {entry.points_cohesion}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between sm:col-span-4">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-text/50 sm:hidden">
+                    Item
+                  </span>
+                  <span className="text-text/90 sm:text-left">
+                    {entry.item_voulu}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between sm:col-span-2 sm:justify-end">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-text/50 sm:hidden">
+                    Priorité
+                  </span>
+                  <span className="font-semibold text-gold">P{entry.priority}</span>
+                </div>
               </div>
             );
           })}

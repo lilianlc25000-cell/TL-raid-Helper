@@ -371,11 +371,11 @@ export default function PlayerLootPage() {
 
   return (
     <div className="min-h-screen text-zinc-100">
-      <header className="rounded-3xl border border-white/10 bg-surface/70 px-6 py-6 shadow-[0_0_35px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10">
-        <p className="text-xs uppercase tracking-[0.4em] text-text/60">
+      <header className="rounded-3xl border border-white/10 bg-surface/70 px-5 py-5 shadow-[0_0_35px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10 sm:py-6">
+        <p className="text-xs uppercase tracking-[0.25em] text-text/60 sm:tracking-[0.4em]">
           Live Loot
         </p>
-        <h1 className="mt-2 font-display text-3xl tracking-[0.15em] text-text">
+        <h1 className="mt-2 font-display text-2xl tracking-[0.12em] text-text sm:text-3xl sm:tracking-[0.15em]">
           Salle du butin
         </h1>
         <p className="mt-2 text-sm text-text/60">
@@ -397,7 +397,7 @@ export default function PlayerLootPage() {
               type="button"
               onClick={() => setActiveTab(tab.key as "guild" | "brocante")}
               className={[
-                "rounded-full border px-4 py-2 text-xs uppercase tracking-[0.25em] transition",
+                "rounded-full border px-4 py-2 text-[10px] uppercase tracking-[0.2em] transition sm:text-xs sm:tracking-[0.25em]",
                 activeTab === tab.key
                   ? "border-amber-400/60 bg-amber-400/10 text-amber-200"
                   : "border-white/10 bg-surface/60 text-text/50 hover:border-amber-400/40 hover:text-amber-100",
@@ -409,9 +409,9 @@ export default function PlayerLootPage() {
         </div>
         {isAdminMode ? (
           <div className="rounded-3xl border border-amber-400/20 bg-gradient-to-br from-amber-400/10 via-zinc-950 to-black/80 px-6 py-6 shadow-[0_0_35px_rgba(251,191,36,0.18)] backdrop-blur">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-amber-200/70">
+                <p className="text-xs uppercase tracking-[0.25em] text-amber-200/70 sm:tracking-[0.3em]">
                   Mode Admin
                 </p>
                 <h2 className="mt-2 text-lg font-semibold text-zinc-100">
@@ -421,7 +421,7 @@ export default function PlayerLootPage() {
               <button
                 type="button"
                 onClick={() => setIsPickerOpen(true)}
-                className="rounded-full border border-amber-400/60 bg-amber-400/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+                className="w-full rounded-full border border-amber-400/60 bg-amber-400/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 sm:w-auto"
               >
                 Ajouter un loot
               </button>
@@ -437,9 +437,9 @@ export default function PlayerLootPage() {
                   {sessions.map((session) => (
                     <div
                       key={session.id}
-                      className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-zinc-200"
+                      className="flex min-w-0 items-center justify-between gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-zinc-200"
                     >
-                      <span>{session.itemName}</span>
+                      <span className="min-w-0 truncate">{session.itemName}</span>
                       <span className="text-xs uppercase tracking-[0.2em] text-amber-200/70">
                         Actif
                       </span>
@@ -484,7 +484,7 @@ export default function PlayerLootPage() {
               <div
                 key={session.id}
                 className={[
-                  "group rounded-3xl border bg-gradient-to-br px-6 py-6 backdrop-blur transition hover:scale-[1.01]",
+                  "group rounded-3xl border bg-gradient-to-br px-5 py-6 backdrop-blur transition hover:scale-[1.01] sm:px-6",
                   isBrocante
                     ? [
                         rarityConfig?.border,
@@ -495,7 +495,7 @@ export default function PlayerLootPage() {
                     : "border-white/10 from-zinc-900/70 via-zinc-950 to-black/80 shadow-[0_0_35px_rgba(124,58,237,0.15)]",
                 ].join(" ")}
               >
-                <div className="flex flex-wrap items-center gap-6">
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
                   <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/10 bg-black/40 shadow-[0_0_25px_rgba(251,191,36,0.15)]">
                     <Image
                       src={
@@ -516,13 +516,13 @@ export default function PlayerLootPage() {
                       }
                     />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-xs uppercase tracking-[0.3em] text-text/50">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs uppercase tracking-[0.25em] text-text/50 sm:tracking-[0.3em]">
                       {isBrocante ? "La Brocante" : "Loot publié"}
                     </p>
                     <h2
                       className={[
-                        "mt-2 text-2xl font-semibold",
+                        "mt-2 break-words text-2xl font-semibold",
                         isBrocante
                           ? `font-serif ${rarityConfig?.title}`
                           : "text-text",
@@ -558,7 +558,7 @@ export default function PlayerLootPage() {
                                     [session.id]: event.target.value,
                                   }))
                                 }
-                                className="rounded-full border border-white/10 bg-black/50 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-zinc-200"
+                                className="w-full rounded-full border border-white/10 bg-black/50 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-zinc-200 sm:w-auto"
                               >
                                 <option value="">Choisir un trait</option>
                                 {allTraits.map((trait) => (
@@ -571,7 +571,7 @@ export default function PlayerLootPage() {
                                 type="button"
                                 onClick={() => handleAddTrait(session)}
                                 disabled={!selectedTrait}
-                                className="rounded-full border border-amber-400/60 bg-amber-400/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="w-full rounded-full border border-amber-400/60 bg-amber-400/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                               >
                                 Ajouter
                               </button>
@@ -581,9 +581,9 @@ export default function PlayerLootPage() {
                       </div>
                     ) : null}
                   </div>
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:items-end">
                     {typeof rollResult === "number" ? (
-                      <div className="rounded-2xl border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">
+                      <div className="w-full rounded-2xl border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200 sm:w-auto">
                         Votre résultat :{" "}
                         <span className="font-mono text-lg">
                           {rollResult}
@@ -598,12 +598,12 @@ export default function PlayerLootPage() {
                         onClick={() =>
                           setSelectedItem({ id: session.id, name: session.itemName })
                         }
-                        className="rounded-2xl border border-amber-400/60 bg-amber-400/10 px-6 py-3 text-xs uppercase tracking-[0.3em] text-amber-200 shadow-[0_0_25px_rgba(251,191,36,0.35)] transition hover:border-amber-300 hover:text-amber-100"
+                        className="w-full rounded-2xl border border-amber-400/60 bg-amber-400/10 px-6 py-3 text-xs uppercase tracking-[0.2em] text-amber-200 shadow-[0_0_25px_rgba(251,191,36,0.35)] transition hover:border-amber-300 hover:text-amber-100 sm:w-auto sm:tracking-[0.3em]"
                       >
                         ROLL
                       </button>
                     ) : (
-                      <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.2em] text-text/50">
+                      <div className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.2em] text-text/50 sm:w-auto">
                         Non éligible (Pas dans votre Wishlist)
                       </div>
                     )}
@@ -626,10 +626,10 @@ export default function PlayerLootPage() {
 
       {isPickerOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-3xl rounded-2xl border border-white/10 bg-surface/90 p-6 text-zinc-100 shadow-[0_0_40px_rgba(0,0,0,0.6)] backdrop-blur">
-            <div className="flex items-start justify-between">
+          <div className="w-full max-w-3xl rounded-2xl border border-white/10 bg-surface/90 p-5 text-zinc-100 shadow-[0_0_40px_rgba(0,0,0,0.6)] backdrop-blur sm:p-6">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-text/50">
+                <p className="text-xs uppercase tracking-[0.25em] text-text/50 sm:tracking-[0.3em]">
                   Ajout de loot
                 </p>
                 <h2 className="mt-2 text-xl font-semibold text-text">
@@ -653,7 +653,7 @@ export default function PlayerLootPage() {
             </div>
 
             {!selectedCategory ? (
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 {(Object.keys(categoryConfig) as ItemCategory[]).map((key) => (
                   <button
                     key={key}
@@ -661,7 +661,7 @@ export default function PlayerLootPage() {
                     onClick={() => setSelectedCategory(key)}
                     className="rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-left text-sm text-zinc-200 transition hover:border-amber-400/60 hover:text-amber-100"
                   >
-                    <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                      <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">
                       Catégorie
                     </div>
                     <div className="mt-2 text-lg font-semibold text-zinc-100">

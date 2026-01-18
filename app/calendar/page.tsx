@@ -254,11 +254,11 @@ export default function CalendarPage() {
 
   return (
     <div className="min-h-screen text-zinc-100">
-      <header className="rounded-3xl border border-white/10 bg-surface/70 px-6 py-6 shadow-[0_0_35px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10">
-        <p className="text-xs uppercase tracking-[0.4em] text-text/60">
+      <header className="rounded-3xl border border-white/10 bg-surface/70 px-5 py-5 shadow-[0_0_35px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10 sm:py-6">
+        <p className="text-xs uppercase tracking-[0.25em] text-text/60 sm:tracking-[0.4em]">
           Calendrier
         </p>
-        <h1 className="mt-2 font-display text-3xl tracking-[0.15em] text-text">
+        <h1 className="mt-2 font-display text-2xl tracking-[0.12em] text-text sm:text-3xl sm:tracking-[0.15em]">
           Prochains événements
         </h1>
         {error ? (

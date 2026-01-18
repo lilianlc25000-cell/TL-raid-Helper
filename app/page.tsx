@@ -11,9 +11,9 @@ export default function Home() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-10">
-      <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-surface/40 px-6 py-12 text-center shadow-[0_0_60px_rgba(124,58,237,0.25)] backdrop-blur sm:px-10">
+      <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-surface/40 px-5 py-10 text-center shadow-[0_0_60px_rgba(124,58,237,0.25)] backdrop-blur sm:px-10 sm:py-12">
         <div className="absolute inset-x-10 top-1/2 -z-10 h-24 -translate-y-1/2 rounded-full bg-primary/40 blur-3xl" />
-        <p className="text-xs uppercase tracking-[0.6em] text-text/50">
+        <p className="text-xs uppercase tracking-[0.35em] text-text/50 sm:tracking-[0.6em]">
           Raid Manager
         </p>
         <h1 className="mt-4 font-display text-4xl tracking-[0.08em] text-text sm:text-6xl">

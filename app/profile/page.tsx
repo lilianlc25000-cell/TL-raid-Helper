@@ -169,7 +169,7 @@ function WeaponSelector({ label, value, onChange, highlighted }: WeaponSelectorP
             : "border-white/10 text-text/80 hover:text-text"
         }`}
       >
-        <span className="flex items-center gap-3">
+        <span className="flex min-w-0 items-center gap-3">
           {value ? (
             <Image
               src={weaponImages[value]}
@@ -183,11 +183,11 @@ function WeaponSelector({ label, value, onChange, highlighted }: WeaponSelectorP
               <Swords className="h-4 w-4" />
             </span>
           )}
-          <span className="text-sm text-text/80">
+          <span className="min-w-0 truncate text-sm text-text/80">
             {value || "Choisir une arme..."}
           </span>
         </span>
-        <span className="text-xs uppercase tracking-[0.25em] text-text/40">
+        <span className="text-[10px] uppercase tracking-[0.2em] text-text/40 sm:text-xs sm:tracking-[0.25em]">
           {label}
         </span>
       </button>
@@ -426,13 +426,13 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <header className="rounded-3xl border border-gold/50 bg-surface/70 px-6 py-6 shadow-[0_0_40px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <header className="rounded-3xl border border-gold/50 bg-surface/70 px-5 py-5 shadow-[0_0_40px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10 sm:py-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.4em] text-gold/70">
+            <p className="text-xs uppercase tracking-[0.25em] text-gold/70 sm:tracking-[0.4em]">
               Profil Agent
             </p>
-            <h1 className="mt-2 font-display text-3xl tracking-[0.15em] text-text">
+            <h1 className="mt-2 font-display text-2xl tracking-[0.12em] text-text sm:text-3xl sm:tracking-[0.15em]">
               Identité de Combat
             </h1>
             {profileError ? (
@@ -440,8 +440,8 @@ export default function ProfilePage() {
             ) : null}
             {isSavingProfile ? null : null}
           </div>
-          <div className="text-right">
-            <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+          <div className="text-left sm:text-right">
+            <p className="text-xs uppercase tracking-[0.2em] text-text/50 sm:tracking-[0.25em]">
               Rang de Guilde
             </p>
             <p className="mt-2 text-lg font-semibold text-text">Soldat</p>
@@ -507,16 +507,16 @@ export default function ProfilePage() {
 
         <div className="space-y-6">
           <div className="relative z-0 rounded-3xl border border-white/10 bg-surface/70 p-6 text-center shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
-            <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+            <p className="text-xs uppercase tracking-[0.2em] text-text/50 sm:tracking-[0.25em]">
               Nom de Classe
             </p>
             <p
               key={className}
-              className="mt-4 animate-fade-in font-cinzel text-4xl tracking-[0.15em] text-transparent bg-clip-text bg-gradient-to-r from-gold via-orange-300 to-primary"
+              className="mt-4 animate-fade-in break-words font-cinzel text-3xl tracking-[0.12em] text-transparent bg-clip-text bg-gradient-to-r from-gold via-orange-300 to-primary sm:text-4xl sm:tracking-[0.15em]"
             >
               {className}
             </p>
-            <p className="mt-3 text-xs uppercase tracking-[0.3em] text-text/40">
+            <p className="mt-3 text-xs uppercase tracking-[0.2em] text-text/40 sm:tracking-[0.3em]">
               Déterminé par vos armes
             </p>
           </div>

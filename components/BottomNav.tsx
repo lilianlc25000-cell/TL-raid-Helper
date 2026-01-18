@@ -65,17 +65,19 @@ export default function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-40">
       <div className="mx-auto w-full max-w-2xl px-3 pb-3 sm:px-4 sm:pb-4">
         <div className="rounded-2xl border border-white/10 bg-surface/90 px-2 py-2 backdrop-blur-xl sm:px-4">
-          <ul className="grid grid-cols-4 gap-1 sm:flex sm:items-center sm:justify-between">
+          <ul className="grid grid-cols-3 gap-1 sm:flex sm:items-center sm:justify-between">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <li key={tab.label}>
                   <Link
                     href={tab.href}
-                    className="flex w-full flex-col items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] text-text/80 transition hover:text-text sm:w-16 sm:py-2 sm:text-xs"
+                    className="flex w-full min-w-0 flex-col items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] text-text/80 transition hover:text-text sm:w-16 sm:py-2 sm:text-xs"
                   >
                     <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-                    <span>{tab.label}</span>
+                    <span className="w-full truncate text-center leading-tight">
+                      {tab.label}
+                    </span>
                   </Link>
                 </li>
               );
@@ -87,10 +89,12 @@ export default function BottomNav() {
                   return (
                 <Link
                   href={adminTab.href}
-                  className="flex w-full flex-col items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] text-amber-300 transition hover:text-amber-200 sm:w-16 sm:py-2 sm:text-xs"
+                  className="flex w-full min-w-0 flex-col items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] text-amber-300 transition hover:text-amber-200 sm:w-16 sm:py-2 sm:text-xs"
                 >
                   <AdminIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <span>{adminTab.label}</span>
+                  <span className="w-full truncate text-center leading-tight">
+                    {adminTab.label}
+                  </span>
                 </Link>
                   );
                 })()}

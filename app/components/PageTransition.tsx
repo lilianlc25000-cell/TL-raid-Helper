@@ -10,7 +10,10 @@ export default function PageTransition({
   const pathname = usePathname();
 
   return (
-    <main key={pathname} className="page-transition px-5 pb-24 pt-20">
+    <main
+      key={pathname}
+      className="page-transition mx-auto w-full max-w-6xl px-4 pb-28 pt-20 sm:px-6 xl:max-w-7xl"
+    >
       {children}
     </main>
   );

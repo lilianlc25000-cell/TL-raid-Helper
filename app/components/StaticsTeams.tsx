@@ -374,14 +374,14 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
         return (
           <div
             key={`team-${teamIndex}`}
-            className="group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-transparent px-6 py-6 shadow-[0_0_35px_rgba(0,0,0,0.45)] backdrop-blur"
+            className="group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-transparent px-5 py-6 shadow-[0_0_35px_rgba(0,0,0,0.45)] backdrop-blur sm:px-6"
           >
             <div className="absolute -left-16 -top-16 h-40 w-40 rounded-full bg-primary/20 blur-3xl transition group-hover:bg-primary/30" />
             <div className="absolute -bottom-10 -right-10 h-32 w-32 rounded-full bg-amber-400/10 blur-2xl" />
 
-            <div className="relative flex items-center justify-between gap-3">
+            <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-text/50">
+                <p className="text-xs uppercase tracking-[0.25em] text-text/50 sm:tracking-[0.35em]">
                   Statics {mode.toUpperCase()}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -412,7 +412,7 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
                     </>
                   ) : (
                     <>
-                      <h2 className="text-xl font-semibold text-text">
+                      <h2 className="max-w-[12rem] truncate text-xl font-semibold text-text sm:max-w-none">
                         {teamNames[teamIndex] ?? `Team ${teamIndex}`}
                       </h2>
                       <button
@@ -433,7 +433,7 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
                 <button
                   type="button"
                   onClick={handleLeaveTeam}
-                  className="rounded-full border border-red-500/50 bg-red-500/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400"
+                  className="w-full rounded-full border border-red-500/50 bg-red-500/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
                 >
                   Quitter
                 </button>
@@ -442,7 +442,7 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
                   type="button"
                   disabled={!canJoin}
                   onClick={() => handleJoinTeam(teamIndex)}
-                  className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                 >
                   Rejoindre
                 </button>
@@ -514,7 +514,7 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
                             key={`${teamIndex}-${role}-${member.userId}`}
                             className="flex items-center justify-between rounded-lg border border-white/5 bg-black/50 px-3 py-2"
                           >
-                          <span>{member.name}</span>
+                          <span className="min-w-0 truncate">{member.name}</span>
                           <div className="flex items-center gap-2">
                             {member.mainWeapon &&
                             getWeaponImage(member.mainWeapon) ? (
@@ -551,7 +551,7 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
               })}
             </div>
 
-            <div className="relative mt-5 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-text/40">
+            <div className="relative mt-5 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-text/40 sm:tracking-[0.3em]">
               <span className="rounded-full border border-white/10 bg-black/40 px-3 py-1">
                 Min: 1/1/1
               </span>

@@ -306,10 +306,10 @@ export default function WishlistPage() {
     <div className="min-h-screen bg-zinc-950 px-4 py-10 text-zinc-100 sm:px-6 sm:py-12">
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 sm:gap-8">
         <header>
-          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+          <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 sm:tracking-[0.3em]">
             Wishlist
           </p>
-          <h1 className="text-3xl font-semibold text-zinc-100">
+          <h1 className="text-2xl font-semibold text-zinc-100 sm:text-3xl">
             Mon Build Souhaité
           </h1>
         </header>
@@ -401,8 +401,8 @@ export default function WishlistPage() {
 
       {selectedSlot ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-2xl rounded-lg border border-zinc-800 bg-zinc-950 p-6 shadow-[0_0_40px_rgba(0,0,0,0.6)]">
-            <div className="flex items-start justify-between">
+          <div className="w-full max-w-2xl rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-[0_0_40px_rgba(0,0,0,0.6)] sm:p-6">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
                   Choisir l&apos;objet pour :

@@ -47,7 +47,7 @@ export default function ItemSelector({
 
   return (
     <div>
-      <label className="mb-2 block text-sm text-zinc-400">
+      <label className="mb-2 block text-xs text-zinc-400 sm:text-sm">
         Rechercher un objet pour {slotName.toUpperCase()}
       </label>
       <input
@@ -78,7 +78,7 @@ export default function ItemSelector({
                 key={item.id}
                 type="button"
                 onClick={() => onSelect(item)}
-                className="flex w-full items-center gap-3 border-b border-zinc-900 px-4 py-3 text-left text-sm text-zinc-200 transition hover:bg-zinc-900/60"
+                className="flex w-full min-w-0 items-center gap-3 border-b border-zinc-900 px-4 py-3 text-left text-sm text-zinc-200 transition hover:bg-zinc-900/60"
               >
                 <div
                   className={[
@@ -101,15 +101,17 @@ export default function ItemSelector({
                     }}
                   />
                 </div>
-                <div className="flex-1">
-                  <div className="font-medium text-zinc-100">{item.name}</div>
-                  <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                <div className="flex-1 min-w-0">
+                  <div className="truncate font-medium text-zinc-100">
+                    {item.name}
+                  </div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 sm:text-xs">
                     {item.rarity}
                   </div>
                 </div>
                 <span
                   className={[
-                    "rounded-full border px-2 py-1 text-xs uppercase tracking-[0.2em]",
+                    "rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.2em] sm:text-xs",
                     rarityBorder[item.rarity],
                   ].join(" ")}
                 >

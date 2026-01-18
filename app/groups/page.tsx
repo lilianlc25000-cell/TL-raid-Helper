@@ -243,11 +243,11 @@ export default function PlayerGroupsPage() {
   return (
     <div className="min-h-screen text-zinc-100">
       <section className="mx-auto w-full max-w-6xl space-y-6">
-        <header className="rounded-lg border border-zinc-800 bg-zinc-950/80 px-6 py-5">
-          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+        <header className="rounded-lg border border-zinc-800 bg-zinc-950/80 px-5 py-5 sm:px-6">
+          <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 sm:tracking-[0.3em]">
             Mes Groupes
           </p>
-          <h1 className="mt-2 text-2xl font-semibold text-zinc-100">
+          <h1 className="mt-2 text-xl font-semibold text-zinc-100 sm:text-2xl">
             Événements publiés
           </h1>
           <p className="mt-2 text-sm text-zinc-500">
@@ -259,7 +259,7 @@ export default function PlayerGroupsPage() {
           {publishedEvents.map((event) => (
             <div
               key={event.id}
-              className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-5 py-4"
+              className="flex flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <div>
                 <div className="text-sm font-semibold text-zinc-100">
@@ -274,7 +274,7 @@ export default function PlayerGroupsPage() {
               <button
                 type="button"
                 onClick={() => loadGroups(event)}
-                className="rounded-full border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+                className="w-full rounded-full border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 sm:w-auto"
               >
                 Voir les groupes
               </button>
@@ -284,8 +284,10 @@ export default function PlayerGroupsPage() {
 
         {selectedEvent ? (
           <div className="space-y-4 pt-2">
-            <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-zinc-500">
-              <span>Groupes · {selectedEvent.title}</span>
+            <div className="flex flex-col gap-2 text-xs uppercase tracking-[0.2em] text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
+              <span className="break-words">
+                Groupes · {selectedEvent.title}
+              </span>
               {isLoadingGroups ? (
                 <span className="text-zinc-500">Chargement...</span>
               ) : null}
@@ -343,9 +345,11 @@ function PlayerCard({ member }: { member: GroupMember }) {
   const offImage = getWeaponImage(member.offWeapon);
 
   return (
-    <div className="flex items-center justify-between rounded-lg border border-zinc-900 bg-zinc-950/40 px-3 py-3 text-sm text-zinc-200">
-      <div>
-        <div className="font-semibold text-zinc-100">{member.ingameName}</div>
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-zinc-900 bg-zinc-950/40 px-3 py-3 text-sm text-zinc-200">
+      <div className="min-w-0">
+        <div className="truncate font-semibold text-zinc-100">
+          {member.ingameName}
+        </div>
         <div className="mt-1 flex items-center gap-2 text-xs text-zinc-400">
           <span className={`rounded-full border px-2 py-0.5 ${RoleBadgeStyle}`}>
             {roleLabel}
