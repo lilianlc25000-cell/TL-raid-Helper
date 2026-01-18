@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { Shield, ShieldCheck } from "lucide-react";
+import { MoreVertical, Shield, ShieldCheck } from "lucide-react";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 import { getWeaponImage } from "../../lib/weapons";
 
@@ -50,6 +50,8 @@ export default function GuildPage() {
   const [onlineMemberIds, setOnlineMemberIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
+  const [profileView, setProfileView] = useState<MemberEntry | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -210,7 +212,7 @@ export default function GuildPage() {
               return (
                 <div
                   key={member.userId}
-                  className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-surface/70 px-5 py-4 text-sm text-text/80 shadow-[0_0_20px_rgba(0,0,0,0.2)] sm:flex-row sm:items-center sm:justify-between"
+                  className="relative flex flex-col gap-4 rounded-2xl border border-white/10 bg-surface/70 px-5 py-4 text-sm text-text/80 shadow-[0_0_20px_rgba(0,0,0,0.2)] sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
                     <div className="text-sm font-semibold text-text">
@@ -247,7 +249,19 @@ export default function GuildPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMenuOpenFor((prev) =>
+                          prev === member.userId ? null : member.userId,
+                        )
+                      }
+                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/40 text-text/70 transition hover:text-text"
+                      aria-label={`Actions ${member.ingameName}`}
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
                     <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/40">
                       {mainImage && !imageErrors[mainKey] ? (
                         <Image
@@ -289,12 +303,76 @@ export default function GuildPage() {
                       )}
                     </span>
                   </div>
+
+                  {menuOpenFor === member.userId ? (
+                    <div className="absolute right-4 top-4 z-10 w-48 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-[0_0_25px_rgba(0,0,0,0.45)] backdrop-blur">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileView(member);
+                          setMenuOpenFor(null);
+                        }}
+                        className="w-full rounded-lg px-3 py-2 text-left text-sm text-text/80 transition hover:bg-white/5 hover:text-text"
+                      >
+                        Voir le profil
+                      </button>
+                      <a
+                        href={`/messages?user=${encodeURIComponent(
+                          member.userId,
+                        )}&name=${encodeURIComponent(member.ingameName)}`}
+                        className="block w-full rounded-lg px-3 py-2 text-left text-sm text-text/80 transition hover:bg-white/5 hover:text-text"
+                      >
+                        Envoyer un message
+                      </a>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
           </div>
         )}
       </section>
+
+      {profileView ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-surface/95 p-6 text-text shadow-[0_0_40px_rgba(0,0,0,0.6)] backdrop-blur">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+                  Profil membre
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-text">
+                  {profileView.ingameName}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProfileView(null)}
+                className="rounded-md border border-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-text/70 transition hover:text-text"
+              >
+                Fermer
+              </button>
+            </div>
+            <div className="mt-4 space-y-2 text-sm text-text/70">
+              <div>Rôle : {profileView.role ?? "Inconnu"}</div>
+              <div>Sous-classe : {profileView.archetype ?? "Non définie"}</div>
+              <div>GS : {profileView.gearScore ?? "?"}</div>
+              <div>Rang : {getRankLabel(profileView.roleRank)}</div>
+              <div>
+                Classe : {getClassName(profileView.mainWeapon, profileView.offWeapon)}
+              </div>
+            </div>
+            <a
+              href={`/messages?user=${encodeURIComponent(
+                profileView.userId,
+              )}&name=${encodeURIComponent(profileView.ingameName)}`}
+              className="mt-5 inline-flex w-full items-center justify-center rounded-2xl border border-amber-400/60 bg-amber-400/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+            >
+              Envoyer un message
+            </a>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

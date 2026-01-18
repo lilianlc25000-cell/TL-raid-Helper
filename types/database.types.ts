@@ -274,6 +274,29 @@ export type Database = {
           image_url?: string | null;
         };
       };
+      direct_messages: {
+        Row: {
+          id: string;
+          sender_id: string;
+          recipient_id: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          sender_id: string;
+          recipient_id: string;
+          body: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          sender_id?: string;
+          recipient_id?: string;
+          body?: string;
+          created_at?: string;
+        };
+      };
       notifications: {
         Row: {
           id: string;
