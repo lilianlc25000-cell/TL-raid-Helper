@@ -53,6 +53,8 @@ export default function GuildPage() {
   );
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [profileView, setProfileView] = useState<MemberEntry | null>(null);
+  const [currentGuildId, setCurrentGuildId] = useState<string | null>(null);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -62,6 +64,18 @@ export default function GuildPage() {
         setError("Supabase n'est pas configuré (URL / ANON KEY).");
         setIsLoading(false);
         return;
+      }
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (userId) {
+        const { data: profile } = (await supabase
+          .from("profiles")
+          .select("guild_id")
+          .eq("user_id", userId)
+          .maybeSingle()) as { data: { guild_id?: string | null } | null };
+        if (isMounted) {
+          setCurrentGuildId(profile?.guild_id ?? null);
+        }
       }
       const { data, error: fetchError } = (await supabase
         .from("profiles")
@@ -203,8 +217,55 @@ export default function GuildPage() {
             >
               Messagerie générale de guilde
             </Link>
+            {currentGuildId ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  const supabase = createSupabaseBrowserClient();
+                  if (!supabase || !currentGuildId) {
+                    return;
+                  }
+                  setIsLeaving(true);
+                  const { data } = await supabase.auth.getUser();
+                  const userId = data.user?.id;
+                  if (!userId) {
+                    setIsLeaving(false);
+                    return;
+                  }
+                  await supabase
+                    .from("guild_members")
+                    .delete()
+                    .eq("guild_id", currentGuildId)
+                    .eq("user_id", userId);
+                  await supabase
+                    .from("profiles")
+                    .update({ guild_id: null })
+                    .eq("user_id", userId);
+                  setIsLeaving(false);
+                  window.location.href = "/guild/join";
+                }}
+                disabled={isLeaving}
+                className="ml-3 inline-flex items-center rounded-full border border-red-500/60 bg-red-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-red-200 transition hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLeaving ? "Quitter..." : "Quitter la guilde"}
+              </button>
+            ) : null}
           </div>
         </header>
+
+        {!currentGuildId ? (
+          <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-6 py-5 text-sm text-amber-100">
+            Vous n&apos;avez pas encore de guilde.
+            <div className="mt-3">
+              <Link
+                href="/guild/join"
+                className="inline-flex items-center rounded-full border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+              >
+                Créer / Rejoindre une guilde
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         {sortedMembers.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-surface/70 px-6 py-6 text-sm text-text/60">

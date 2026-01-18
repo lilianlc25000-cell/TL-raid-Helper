@@ -1,0 +1,233 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+
+type GuildEntry = {
+  id: string;
+  name: string;
+  slug: string;
+  owner_id: string;
+};
+
+const normalizeSlug = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+export default function GuildJoinPage() {
+  const router = useRouter();
+  const [userId, setUserId] = useState<string | null>(null);
+  const [guilds, setGuilds] = useState<GuildEntry[]>([]);
+  const [query, setQuery] = useState("");
+  const [joinSlug, setJoinSlug] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadUser = async () => {
+      const supabase = createSupabaseBrowserClient();
+      if (!supabase) {
+        setError("Supabase n'est pas configuré (URL / ANON KEY).");
+        setLoading(false);
+        return;
+      }
+      const { data } = await supabase.auth.getUser();
+      const id = data.user?.id ?? null;
+      if (!isMounted) {
+        return;
+      }
+      if (!id) {
+        setError("Veuillez vous connecter pour rejoindre une guilde.");
+        setLoading(false);
+        return;
+      }
+      setUserId(id);
+    };
+    loadUser();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const loadGuilds = async () => {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      return;
+    }
+    setLoading(true);
+    const { data } = (await supabase
+      .from("guilds")
+      .select("id,name,slug,owner_id")
+      .order("name")) as { data: GuildEntry[] | null };
+    setGuilds(data ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    void loadGuilds();
+  }, []);
+
+  const handleJoin = async (guild: GuildEntry) => {
+    if (!userId) {
+      return;
+    }
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      return;
+    }
+    setJoiningId(guild.id);
+    setError(null);
+    const { error: joinError } = await supabase.from("guild_members").insert({
+      guild_id: guild.id,
+      user_id: userId,
+      role_rank: "member",
+    });
+    if (joinError) {
+      setError(joinError.message || "Impossible de rejoindre la guilde.");
+      setJoiningId(null);
+      return;
+    }
+    await supabase
+      .from("profiles")
+      .update({ guild_id: guild.id })
+      .eq("user_id", userId);
+    setJoiningId(null);
+    router.push("/");
+  };
+
+  const handleJoinBySlug = async () => {
+    if (!userId) {
+      return;
+    }
+    const slug = normalizeSlug(joinSlug);
+    if (!slug) {
+      setError("Code de guilde requis.");
+      return;
+    }
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    let { data: guild } = await supabase
+      .from("guilds")
+      .select("id,name,slug,owner_id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!guild && slug === "trinity") {
+      const { data: created } = await supabase
+        .from("guilds")
+        .insert({
+          name: "Trinity",
+          slug: "trinity",
+          owner_id: userId,
+        })
+        .select("id,name,slug,owner_id")
+        .single();
+      guild = created ?? null;
+    }
+    if (!guild) {
+      setError("Guilde introuvable.");
+      setLoading(false);
+      return;
+    }
+    await handleJoin(guild as GuildEntry);
+    setLoading(false);
+  };
+
+  const filteredGuilds = guilds.filter((guild) =>
+    guild.name.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+
+  return (
+    <div className="min-h-screen text-zinc-100">
+      <section className="mx-auto w-full max-w-5xl space-y-6">
+        <header className="rounded-3xl border border-white/10 bg-surface/70 px-6 py-6 shadow-[0_0_35px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10">
+          <p className="text-xs uppercase tracking-[0.3em] text-text/60">
+            Guilde
+          </p>
+          <h1 className="mt-2 font-display text-3xl tracking-[0.15em] text-text">
+            Rejoindre une guilde
+          </h1>
+          <p className="mt-2 text-sm text-text/70">
+            Choisis une guilde existante ou entre un code.
+          </p>
+          {error ? (
+            <p className="mt-3 text-sm text-red-300">{error}</p>
+          ) : null}
+        </header>
+
+        <div className="rounded-3xl border border-white/10 bg-surface/60 p-6 backdrop-blur">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Rechercher une guilde..."
+              className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text outline-none sm:w-72"
+            />
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <input
+                value={joinSlug}
+                onChange={(event) => setJoinSlug(event.target.value)}
+                placeholder="Code de guilde"
+                className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleJoinBySlug}
+                disabled={loading || !userId}
+                className="rounded-2xl border border-amber-400/60 bg-amber-400/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Rejoindre
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            {loading ? (
+              <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/60">
+                Chargement des guildes...
+              </div>
+            ) : filteredGuilds.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-6 text-center text-sm text-text/60">
+                Aucune guilde trouvée.
+              </div>
+            ) : (
+              filteredGuilds.map((guild) => (
+                <div
+                  key={guild.id}
+                  className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/40 px-5 py-4 text-sm text-text/80 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <div className="text-sm font-semibold text-text">
+                      {guild.name}
+                    </div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-text/40">
+                      {guild.slug}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleJoin(guild)}
+                    disabled={joiningId === guild.id || !userId}
+                    className="rounded-2xl border border-sky-400/60 bg-sky-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-sky-200 transition hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {joiningId === guild.id ? "..." : "Rejoindre"}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
