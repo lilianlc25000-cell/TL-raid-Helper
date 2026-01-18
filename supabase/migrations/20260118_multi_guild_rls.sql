@@ -113,7 +113,8 @@ create policy "profiles_select"
   for select
   to authenticated
   using (
-    exists (
+    user_id = auth.uid()
+    or exists (
       select 1
       from public.guild_members gm
       where gm.user_id = auth.uid()

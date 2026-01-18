@@ -49,6 +49,15 @@ export default function GuildJoinPage() {
         return;
       }
       setUserId(id);
+      const { data: profile } = (await supabase
+        .from("profiles")
+        .select("guild_id")
+        .eq("user_id", id)
+        .maybeSingle()) as { data: { guild_id?: string | null } | null };
+      if (profile?.guild_id) {
+        router.push("/");
+        return;
+      }
     };
     loadUser();
     return () => {

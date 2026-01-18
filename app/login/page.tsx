@@ -16,6 +16,24 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
 
+  const resolvePostLoginRoute = async () => {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      return "/guild/join";
+    }
+    const { data } = await supabase.auth.getUser();
+    const userId = data.user?.id;
+    if (!userId) {
+      return "/guild/join";
+    }
+    const { data: profile } = (await supabase
+      .from("profiles")
+      .select("guild_id")
+      .eq("user_id", userId)
+      .maybeSingle()) as { data: { guild_id?: string | null } | null };
+    return profile?.guild_id ? "/" : "/guild/join";
+  };
+
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -40,7 +58,8 @@ export default function LoginPage() {
       return;
     }
     setSuccess("Connexion réussie. Redirection...");
-    router.push("/profile");
+    const nextRoute = await resolvePostLoginRoute();
+    router.push(nextRoute);
     router.refresh();
   };
 
@@ -79,7 +98,8 @@ export default function LoginPage() {
       return;
     }
     setSuccess("Compte créé ! Connexion en cours...");
-    router.push("/profile");
+    const nextRoute = await resolvePostLoginRoute();
+    router.push(nextRoute);
     router.refresh();
   };
 
@@ -95,7 +115,7 @@ export default function LoginPage() {
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "discord",
       options: {
-        redirectTo: `${window.location.origin}/profile`,
+        redirectTo: `${window.location.origin}/guild/join`,
       },
     });
     if (oauthError) {
