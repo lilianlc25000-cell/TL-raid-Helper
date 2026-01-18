@@ -242,6 +242,9 @@ export default function ProfilePage() {
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [discordLinked, setDiscordLinked] = useState(false);
+  const [discordLinkLoading, setDiscordLinkLoading] = useState(false);
+  const [discordLinkError, setDiscordLinkError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const rollChannelRef = useRef<BroadcastChannel | null>(null);
   const playerName = name || "Mozorh";
@@ -279,6 +282,26 @@ export default function ProfilePage() {
     return () => {
       isMounted = false;
       subscription.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadDiscordIdentity = async () => {
+      const supabase = createSupabaseBrowserClient();
+      if (!supabase) {
+        return;
+      }
+      const { data } = await supabase.auth.getUser();
+      if (!isMounted) {
+        return;
+      }
+      const identities = data.user?.identities ?? [];
+      setDiscordLinked(identities.some((identity) => identity.provider === "discord"));
+    };
+    loadDiscordIdentity();
+    return () => {
+      isMounted = false;
     };
   }, []);
 
@@ -424,6 +447,25 @@ export default function ProfilePage() {
     return comboNames[key] ?? `${weapon1} / ${weapon2}`;
   }, [weapon1, weapon2]);
 
+  const handleDiscordLink = async () => {
+    setDiscordLinkError(null);
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      setDiscordLinkError("Supabase n'est pas configuré.");
+      return;
+    }
+    setDiscordLinkLoading(true);
+    const { error } = await supabase.auth.linkIdentity({
+      provider: "discord",
+      options: { redirectTo: `${window.location.origin}/profile` },
+    });
+    if (error) {
+      setDiscordLinkError(error.message);
+      setDiscordLinkLoading(false);
+      return;
+    }
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <header className="rounded-3xl border border-gold/50 bg-surface/70 px-5 py-5 shadow-[0_0_40px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10 sm:py-6">
@@ -506,6 +548,31 @@ export default function ProfilePage() {
         </div>
 
         <div className="space-y-6">
+          <div className="rounded-3xl border border-indigo-400/30 bg-indigo-500/5 p-6 text-center shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
+            <p className="text-xs uppercase tracking-[0.2em] text-indigo-200/80 sm:tracking-[0.25em]">
+              Compte Discord
+            </p>
+            <p className="mt-2 text-sm text-indigo-100/80">
+              {discordLinked
+                ? "Votre compte Discord est lié."
+                : "Liez votre compte Discord pour une connexion rapide."}
+            </p>
+            {discordLinkError ? (
+              <p className="mt-3 text-xs text-red-300">{discordLinkError}</p>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleDiscordLink}
+              disabled={discordLinked || discordLinkLoading}
+              className="mt-4 w-full rounded-2xl border border-indigo-400/50 bg-indigo-400/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-indigo-200 transition hover:border-indigo-300 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {discordLinked
+                ? "Discord déjà lié"
+                : discordLinkLoading
+                  ? "Connexion..."
+                  : "Lier Discord"}
+            </button>
+          </div>
           <div className="relative z-0 rounded-3xl border border-white/10 bg-surface/70 p-6 text-center shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
             <p className="text-xs uppercase tracking-[0.2em] text-text/50 sm:tracking-[0.25em]">
               Nom de Classe

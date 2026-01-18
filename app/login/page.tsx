@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -80,6 +81,28 @@ export default function LoginPage() {
     setSuccess("Compte créé ! Connexion en cours...");
     router.push("/profile");
     router.refresh();
+  };
+
+  const handleDiscordLogin = async () => {
+    setError(null);
+    setSuccess(null);
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      setError("Supabase n'est pas configuré.");
+      return;
+    }
+    setOauthLoading(true);
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "discord",
+      options: {
+        redirectTo: `${window.location.origin}/profile`,
+      },
+    });
+    if (oauthError) {
+      setError(oauthError.message);
+      setOauthLoading(false);
+      return;
+    }
   };
 
   return (
@@ -178,6 +201,21 @@ export default function LoginPage() {
                   : "Rejoindre la Guilde"}
             </button>
           </form>
+
+          <div className="mt-6 flex items-center gap-3 text-[10px] uppercase tracking-[0.3em] text-zinc-500">
+            <span className="h-px flex-1 bg-white/10" />
+            ou
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleDiscordLogin}
+            disabled={oauthLoading}
+            className="mt-4 w-full rounded-2xl border border-indigo-400/50 bg-indigo-400/10 px-5 py-3 text-xs uppercase tracking-[0.3em] text-indigo-200 transition hover:border-indigo-300 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {oauthLoading ? "Connexion..." : "Se connecter avec Discord"}
+          </button>
         </div>
       </div>
     </div>
