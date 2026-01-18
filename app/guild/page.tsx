@@ -47,6 +47,9 @@ export default function GuildPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+  const [onlineMemberIds, setOnlineMemberIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -106,6 +109,52 @@ export default function GuildPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const setupPresence = async () => {
+      const { data } = await supabase.auth.getUser();
+      const userId = data.user?.id;
+      if (!userId) {
+        return;
+      }
+      const channel = supabase.channel("guild-online", {
+        config: {
+          presence: { key: userId },
+        },
+      });
+      channel.on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState();
+        if (!isMounted) {
+          return;
+        }
+        setOnlineMemberIds(new Set(Object.keys(state)));
+      });
+      channel.subscribe(async (status) => {
+        if (status !== "SUBSCRIBED") {
+          return;
+        }
+        await channel.track({ online_at: new Date().toISOString() });
+      });
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    };
+
+    const cleanupPromise = setupPresence();
+    return () => {
+      isMounted = false;
+      void cleanupPromise?.then((cleanup) => cleanup?.());
+    };
+  }, []);
+
   const sortedMembers = useMemo(
     () => [...members].sort((a, b) => a.ingameName.localeCompare(b.ingameName)),
     [members],
@@ -157,6 +206,7 @@ export default function GuildPage() {
               const offImage = getWeaponImage(member.offWeapon);
               const mainKey = `${member.userId}-main`;
               const offKey = `${member.userId}-off`;
+              const isOnline = onlineMemberIds.has(member.userId);
               return (
                 <div
                   key={member.userId}
@@ -167,6 +217,15 @@ export default function GuildPage() {
                       {member.ingameName}
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-text/60">
+                      <span
+                        className={`rounded-full border px-2 py-1 ${
+                          isOnline
+                            ? "border-emerald-400/70 bg-emerald-500/10 text-emerald-200"
+                            : "border-white/10 bg-black/40"
+                        }`}
+                      >
+                        {isOnline ? "En ligne" : "Hors ligne"}
+                      </span>
                       <span className="rounded-full border border-white/10 bg-black/40 px-2 py-1">
                         {getClassName(member.mainWeapon, member.offWeapon)}
                       </span>
