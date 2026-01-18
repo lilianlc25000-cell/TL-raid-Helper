@@ -471,10 +471,10 @@ export default function LootDistributionPage() {
                     return (
                       <div
                         key={loot.id}
-                        className="flex items-center justify-between gap-3 rounded-md border border-zinc-900 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-200"
+                        className="flex flex-col gap-3 rounded-md border border-zinc-900 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-200 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="flex h-24 w-24 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/70">
+                          <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/70">
                             <Image
                               src={imageSrc}
                               alt={loot.itemName}
@@ -500,30 +500,30 @@ export default function LootDistributionPage() {
                           </div>
                         </div>
                         {isAdmin ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
                             {loot.id ? (
                               <Link
                                 href={`/admin/loot/active/${loot.id}`}
-                                className="rounded-md border border-amber-400/60 bg-amber-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300"
+                                className="w-full rounded-md border border-amber-400/60 bg-amber-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300 sm:w-auto"
                               >
                                 Gérer
                               </Link>
                             ) : (
-                              <span className="rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs uppercase tracking-[0.2em] text-zinc-500">
+                              <span className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs uppercase tracking-[0.2em] text-zinc-500 sm:w-auto">
                                 Gérer
                               </span>
                             )}
                             <button
                               type="button"
                               onClick={() => loadCandidates(loot)}
-                              className="rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500"
+                              className="w-full rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500 sm:w-auto"
                             >
                               Attribuer
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDeleteLoot(loot.id)}
-                              className="rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400"
+                              className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
                             >
                               Supprimer
                             </button>
@@ -567,8 +567,8 @@ export default function LootDistributionPage() {
                           key={loot.id}
                           className="flex flex-col gap-3 rounded-md border border-zinc-900 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-200 sm:flex-row sm:items-center sm:justify-between"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900/70">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900/70">
                               <Image
                                 src={imageSrc}
                                 alt={loot.itemName}
@@ -593,37 +593,37 @@ export default function LootDistributionPage() {
                               </div>
                             </div>
                           </div>
-                          <div className="flex flex-wrap items-center justify-end gap-2">
+                        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
                             {loot.id ? (
                               <Link
                                 href={`/admin/loot/${loot.id}`}
-                                className="rounded-md border border-amber-400/60 bg-amber-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300"
+                              className="w-full rounded-md border border-amber-400/60 bg-amber-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300 sm:w-auto"
                               >
                                 Gérer
                               </Link>
                             ) : (
-                              <span className="rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs uppercase tracking-[0.2em] text-zinc-500">
+                            <span className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs uppercase tracking-[0.2em] text-zinc-500 sm:w-auto">
                                 Gérer
                               </span>
                             )}
                             <button
                               type="button"
                               onClick={() => handleOpenRolls(loot.id)}
-                              className="rounded-md border border-sky-500/60 bg-sky-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-200 transition hover:border-sky-400"
+                            className="w-full rounded-md border border-sky-500/60 bg-sky-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-200 transition hover:border-sky-400 sm:w-auto"
                             >
                               Ouvrir les rolls
                             </button>
                             <button
                               type="button"
                               onClick={() => loadCandidates(loot)}
-                              className="rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500"
+                            className="w-full rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500 sm:w-auto"
                             >
                               Attribuer
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDeleteLoot(loot.id)}
-                              className="rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400"
+                            className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
                             >
                               Supprimer
                             </button>
