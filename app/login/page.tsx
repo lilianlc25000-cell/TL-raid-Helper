@@ -218,7 +218,7 @@ export default function LoginPage() {
                 ? "Connexion..."
                 : tab === "login"
                   ? "Entrer dans le Royaume"
-                  : "Rejoindre la Guilde"}
+                  : "Entrer dans TL Raid Manager"}
             </button>
           </form>
 

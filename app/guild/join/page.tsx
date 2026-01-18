@@ -25,6 +25,8 @@ export default function GuildJoinPage() {
   const [guilds, setGuilds] = useState<GuildEntry[]>([]);
   const [query, setQuery] = useState("");
   const [joinSlug, setJoinSlug] = useState("");
+  const [guildName, setGuildName] = useState("");
+  const [guildSlug, setGuildSlug] = useState("");
   const [loading, setLoading] = useState(true);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +77,20 @@ export default function GuildJoinPage() {
       .from("guilds")
       .select("id,name,slug,owner_id")
       .order("name")) as { data: GuildEntry[] | null };
-    setGuilds(data ?? []);
+    const list = data ?? [];
+    const hasTrinity = list.some((guild) => guild.slug === "trinity");
+    const withTrinity = hasTrinity
+      ? list
+      : [
+          {
+            id: "trinity",
+            name: "Trinity",
+            slug: "trinity",
+            owner_id: "",
+          },
+          ...list,
+        ];
+    setGuilds(withTrinity);
     setLoading(false);
   };
 
@@ -93,8 +108,26 @@ export default function GuildJoinPage() {
     }
     setJoiningId(guild.id);
     setError(null);
+    let targetGuildId = guild.id;
+    if (guild.id === "trinity") {
+      const { data: created, error: createError } = await supabase
+        .from("guilds")
+        .insert({
+          name: "Trinity",
+          slug: "trinity",
+          owner_id: userId,
+        })
+        .select("id")
+        .single();
+      if (createError) {
+        setError(createError.message || "Impossible de créer la guilde.");
+        setJoiningId(null);
+        return;
+      }
+      targetGuildId = created.id;
+    }
     const { error: joinError } = await supabase.from("guild_members").insert({
-      guild_id: guild.id,
+      guild_id: targetGuildId,
       user_id: userId,
       role_rank: "member",
     });
@@ -105,7 +138,7 @@ export default function GuildJoinPage() {
     }
     await supabase
       .from("profiles")
-      .update({ guild_id: guild.id })
+      .update({ guild_id: targetGuildId })
       .eq("user_id", userId);
     setJoiningId(null);
     router.push("/");
@@ -150,6 +183,46 @@ export default function GuildJoinPage() {
     }
     await handleJoin(guild as GuildEntry);
     setLoading(false);
+  };
+
+  const handleCreate = async () => {
+    if (!userId) {
+      return;
+    }
+    const name = guildName.trim();
+    const slug = normalizeSlug(guildSlug || guildName);
+    if (!name || !slug) {
+      setError("Nom et code de guilde obligatoires.");
+      return;
+    }
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      setError("Supabase n'est pas configuré.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    const { data: guild, error: guildError } = await supabase
+      .from("guilds")
+      .insert({ name, slug, owner_id: userId })
+      .select("id")
+      .single();
+    if (guildError) {
+      setError(guildError.message || "Impossible de créer la guilde.");
+      setLoading(false);
+      return;
+    }
+    await supabase.from("guild_members").insert({
+      guild_id: guild.id,
+      user_id: userId,
+      role_rank: "admin",
+    });
+    await supabase
+      .from("profiles")
+      .update({ guild_id: guild.id })
+      .eq("user_id", userId);
+    setLoading(false);
+    router.push("/");
   };
 
   const filteredGuilds = guilds.filter((guild) =>
@@ -197,6 +270,44 @@ export default function GuildJoinPage() {
               >
                 Rejoindre
               </button>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-text/50">
+                Créer sa guilde
+              </p>
+              <div className="mt-3 space-y-3">
+                <input
+                  value={guildName}
+                  onChange={(event) => setGuildName(event.target.value)}
+                  placeholder="Nom de la guilde"
+                  className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text outline-none"
+                />
+                <input
+                  value={guildSlug}
+                  onChange={(event) => setGuildSlug(event.target.value)}
+                  placeholder="Code (ex: les-archers)"
+                  className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleCreate}
+                  disabled={loading || !userId}
+                  className="w-full rounded-2xl border border-emerald-400/60 bg-emerald-400/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Créer la guilde
+                </button>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-text/50">
+                Guildes publiques
+              </p>
+              <p className="mt-2 text-xs text-text/40">
+                Sélectionne une guilde pour rejoindre.
+              </p>
             </div>
           </div>
 
