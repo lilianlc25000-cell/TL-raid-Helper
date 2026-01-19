@@ -9,12 +9,15 @@ export const metadata: Metadata = {
   title: "TL Raid Manager",
   description: "Raid Manager pour Throne and Liberty",
   manifest: "/manifest.json",
-  themeColor: "#000000",
   appleWebApp: {
     capable: true,
     title: "TL Raid Manager",
     statusBarStyle: "black",
   },
+};
+
+export const viewport = {
+  themeColor: "#000000",
 };
 
 export default function RootLayout({
