@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
 
@@ -9,6 +8,7 @@ type GuildMessage = {
   sender_id: string;
   body: string;
   created_at: string;
+  guild_id?: string | null;
 };
 
 type SenderProfile = {
@@ -24,6 +24,7 @@ const formatTime = (iso: string) =>
 
 export default function GuildMessagesPage() {
   const [userId, setUserId] = useState<string | null>(null);
+  const [guildId, setGuildId] = useState<string | null>(null);
   const [messages, setMessages] = useState<GuildMessage[]>([]);
   const [namesById, setNamesById] = useState<Record<string, string>>({});
   const [newMessage, setNewMessage] = useState("");
@@ -51,6 +52,20 @@ export default function GuildMessagesPage() {
         return;
       }
       setUserId(id);
+      const { data: profile } = (await supabase
+        .from("profiles")
+        .select("guild_id")
+        .eq("user_id", id)
+        .maybeSingle()) as { data: { guild_id?: string | null } | null };
+      if (!isMounted) {
+        return;
+      }
+      if (!profile?.guild_id) {
+        setError("Rejoins une guilde pour accéder à la messagerie.");
+        setLoading(false);
+        return;
+      }
+      setGuildId(profile.guild_id ?? null);
     };
     loadUser();
     return () => {
@@ -58,7 +73,7 @@ export default function GuildMessagesPage() {
     };
   }, []);
 
-  const loadMessages = async () => {
+  const loadMessages = async (currentGuildId: string) => {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) {
       return;
@@ -66,7 +81,8 @@ export default function GuildMessagesPage() {
     setLoading(true);
     const { data, error: fetchError } = (await supabase
       .from("guild_messages")
-      .select("id,sender_id,body,created_at")
+      .select("id,sender_id,body,created_at,guild_id")
+      .eq("guild_id", currentGuildId)
       .order("created_at", { ascending: true })
       .limit(200)) as {
       data: GuildMessage[] | null;
@@ -95,24 +111,35 @@ export default function GuildMessagesPage() {
   };
 
   useEffect(() => {
-    void loadMessages();
-  }, []);
+    if (!userId || !guildId) {
+      return;
+    }
+    void loadMessages(guildId);
+  }, [userId, guildId]);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) {
       return;
     }
-    const channel = supabase.channel("guild-messages");
+    if (!guildId) {
+      return;
+    }
+    const channel = supabase.channel(`guild-messages-${guildId}`);
     channel
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "guild_messages" },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "guild_messages",
+          filter: `guild_id=eq.${guildId}`,
+        },
         (payload) => {
           const next = payload.new as GuildMessage;
           setMessages((prev) => [...prev, next]);
           if (!namesById[next.sender_id]) {
-            void loadMessages();
+            void loadMessages(guildId);
           }
         },
       )
@@ -120,7 +147,7 @@ export default function GuildMessagesPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [namesById]);
+  }, [namesById, guildId]);
 
   useEffect(() => {
     if (!scrollRef.current) {
@@ -130,7 +157,7 @@ export default function GuildMessagesPage() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!userId) {
+    if (!userId || !guildId) {
       return;
     }
     const body = newMessage.trim();
@@ -142,64 +169,47 @@ export default function GuildMessagesPage() {
       return;
     }
     setNewMessage("");
-    const { error: sendError } = await supabase.from("guild_messages").insert({
-      sender_id: userId,
-      body,
-    });
+    const { data, error: sendError } = await supabase
+      .from("guild_messages")
+      .insert({
+        sender_id: userId,
+        body,
+        guild_id: guildId,
+      })
+      .select("id,sender_id,body,created_at,guild_id")
+      .single();
     if (sendError) {
       setError(sendError.message || "Impossible d'envoyer le message.");
+      return;
+    }
+    if (data) {
+      setMessages((prev) => [...prev, data]);
     }
   };
 
   return (
     <div className="min-h-screen text-zinc-100">
       <section className="mx-auto w-full max-w-5xl space-y-6">
-        <header className="rounded-3xl border border-white/10 bg-surface/70 px-6 py-6 shadow-[0_0_35px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10">
-          <p className="text-xs uppercase tracking-[0.3em] text-text/60">
-            Guilde
-          </p>
-          <h1 className="mt-2 font-display text-3xl tracking-[0.15em] text-text">
-            Messagerie générale
-          </h1>
-          <p className="mt-2 text-sm text-text/70">
-            Discutez avec tous les membres.
-          </p>
-          {error ? (
-            <p className="mt-3 text-sm text-red-300">{error}</p>
-          ) : null}
-          <Link
-            href="/guild"
-            className="mt-4 inline-flex items-center rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:text-text"
-          >
-            Retour à la guilde
-          </Link>
-        </header>
-
-        <div className="flex flex-col rounded-3xl border border-white/10 bg-surface/60 p-4 backdrop-blur">
-          <div className="border-b border-white/10 pb-3">
-            <p className="text-xs uppercase tracking-[0.25em] text-text/50">
-              Salon principal
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-text">
-              Discussion ouverte
-            </h2>
-          </div>
+        <div className="flex h-[70vh] flex-col rounded-3xl border border-white/10 bg-surface/60 p-4 backdrop-blur">
 
           <div
             ref={scrollRef}
-            className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1"
+            className="flex flex-1 flex-col justify-end gap-3 overflow-y-auto pr-1"
           >
-            {loading ? (
+            {error ? (
+              <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {error}
+              </div>
+            ) : loading ? (
               <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/60">
                 Chargement des messages...
               </div>
-            ) : messages.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/60">
-                Aucun message pour le moment.
-              </div>
-            ) : (
+            ) : messages.length === 0 ? null : (
               messages.map((message) => {
                 const isMine = message.sender_id === userId;
+                const senderLabel = isMine
+                  ? "Vous"
+                  : namesById[message.sender_id] ?? "Membre";
                 return (
                   <div
                     key={message.id}
@@ -209,15 +219,16 @@ export default function GuildMessagesPage() {
                       className={[
                         "max-w-[80%] rounded-2xl border px-4 py-3 text-sm",
                         isMine
-                          ? "border-primary/40 bg-primary/20 text-text"
+                          ? "border-primary/40 bg-primary/20 text-text text-right"
                           : "border-white/10 bg-black/40 text-text/80",
                       ].join(" ")}
                     >
-                      <p className="text-[10px] uppercase tracking-[0.2em] text-text/40">
-                        {namesById[message.sender_id] ?? "Membre"} ·{" "}
-                        {formatTime(message.created_at)}
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-text/50">
+                        {senderLabel} · {formatTime(message.created_at)}
                       </p>
-                      <p className="mt-2 whitespace-pre-wrap">{message.body}</p>
+                      <p className="mt-2 whitespace-pre-wrap text-text">
+                        {message.body}
+                      </p>
                     </div>
                   </div>
                 );
@@ -225,7 +236,7 @@ export default function GuildMessagesPage() {
             )}
           </div>
 
-          <div className="mt-4 border-t border-white/10 pt-4">
+          <div className="mt-auto border-t border-white/10 pt-4">
             <div className="flex flex-col gap-3 sm:flex-row">
               <textarea
                 value={newMessage}

@@ -200,10 +200,21 @@ export default function GuildPage() {
     };
   }, []);
 
-  const sortedMembers = useMemo(
-    () => [...members].sort((a, b) => a.ingameName.localeCompare(b.ingameName)),
-    [members],
-  );
+  const sortedMembers = useMemo(() => {
+    const rankOrder = (rank: string | null) => {
+      const normalized = (rank ?? "soldat").toLowerCase();
+      if (normalized === "admin") return 0;
+      if (normalized === "conseiller") return 1;
+      return 2;
+    };
+    return [...members].sort((a, b) => {
+      const rankDiff = rankOrder(a.roleRank) - rankOrder(b.roleRank);
+      if (rankDiff !== 0) {
+        return rankDiff;
+      }
+      return a.ingameName.localeCompare(b.ingameName, "fr");
+    });
+  }, [members]);
 
   if (isLoading) {
     return (

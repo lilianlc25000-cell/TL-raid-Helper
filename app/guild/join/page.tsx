@@ -421,7 +421,6 @@ export default function GuildJoinPage() {
                 onClick={() => {
                   setShowKeyModal(false);
                   setPendingGuild(null);
-                  setPendingSlug(null);
                 }}
                 className="flex-1 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:text-text"
               >

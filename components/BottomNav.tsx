@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Calendar, Crown, Gem, Home, Layers, User, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { createSupabaseBrowserClient } from "../lib/supabase/client";
 
 const tabs = [
@@ -16,50 +17,63 @@ const tabs = [
 
 export default function BottomNav() {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasGuild, setHasGuild] = useState(false);
+  const pathname = usePathname();
 
-  const loadAdminRole = useCallback(async () => {
+  const loadProfileAccess = useCallback(async () => {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) {
       setIsAdmin(false);
+      setHasGuild(false);
       return;
     }
     const { data } = await supabase.auth.getUser();
     const userId = data.user?.id;
     if (!userId) {
       setIsAdmin(false);
+      setHasGuild(false);
       return;
     }
     const { data: profile } = (await supabase
       .from("profiles")
-      .select("role_rank")
+      .select("role_rank,guild_id")
       .eq("user_id", userId)
       .maybeSingle()) as {
-      data: { role_rank?: string | null } | null;
+      data: { role_rank?: string | null; guild_id?: string | null } | null;
     };
     setIsAdmin(
       profile?.role_rank === "admin" || profile?.role_rank === "conseiller",
     );
+    setHasGuild(Boolean(profile?.guild_id));
   }, []);
 
   useEffect(() => {
-    loadAdminRole();
+    loadProfileAccess();
     const supabase = createSupabaseBrowserClient();
     if (!supabase) {
       return;
     }
     const { data: subscription } = supabase.auth.onAuthStateChange(() => {
-      loadAdminRole();
+      loadProfileAccess();
     });
     return () => {
       subscription.subscription.unsubscribe();
     };
-  }, [loadAdminRole]);
+  }, [loadProfileAccess]);
+
+  useEffect(() => {
+    loadProfileAccess();
+  }, [pathname, loadProfileAccess]);
 
   const adminTab = {
     label: "Gestion",
     icon: Crown,
     href: "/admin",
   };
+
+  if (!hasGuild) {
+    return null;
+  }
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40">
@@ -68,11 +82,19 @@ export default function BottomNav() {
           <ul className="grid grid-cols-3 gap-1 sm:flex sm:items-center sm:justify-between">
             {tabs.map((tab) => {
               const Icon = tab.icon;
+              const isActive =
+                tab.href === "/"
+                  ? pathname === "/"
+                  : pathname === tab.href || pathname.startsWith(`${tab.href}/`);
               return (
                 <li key={tab.label}>
                   <Link
                     href={tab.href}
-                    className="flex w-full min-w-0 flex-col items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] text-text/80 transition hover:text-text sm:w-16 sm:py-2 sm:text-xs"
+                    className={`flex w-full min-w-0 flex-col items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] transition sm:w-16 sm:py-2 sm:text-xs ${
+                      isActive
+                        ? "text-sky-300"
+                        : "text-text/80 hover:text-text"
+                    }`}
                   >
                     <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                     <span className="w-full truncate text-center leading-tight">
@@ -86,10 +108,17 @@ export default function BottomNav() {
               <li>
                 {(() => {
                   const AdminIcon = adminTab.icon;
+                  const isAdminActive =
+                    pathname === adminTab.href ||
+                    pathname.startsWith(`${adminTab.href}/`);
                   return (
                 <Link
                   href={adminTab.href}
-                  className="flex w-full min-w-0 flex-col items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] text-amber-300 transition hover:text-amber-200 sm:w-16 sm:py-2 sm:text-xs"
+                  className={`flex w-full min-w-0 flex-col items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] transition sm:w-16 sm:py-2 sm:text-xs ${
+                    isAdminActive
+                      ? "text-sky-300"
+                      : "text-amber-300 hover:text-amber-200"
+                  }`}
                 >
                   <AdminIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                   <span className="w-full truncate text-center leading-tight">

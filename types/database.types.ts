@@ -53,9 +53,56 @@ export type Database = {
           archetype?: string | null;
         };
       };
+      guilds: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          owner_id: string;
+          access_code: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          owner_id: string;
+          access_code?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          slug?: string;
+          owner_id?: string;
+          access_code?: string | null;
+          created_at?: string;
+        };
+      };
+      guild_members: {
+        Row: {
+          guild_id: string;
+          user_id: string;
+          role_rank: string;
+          joined_at: string;
+        };
+        Insert: {
+          guild_id: string;
+          user_id: string;
+          role_rank?: string;
+          joined_at?: string;
+        };
+        Update: {
+          guild_id?: string;
+          user_id?: string;
+          role_rank?: string;
+          joined_at?: string;
+        };
+      };
       events: {
         Row: {
           id: string;
+          guild_id: string | null;
           title: string;
           event_type: string;
           difficulty: string | null;
@@ -68,6 +115,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          guild_id?: string | null;
           title: string;
           event_type: string;
           difficulty?: string | null;
@@ -80,6 +128,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          guild_id?: string | null;
           title?: string;
           event_type?: string;
           difficulty?: string | null;
@@ -115,6 +164,7 @@ export type Database = {
         Row: {
           user_id: string;
           event_id: string;
+          guild_id: string | null;
           status: string;
           created_at: string;
           group_index: number | null;
@@ -122,6 +172,7 @@ export type Database = {
         Insert: {
           user_id: string;
           event_id: string;
+          guild_id?: string | null;
           status: string;
           created_at?: string;
           group_index?: number | null;
@@ -129,6 +180,7 @@ export type Database = {
         Update: {
           user_id?: string;
           event_id?: string;
+          guild_id?: string | null;
           status?: string;
           created_at?: string;
           group_index?: number | null;
@@ -155,6 +207,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          guild_id: string | null;
           item_name: string;
           roll_value: number;
           created_at: string;
@@ -163,6 +216,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          guild_id?: string | null;
           item_name: string;
           roll_value: number;
           created_at?: string;
@@ -171,6 +225,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          guild_id?: string | null;
           item_name?: string;
           roll_value?: number;
           created_at?: string;
@@ -181,6 +236,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          guild_id: string | null;
           slot_name:
             | "main_hand"
             | "off_hand"
@@ -202,6 +258,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          guild_id?: string | null;
           slot_name:
             | "main_hand"
             | "off_hand"
@@ -223,6 +280,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          guild_id?: string | null;
           slot_name?:
             | "main_hand"
             | "off_hand"
@@ -247,6 +305,7 @@ export type Database = {
           id: string;
           item_name: string;
           is_active: boolean;
+          guild_id: string | null;
           category: string;
           custom_name: string | null;
           custom_traits: Json | null;
@@ -257,6 +316,7 @@ export type Database = {
           id?: string;
           item_name: string;
           is_active?: boolean;
+          guild_id?: string | null;
           category?: string;
           custom_name?: string | null;
           custom_traits?: Json | null;
@@ -267,6 +327,7 @@ export type Database = {
           id?: string;
           item_name?: string;
           is_active?: boolean;
+          guild_id?: string | null;
           category?: string;
           custom_name?: string | null;
           custom_traits?: Json | null;
@@ -301,18 +362,21 @@ export type Database = {
         Row: {
           id: string;
           sender_id: string;
+          guild_id: string | null;
           body: string;
           created_at: string;
         };
         Insert: {
           id?: string;
           sender_id: string;
+          guild_id?: string | null;
           body: string;
           created_at?: string;
         };
         Update: {
           id?: string;
           sender_id?: string;
+          guild_id?: string | null;
           body?: string;
           created_at?: string;
         };
@@ -321,6 +385,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          guild_id: string | null;
           type: string;
           message: string;
           is_read: boolean;
@@ -329,6 +394,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          guild_id?: string | null;
           type: string;
           message: string;
           is_read?: boolean;
@@ -337,6 +403,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          guild_id?: string | null;
           type?: string;
           message?: string;
           is_read?: boolean;

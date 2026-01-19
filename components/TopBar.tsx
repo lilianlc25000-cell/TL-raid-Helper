@@ -15,6 +15,7 @@ export default function TopBar() {
   const menuRef = useRef<HTMLDivElement>(null);
   const hideComms = pathname === "/profile";
   const showBack = pathname !== "/login";
+  const disableBack = pathname === "/";
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -69,7 +70,10 @@ export default function TopBar() {
             <button
               type="button"
               onClick={() => router.back()}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-surface/80 text-text/70 transition hover:text-text"
+              disabled={disableBack}
+              className={`flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-surface/80 text-text/70 transition ${
+                disableBack ? "cursor-not-allowed opacity-50" : "hover:text-text"
+              }`}
               aria-label="Retour"
             >
               <ArrowLeft className="h-4 w-4" />

@@ -3,16 +3,31 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CloudRain, Moon, Skull, Sun, Users } from "lucide-react";
+import { CloudRain, Skull, Users } from "lucide-react";
 import { createSupabaseBrowserClient } from "../lib/supabase/client";
-import { useSolisiumTime } from "@/lib/solisium-time";
 
 export default function Home() {
   const router = useRouter();
-  const { isNight, timeRemaining } = useSolisiumTime();
-  const stateLabel = isNight ? "Nuit" : "Jour";
   const bossCountdown = "01:42:18";
   const [checkingSession, setCheckingSession] = useState(true);
+
+  const isProfileComplete = (profile: {
+    ingame_name?: string | null;
+    main_weapon?: string | null;
+    off_weapon?: string | null;
+    role?: string | null;
+    archetype?: string | null;
+    gear_score?: number | null;
+  } | null) =>
+    Boolean(
+      profile?.ingame_name?.trim() &&
+        profile?.main_weapon &&
+        profile?.off_weapon &&
+        profile?.role &&
+        profile?.archetype &&
+        typeof profile?.gear_score === "number" &&
+        profile.gear_score > 0,
+    );
 
   useEffect(() => {
     let isMounted = true;
@@ -27,6 +42,31 @@ export default function Home() {
       const { data } = await supabase.auth.getUser();
       if (!data.user) {
         router.replace("/login");
+        return;
+      }
+      const { data: profile } = (await supabase
+        .from("profiles")
+        .select("guild_id,ingame_name,main_weapon,off_weapon,role,archetype,gear_score")
+        .eq("user_id", data.user.id)
+        .maybeSingle()) as {
+        data:
+          | {
+              guild_id?: string | null;
+              ingame_name?: string | null;
+              main_weapon?: string | null;
+              off_weapon?: string | null;
+              role?: string | null;
+              archetype?: string | null;
+              gear_score?: number | null;
+            }
+          | null;
+      };
+      if (!isProfileComplete(profile)) {
+        router.replace("/profile");
+        return;
+      }
+      if (!profile?.guild_id) {
+        router.replace("/guild/join");
         return;
       }
       if (isMounted) {
@@ -74,85 +114,74 @@ export default function Home() {
       </section>
 
       <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <article className="rounded-2xl border border-white/10 bg-surface/50 p-6 backdrop-blur">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-text">Cycle Jour/Nuit</h2>
-            <span className="relative rounded-full border border-white/10 bg-black/30 p-2 text-primary">
-              {!isNight ? (
-                <>
-                  <span className="absolute inset-0 -z-10 animate-ping rounded-full bg-amber-300/40" />
-                  <span className="absolute -inset-2 -z-20 animate-spin-slow rounded-full bg-gradient-to-r from-amber-300/20 via-yellow-200/10 to-transparent blur-lg" />
-                </>
-              ) : null}
-              {isNight ? (
-                <Moon className="h-5 w-5" />
-              ) : (
-                <Sun className="h-5 w-5 text-amber-200" />
-              )}
-            </span>
-          </div>
-          <p className="mt-4 text-2xl font-semibold text-text">
-            {stateLabel} - Reste {timeRemaining}
-          </p>
-          <p className="mt-2 text-xs uppercase tracking-[0.3em] text-text/50">
-            Solisium
-          </p>
-        </article>
-
-        <article className="rounded-2xl border border-white/10 bg-surface/50 p-6 backdrop-blur">
+        <article className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 via-surface/60 to-surface/80 p-6 shadow-[0_0_30px_rgba(251,191,36,0.25)] backdrop-blur">
+          <div className="absolute -left-6 -top-10 h-28 w-28 rounded-full bg-amber-400/20 blur-2xl" />
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-text">Guilde</h2>
-            <span className="rounded-full border border-white/10 bg-black/30 p-2 text-gold">
+            <span className="rounded-full border border-amber-300/40 bg-amber-400/10 p-2 text-amber-200">
               <Users className="h-5 w-5" />
             </span>
           </div>
           <p className="mt-4 text-sm text-text/70">
             Consulter les membres et leurs rôles.
           </p>
-          <Link
-            href="/guild"
-            className="mt-6 inline-flex items-center rounded-full border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
-          >
-            Ouvrir la guilde
-          </Link>
+          <div className="relative mt-auto inline-flex w-fit self-start pt-6">
+            <span className="inline-flex rounded-full p-[1px] shadow-[0_0_18px_rgba(251,191,36,0.45)] animate-pulse">
+              <Link
+                href="/guild"
+                className="inline-flex items-center rounded-full border border-amber-400/60 bg-amber-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-100 transition hover:border-amber-300"
+              >
+                Ouvrir
+              </Link>
+            </span>
+          </div>
         </article>
 
-        
 
-        <article className="rounded-2xl border border-white/10 bg-surface/50 p-6 backdrop-blur">
+        <article className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-rose-400/30 bg-gradient-to-br from-rose-500/10 via-surface/60 to-surface/80 p-6 shadow-[0_0_30px_rgba(244,63,94,0.25)] backdrop-blur">
+          <div className="absolute -right-8 -top-10 h-28 w-28 rounded-full bg-rose-400/20 blur-2xl" />
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-text">Statics PvP</h2>
-            <span className="rounded-full border border-white/10 bg-black/30 p-2 text-primary">
+            <span className="rounded-full border border-rose-300/40 bg-rose-400/10 p-2 text-rose-200">
               <Users className="h-5 w-5" />
             </span>
           </div>
           <p className="mt-4 text-sm text-text/70">
-            Statistiques et performances JcJ.
+            JcJ : domination, stratégie et performances d'équipe.
           </p>
-          <Link
-            href="/statics-pvp"
-            className="mt-6 inline-flex items-center rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300"
-          >
-            Ouvrir
-          </Link>
+          <div className="relative mt-auto inline-flex w-fit self-start pt-6">
+            <span className="inline-flex rounded-full p-[1px] shadow-[0_0_18px_rgba(244,63,94,0.45)] animate-pulse">
+              <Link
+                href="/statics-pvp"
+                className="inline-flex items-center rounded-full border border-rose-400/60 bg-rose-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-rose-100 transition hover:border-rose-300"
+              >
+                Ouvrir
+              </Link>
+            </span>
+          </div>
         </article>
 
-        <article className="rounded-2xl border border-white/10 bg-surface/50 p-6 backdrop-blur">
+        <article className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 via-surface/60 to-surface/80 p-6 shadow-[0_0_30px_rgba(16,185,129,0.25)] backdrop-blur">
+          <div className="absolute -left-6 -top-10 h-28 w-28 rounded-full bg-emerald-400/20 blur-2xl" />
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-text">Statics PvE</h2>
-            <span className="rounded-full border border-white/10 bg-black/30 p-2 text-gold">
+            <span className="rounded-full border border-emerald-300/40 bg-emerald-400/10 p-2 text-emerald-200">
               <Skull className="h-5 w-5" />
             </span>
           </div>
           <p className="mt-4 text-sm text-text/70">
-            Statistiques et performances JcE.
+            JcE : combats contre les monstres et progression collective.
           </p>
-          <Link
-            href="/statics-pve"
-            className="mt-6 inline-flex items-center rounded-full border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
-          >
-            Ouvrir
-          </Link>
+          <div className="relative mt-auto inline-flex w-fit self-start pt-6">
+            <span className="inline-flex rounded-full p-[1px] shadow-[0_0_18px_rgba(16,185,129,0.45)] animate-pulse">
+              <Link
+                href="/statics-pve"
+                className="inline-flex items-center rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-100 transition hover:border-emerald-300"
+              >
+                Ouvrir
+              </Link>
+            </span>
+          </div>
         </article>
       </section>
     </div>
