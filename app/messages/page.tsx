@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
+
+export const dynamic = "force-dynamic";
 
 type DirectMessage = {
   id: string;
@@ -12,22 +14,34 @@ type DirectMessage = {
   created_at: string;
 };
 
-const formatTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString("fr-FR", {
+type ProfileEntry = {
+  user_id: string;
+  ingame_name: string;
+  role_rank: string | null;
+};
+
+type ThreadEntry = {
+  partnerId: string;
+  partnerName: string;
+  roleRank: string | null;
+  lastMessage: string;
+  lastAt: string;
+};
+
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "short",
     hour: "2-digit",
     minute: "2-digit",
   });
 
-export default function MessagesPage() {
-  const searchParams = useSearchParams();
+export default function MessagesListPage() {
   const [userId, setUserId] = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [selectedName, setSelectedName] = useState<string>("");
-  const [messages, setMessages] = useState<DirectMessage[]>([]);
-  const [newMessage, setNewMessage] = useState("");
-  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [threads, setThreads] = useState<ThreadEntry[]>([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -35,6 +49,7 @@ export default function MessagesPage() {
       const supabase = createSupabaseBrowserClient();
       if (!supabase) {
         setError("Supabase n'est pas configuré (URL / ANON KEY).");
+        setLoading(false);
         return;
       }
       const { data } = await supabase.auth.getUser();
@@ -44,6 +59,7 @@ export default function MessagesPage() {
       }
       if (!id) {
         setError("Veuillez vous connecter pour accéder à la messagerie.");
+        setLoading(false);
         return;
       }
       setUserId(id);
@@ -54,52 +70,71 @@ export default function MessagesPage() {
     };
   }, []);
 
-  useEffect(() => {
-    const target = searchParams.get("user");
-    const name = searchParams.get("name");
-    if (!target) {
-      setSelectedUserId(null);
-      setSelectedName("");
-      return;
-    }
-    setSelectedUserId(target);
-    setSelectedName(name ?? "");
-  }, [searchParams]);
-
-  const loadMessages = async (targetId: string) => {
-    if (!userId) {
-      return;
-    }
+  const loadThreads = async (currentUserId: string) => {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) {
       return;
     }
-    setLoadingMessages(true);
+    setLoading(true);
     const { data, error: fetchError } = (await supabase
       .from("direct_messages")
       .select("id,sender_id,recipient_id,body,created_at")
-      .or(
-        `and(sender_id.eq.${userId},recipient_id.eq.${targetId}),and(sender_id.eq.${targetId},recipient_id.eq.${userId})`,
-      )
-      .order("created_at", { ascending: true })) as {
+      .or(`sender_id.eq.${currentUserId},recipient_id.eq.${currentUserId}`)
+      .order("created_at", { ascending: false })
+      .limit(200)) as {
       data: DirectMessage[] | null;
       error: { message?: string } | null;
     };
     if (fetchError) {
-      setError(fetchError.message || "Impossible de charger les messages.");
-      setLoadingMessages(false);
+      setError(fetchError.message || "Impossible de charger les conversations.");
+      setLoading(false);
       return;
     }
-    setMessages(data ?? []);
-    setLoadingMessages(false);
+    const rows = data ?? [];
+    const threadMap = new Map<string, DirectMessage>();
+    rows.forEach((message) => {
+      const partnerId =
+        message.sender_id === currentUserId
+          ? message.recipient_id
+          : message.sender_id;
+      if (!threadMap.has(partnerId)) {
+        threadMap.set(partnerId, message);
+      }
+    });
+    const partnerIds = Array.from(threadMap.keys());
+    if (partnerIds.length === 0) {
+      setThreads([]);
+      setLoading(false);
+      return;
+    }
+    const { data: profilesData } = (await supabase
+      .from("profiles")
+      .select("user_id,ingame_name,role_rank")
+      .in("user_id", partnerIds)) as { data: ProfileEntry[] | null };
+    const profileMap = new Map(
+      (profilesData ?? []).map((profile) => [profile.user_id, profile]),
+    );
+    const nextThreads = partnerIds.map((partnerId) => {
+      const message = threadMap.get(partnerId) as DirectMessage;
+      const profile = profileMap.get(partnerId);
+      return {
+        partnerId,
+        partnerName: profile?.ingame_name ?? "Membre",
+        roleRank: profile?.role_rank ?? null,
+        lastMessage: message.body,
+        lastAt: message.created_at,
+      };
+    });
+    setThreads(nextThreads);
+    setLoading(false);
   };
 
   useEffect(() => {
-    if (!selectedUserId) {
+    if (!userId) {
       return;
     }
-    void loadMessages(selectedUserId);
-  }, [selectedUserId]);
+    void loadThreads(userId);
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) {
@@ -109,7 +144,7 @@ export default function MessagesPage() {
     if (!supabase) {
       return;
     }
-    const channel = supabase.channel(`dm-${userId}`);
+    const channel = supabase.channel(`threads-${userId}`);
     channel
       .on(
         "postgres_changes",
@@ -119,84 +154,25 @@ export default function MessagesPage() {
           table: "direct_messages",
           filter: `or=(sender_id.eq.${userId},recipient_id.eq.${userId})`,
         },
-        (payload) => {
-          const next = payload.new as DirectMessage;
-          if (!selectedUserId) {
-            return;
-          }
-          const relevant =
-            (next.sender_id === userId && next.recipient_id === selectedUserId) ||
-            (next.sender_id === selectedUserId && next.recipient_id === userId);
-          if (!relevant) {
-            return;
-          }
-          setMessages((prev) => [...prev, next]);
+        () => {
+          void loadThreads(userId);
         },
       )
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, selectedUserId]);
+  }, [userId]);
 
-  useEffect(() => {
-    if (!scrollRef.current) {
-      return;
+  const filteredThreads = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) {
+      return threads;
     }
-    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages, selectedUserId]);
-
-  useEffect(() => {
-    let isMounted = true;
-    const loadSelectedProfile = async () => {
-      if (!selectedUserId || selectedName) {
-        return;
-      }
-      const supabase = createSupabaseBrowserClient();
-      if (!supabase) {
-        return;
-      }
-      const { data } = (await supabase
-        .from("profiles")
-        .select("ingame_name")
-        .eq("user_id", selectedUserId)
-        .maybeSingle()) as { data: { ingame_name: string } | null };
-      if (!isMounted) {
-        return;
-      }
-      if (data?.ingame_name) {
-        setSelectedName(data.ingame_name);
-      }
-    };
-    loadSelectedProfile();
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedUserId, selectedName]);
-
-  const handleSend = async () => {
-    if (!userId || !selectedUserId) {
-      return;
-    }
-    const body = newMessage.trim();
-    if (!body) {
-      return;
-    }
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      return;
-    }
-    setNewMessage("");
-    const { error: sendError } = await supabase.from("direct_messages").insert({
-      sender_id: userId,
-      recipient_id: selectedUserId,
-      body,
-    });
-    if (sendError) {
-      setError(sendError.message || "Impossible d'envoyer le message.");
-    }
-  };
+    return threads.filter((thread) =>
+      thread.partnerName.toLowerCase().includes(normalized),
+    );
+  }, [threads, query]);
 
   return (
     <div className="min-h-screen text-zinc-100">
@@ -206,90 +182,69 @@ export default function MessagesPage() {
             Messagerie
           </p>
           <h1 className="mt-2 font-display text-3xl tracking-[0.15em] text-text">
-            Messages privés
+            Conversations privées
           </h1>
           <p className="mt-2 text-sm text-text/70">
-            Discutez en privé avec les membres de la guilde.
+            Démarrez une conversation depuis l&apos;onglet Guilde.
           </p>
           {error ? (
             <p className="mt-3 text-sm text-red-300">{error}</p>
           ) : null}
         </header>
 
-        <div className="flex flex-col rounded-3xl border border-white/10 bg-surface/60 p-4 backdrop-blur">
-          <div className="border-b border-white/10 pb-3">
-            <p className="text-xs uppercase tracking-[0.25em] text-text/50">
-              Conversation
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-text">
-              {selectedUserId ? selectedName : "Choisir un membre"}
-            </h2>
+        <div className="rounded-3xl border border-white/10 bg-surface/60 p-4 backdrop-blur">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <label className="text-xs uppercase tracking-[0.25em] text-text/50">
+              Conversations
+            </label>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Rechercher un membre..."
+              className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-text outline-none sm:w-64"
+            />
           </div>
 
-            <div
-              ref={scrollRef}
-              className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1"
-            >
-              {selectedUserId ? (
-                loadingMessages ? (
-                  <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/60">
-                    Chargement des messages...
-                  </div>
-                ) : messages.length === 0 ? (
-                  <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/60">
-                    Aucun message pour le moment.
-                  </div>
-                ) : (
-                  messages.map((message) => {
-                    const isMine = message.sender_id === userId;
-                    return (
-                      <div
-                        key={message.id}
-                        className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={[
-                            "max-w-[80%] rounded-2xl border px-4 py-3 text-sm",
-                            isMine
-                              ? "border-primary/40 bg-primary/20 text-text"
-                              : "border-white/10 bg-black/40 text-text/80",
-                          ].join(" ")}
-                        >
-                          <p className="whitespace-pre-wrap">{message.body}</p>
-                          <p className="mt-2 text-[10px] uppercase tracking-[0.2em] text-text/40">
-                            {formatTime(message.created_at)}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })
-                )
-              ) : (
-                <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/60">
-                  Passez par la page Guilde pour démarrer une conversation.
+          <div className="mt-4 space-y-3">
+            {loading ? (
+              <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/60">
+                Chargement des conversations...
+              </div>
+            ) : filteredThreads.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-6 text-center text-sm text-text/60">
+                Aucune conversation pour le moment.
+                <div className="mt-2 text-xs text-text/40">
+                  Va sur l&apos;onglet Guilde pour envoyer un premier message.
                 </div>
-              )}
-            </div>
-
-          <div className="mt-4 border-t border-white/10 pt-4">
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <textarea
-                value={newMessage}
-                onChange={(event) => setNewMessage(event.target.value)}
-                placeholder="Écrire un message..."
-                rows={3}
-                disabled={!selectedUserId}
-                className="flex-1 resize-none rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text outline-none disabled:opacity-50"
-              />
-              <button
-                type="button"
-                onClick={handleSend}
-                disabled={!selectedUserId || !newMessage.trim()}
-                className="rounded-2xl border border-amber-400/60 bg-amber-400/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Envoyer
-              </button>
-            </div>
+              </div>
+            ) : (
+              filteredThreads.map((thread) => (
+                <Link
+                  key={thread.partnerId}
+                  href={`/messages/${encodeURIComponent(
+                    thread.partnerId,
+                  )}?name=${encodeURIComponent(thread.partnerName)}`}
+                  className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/80 transition hover:border-primary/40 hover:bg-primary/10"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold text-text">
+                      {thread.partnerName}
+                    </div>
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-text/40">
+                      {formatDate(thread.lastAt)}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="line-clamp-1 text-sm text-text/70">
+                      {thread.lastMessage}
+                    </p>
+                    <span className="rounded-full border border-white/10 bg-black/40 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-text/50">
+                      {thread.roleRank ?? "membre"}
+                    </span>
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
         </div>
       </section>
