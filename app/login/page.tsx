@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 
@@ -15,6 +15,42 @@ export default function LoginPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkSession = async () => {
+      const supabase = createSupabaseBrowserClient();
+      if (!supabase) {
+        if (isMounted) {
+          setCheckingSession(false);
+        }
+        return;
+      }
+      const { data } = await supabase.auth.getUser();
+      const userId = data.user?.id;
+      if (!userId) {
+        if (isMounted) {
+          setCheckingSession(false);
+        }
+        return;
+      }
+      const { data: profile } = (await supabase
+        .from("profiles")
+        .select("guild_id")
+        .eq("user_id", userId)
+        .maybeSingle()) as { data: { guild_id?: string | null } | null };
+      if (!isMounted) {
+        return;
+      }
+      const nextRoute = profile?.guild_id ? "/" : "/guild/join";
+      router.replace(nextRoute);
+    };
+    void checkSession();
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
 
   const resolvePostLoginRoute = async () => {
     const supabase = createSupabaseBrowserClient();
@@ -124,6 +160,18 @@ export default function LoginPage() {
       return;
     }
   };
+
+  if (checkingSession) {
+    return (
+      <div className="relative min-h-screen overflow-hidden bg-black text-zinc-100">
+        <div className="relative mx-auto flex min-h-screen w-full max-w-xl flex-col items-center justify-center px-6 py-14">
+          <div className="w-full rounded-3xl border border-amber-400/30 bg-white/5 p-8 text-center text-sm text-amber-200/80 shadow-[0_0_35px_rgba(0,0,0,0.6)] backdrop-blur">
+            Vérification de la session...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-black text-zinc-100">
