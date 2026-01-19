@@ -9,6 +9,7 @@ type GuildEntry = {
   name: string;
   slug: string;
   owner_id: string;
+  member_count?: number;
 };
 
 const normalizeSlug = (value: string) =>
@@ -24,12 +25,32 @@ export default function GuildJoinPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [guilds, setGuilds] = useState<GuildEntry[]>([]);
   const [query, setQuery] = useState("");
-  const [joinSlug, setJoinSlug] = useState("");
   const [guildName, setGuildName] = useState("");
-  const [guildSlug, setGuildSlug] = useState("");
+  const [guildAccessCode, setGuildAccessCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [keyInput, setKeyInput] = useState("");
+  const [pendingGuild, setPendingGuild] = useState<GuildEntry | null>(null);
+
+  const isProfileComplete = (profile: {
+    ingame_name?: string | null;
+    main_weapon?: string | null;
+    off_weapon?: string | null;
+    role?: string | null;
+    archetype?: string | null;
+    gear_score?: number | null;
+  } | null) =>
+    Boolean(
+      profile?.ingame_name?.trim() &&
+        profile?.main_weapon &&
+        profile?.off_weapon &&
+        profile?.role &&
+        profile?.archetype &&
+        typeof profile?.gear_score === "number" &&
+        profile.gear_score > 0,
+    );
 
   useEffect(() => {
     let isMounted = true;
@@ -53,9 +74,25 @@ export default function GuildJoinPage() {
       setUserId(id);
       const { data: profile } = (await supabase
         .from("profiles")
-        .select("guild_id")
+        .select("guild_id,ingame_name,main_weapon,off_weapon,role,archetype,gear_score")
         .eq("user_id", id)
-        .maybeSingle()) as { data: { guild_id?: string | null } | null };
+        .maybeSingle()) as {
+        data:
+          | {
+              guild_id?: string | null;
+              ingame_name?: string | null;
+              main_weapon?: string | null;
+              off_weapon?: string | null;
+              role?: string | null;
+              archetype?: string | null;
+              gear_score?: number | null;
+            }
+          | null;
+      };
+      if (!isProfileComplete(profile)) {
+        router.replace("/profile");
+        return;
+      }
       if (profile?.guild_id) {
         router.push("/");
         return;
@@ -73,11 +110,18 @@ export default function GuildJoinPage() {
       return;
     }
     setLoading(true);
-    const { data } = (await supabase
-      .from("guilds")
-      .select("id,name,slug,owner_id")
-      .order("name")) as { data: GuildEntry[] | null };
-    const list = data ?? [];
+    const { data, error: fetchError } = (await supabase.rpc(
+      "get_guilds_with_counts",
+    )) as {
+      data: GuildEntry[] | null;
+      error: { message?: string } | null;
+    };
+    if (fetchError) {
+      setError(fetchError.message || "Impossible de charger les guildes.");
+      setLoading(false);
+      return;
+    }
+    const list = (data ?? []).sort((a, b) => a.name.localeCompare(b.name));
     const hasTrinity = list.some((guild) => guild.slug === "trinity");
     const withTrinity = hasTrinity
       ? list
@@ -87,6 +131,7 @@ export default function GuildJoinPage() {
             name: "Trinity",
             slug: "trinity",
             owner_id: "",
+            member_count: 0,
           },
           ...list,
         ];
@@ -102,6 +147,12 @@ export default function GuildJoinPage() {
     if (!userId) {
       return;
     }
+    setPendingGuild(guild);
+    setKeyInput("");
+    setShowKeyModal(true);
+  };
+
+  const performJoin = async (guild: GuildEntry, roleRank: "admin" | "member") => {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) {
       return;
@@ -109,27 +160,10 @@ export default function GuildJoinPage() {
     setJoiningId(guild.id);
     setError(null);
     let targetGuildId = guild.id;
-    if (guild.id === "trinity") {
-      const { data: created, error: createError } = await supabase
-        .from("guilds")
-        .insert({
-          name: "Trinity",
-          slug: "trinity",
-          owner_id: userId,
-        })
-        .select("id")
-        .single();
-      if (createError) {
-        setError(createError.message || "Impossible de créer la guilde.");
-        setJoiningId(null);
-        return;
-      }
-      targetGuildId = created.id;
-    }
     const { error: joinError } = await supabase.from("guild_members").insert({
       guild_id: targetGuildId,
       user_id: userId,
-      role_rank: "member",
+      role_rank: roleRank,
     });
     if (joinError) {
       setError(joinError.message || "Impossible de rejoindre la guilde.");
@@ -138,61 +172,23 @@ export default function GuildJoinPage() {
     }
     await supabase
       .from("profiles")
-      .update({ guild_id: targetGuildId })
+      .update({ guild_id: targetGuildId, role_rank: roleRank })
       .eq("user_id", userId);
     setJoiningId(null);
     router.push("/");
+    router.refresh();
   };
 
-  const handleJoinBySlug = async () => {
-    if (!userId) {
-      return;
-    }
-    const slug = normalizeSlug(joinSlug);
-    if (!slug) {
-      setError("Code de guilde requis.");
-      return;
-    }
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      return;
-    }
-    setError(null);
-    setLoading(true);
-    let { data: guild } = await supabase
-      .from("guilds")
-      .select("id,name,slug,owner_id")
-      .eq("slug", slug)
-      .maybeSingle();
-    if (!guild && slug === "trinity") {
-      const { data: created } = await supabase
-        .from("guilds")
-        .insert({
-          name: "Trinity",
-          slug: "trinity",
-          owner_id: userId,
-        })
-        .select("id,name,slug,owner_id")
-        .single();
-      guild = created ?? null;
-    }
-    if (!guild) {
-      setError("Guilde introuvable.");
-      setLoading(false);
-      return;
-    }
-    await handleJoin(guild as GuildEntry);
-    setLoading(false);
-  };
 
   const handleCreate = async () => {
     if (!userId) {
       return;
     }
     const name = guildName.trim();
-    const slug = normalizeSlug(guildSlug || guildName);
-    if (!name || !slug) {
-      setError("Nom et code de guilde obligatoires.");
+    const slug = normalizeSlug(guildName);
+    const accessCode = guildAccessCode.trim();
+    if (!name || !slug || !accessCode) {
+      setError("Nom et clé obligatoires.");
       return;
     }
     const supabase = createSupabaseBrowserClient();
@@ -204,7 +200,7 @@ export default function GuildJoinPage() {
     setLoading(true);
     const { data: guild, error: guildError } = await supabase
       .from("guilds")
-      .insert({ name, slug, owner_id: userId })
+      .insert({ name, slug, owner_id: userId, access_code: accessCode })
       .select("id")
       .single();
     if (guildError) {
@@ -219,15 +215,85 @@ export default function GuildJoinPage() {
     });
     await supabase
       .from("profiles")
-      .update({ guild_id: guild.id })
+      .update({ guild_id: guild.id, role_rank: "admin" })
       .eq("user_id", userId);
     setLoading(false);
     router.push("/");
+    router.refresh();
   };
 
   const filteredGuilds = guilds.filter((guild) =>
     guild.name.toLowerCase().includes(query.trim().toLowerCase()),
   );
+
+  const handleKeyConfirm = async () => {
+    if (!userId) {
+      return;
+    }
+    if (!pendingGuild) {
+      return;
+    }
+    const key = keyInput.trim();
+    if (!key) {
+      setError("Clé d'accès requise.");
+      return;
+    }
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      return;
+    }
+    setError(null);
+    let targetGuild: GuildEntry | null = null;
+    let joinRole: "admin" | "member" = "member";
+    if (pendingGuild.id === "trinity") {
+      const { data: existing } = await supabase
+        .from("guilds")
+        .select("id,name,slug,owner_id")
+        .eq("slug", "trinity")
+        .eq("access_code", key)
+        .maybeSingle();
+      if (existing) {
+        targetGuild = existing as GuildEntry;
+      } else if (key === "1234") {
+        const { data: created, error: createError } = await supabase
+          .from("guilds")
+          .insert({
+            name: "Trinity",
+            slug: "trinity",
+            owner_id: userId,
+            access_code: key,
+          })
+          .select("id,name,slug,owner_id")
+          .single();
+        if (createError) {
+          setError(createError.message || "Impossible de créer la guilde.");
+          return;
+        }
+        targetGuild = created as GuildEntry;
+        joinRole = "admin";
+      } else {
+        setError("Clé Trinity invalide.");
+        return;
+      }
+    } else {
+      const { data: existing } = await supabase
+        .from("guilds")
+        .select("id,name,slug,owner_id")
+        .eq("id", pendingGuild.id)
+        .eq("access_code", key)
+        .maybeSingle();
+      if (!existing) {
+        setError("Clé invalide.");
+        return;
+      }
+      targetGuild = existing as GuildEntry;
+    }
+    setShowKeyModal(false);
+    setPendingGuild(null);
+    if (targetGuild) {
+      await performJoin(targetGuild, joinRole);
+    }
+  };
 
   return (
     <div className="min-h-screen text-zinc-100">
@@ -240,7 +306,7 @@ export default function GuildJoinPage() {
             Rejoindre une guilde
           </h1>
           <p className="mt-2 text-sm text-text/70">
-            Choisis une guilde existante ou entre un code.
+            Choisis une guilde existante et sa clé d'accès.
           </p>
           {error ? (
             <p className="mt-3 text-sm text-red-300">{error}</p>
@@ -255,22 +321,7 @@ export default function GuildJoinPage() {
               placeholder="Rechercher une guilde..."
               className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text outline-none sm:w-72"
             />
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              <input
-                value={joinSlug}
-                onChange={(event) => setJoinSlug(event.target.value)}
-                placeholder="Code de guilde"
-                className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text outline-none"
-              />
-              <button
-                type="button"
-                onClick={handleJoinBySlug}
-                disabled={loading || !userId}
-                className="rounded-2xl border border-amber-400/60 bg-amber-400/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Rejoindre
-              </button>
-            </div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row" />
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -285,12 +336,12 @@ export default function GuildJoinPage() {
                   placeholder="Nom de la guilde"
                   className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text outline-none"
                 />
-                <input
-                  value={guildSlug}
-                  onChange={(event) => setGuildSlug(event.target.value)}
-                  placeholder="Code (ex: les-archers)"
-                  className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text outline-none"
-                />
+              <input
+                value={guildAccessCode}
+                onChange={(event) => setGuildAccessCode(event.target.value)}
+                placeholder="Clé d'accès (ex: 1234)"
+                className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text outline-none"
+              />
                 <button
                   type="button"
                   onClick={handleCreate}
@@ -331,7 +382,7 @@ export default function GuildJoinPage() {
                       {guild.name}
                     </div>
                     <div className="text-xs uppercase tracking-[0.2em] text-text/40">
-                      {guild.slug}
+                      {(guild.member_count ?? 0)}/70
                     </div>
                   </div>
                   <button
@@ -348,6 +399,45 @@ export default function GuildJoinPage() {
           </div>
         </div>
       </section>
+      {showKeyModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-surface/95 p-6 text-text shadow-[0_0_40px_rgba(0,0,0,0.6)] backdrop-blur">
+            <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+              Accès à la guilde
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-text">Clé d'accès</h2>
+            <p className="mt-2 text-sm text-text/70">
+              Entre la clé pour rejoindre la guilde.
+            </p>
+            <input
+              value={keyInput}
+              onChange={(event) => setKeyInput(event.target.value)}
+              placeholder="Clé d'accès"
+              className="mt-4 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text outline-none"
+            />
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowKeyModal(false);
+                  setPendingGuild(null);
+                  setPendingSlug(null);
+                }}
+                className="flex-1 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:text-text"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleKeyConfirm}
+                className="flex-1 rounded-2xl border border-amber-400/60 bg-amber-400/10 px-4 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+              >
+                Valider
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

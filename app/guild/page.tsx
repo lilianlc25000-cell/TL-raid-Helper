@@ -67,21 +67,47 @@ export default function GuildPage() {
       }
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth.user?.id;
+      let guildId: string | null = null;
       if (userId) {
         const { data: profile } = (await supabase
           .from("profiles")
           .select("guild_id")
           .eq("user_id", userId)
           .maybeSingle()) as { data: { guild_id?: string | null } | null };
+        guildId = profile?.guild_id ?? null;
         if (isMounted) {
-          setCurrentGuildId(profile?.guild_id ?? null);
+          setCurrentGuildId(guildId);
         }
       }
+      if (!guildId) {
+        setMembers([]);
+        setIsLoading(false);
+        return;
+      }
+      const { data: memberRows, error: membersError } = (await supabase
+        .from("guild_members")
+        .select("user_id,role_rank")
+        .eq("guild_id", guildId)) as {
+        data:
+          | Array<{
+              user_id: string;
+              role_rank: string | null;
+            }>
+          | null;
+        error: { message?: string } | null;
+      };
+      if (membersError) {
+        setError(membersError.message || "Impossible de charger la guilde.");
+        setIsLoading(false);
+        return;
+      }
+      const memberIds = (memberRows ?? []).map((row) => row.user_id);
       const { data, error: fetchError } = (await supabase
         .from("profiles")
         .select(
-          "user_id,ingame_name,role,archetype,gear_score,main_weapon,off_weapon,role_rank",
-        )) as {
+          "user_id,ingame_name,role,archetype,gear_score,main_weapon,off_weapon",
+        )
+        .in("user_id", memberIds)) as {
         data:
           | Array<{
               user_id: string;
@@ -91,7 +117,6 @@ export default function GuildPage() {
               gear_score: number | null;
               main_weapon: string | null;
               off_weapon: string | null;
-              role_rank: string | null;
             }>
           | null;
         error: { message?: string } | null;
@@ -105,6 +130,9 @@ export default function GuildPage() {
         setIsLoading(false);
         return;
       }
+      const roleById = new Map(
+        (memberRows ?? []).map((row) => [row.user_id, row.role_rank]),
+      );
       setMembers(
         (data ?? []).map((entry) => ({
           userId: entry.user_id,
@@ -114,7 +142,7 @@ export default function GuildPage() {
           gearScore: entry.gear_score,
           mainWeapon: entry.main_weapon,
           offWeapon: entry.off_weapon,
-          roleRank: entry.role_rank,
+          roleRank: roleById.get(entry.user_id) ?? null,
         })),
       );
       setIsLoading(false);
