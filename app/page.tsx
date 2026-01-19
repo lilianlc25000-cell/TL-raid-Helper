@@ -1,13 +1,51 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CloudRain, Moon, Skull, Sun, Users } from "lucide-react";
+import { createSupabaseBrowserClient } from "../lib/supabase/client";
 import { useSolisiumTime } from "@/lib/solisium-time";
 
 export default function Home() {
+  const router = useRouter();
   const { isNight, timeRemaining } = useSolisiumTime();
   const stateLabel = isNight ? "Nuit" : "Jour";
   const bossCountdown = "01:42:18";
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkSession = async () => {
+      const supabase = createSupabaseBrowserClient();
+      if (!supabase) {
+        if (isMounted) {
+          setCheckingSession(false);
+        }
+        return;
+      }
+      const { data } = await supabase.auth.getUser();
+      if (!data.user) {
+        router.replace("/login");
+        return;
+      }
+      if (isMounted) {
+        setCheckingSession(false);
+      }
+    };
+    void checkSession();
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
+
+  if (checkingSession) {
+    return (
+      <div className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6 text-sm text-text/70">
+        Vérification de la session...
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-10">
