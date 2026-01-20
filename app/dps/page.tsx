@@ -14,18 +14,13 @@ type ParsedLogEntry = {
   duration: number;
 };
 
-type EventEntry = {
-  id: string;
-  title: string;
-  start_time: string;
-};
-
 const TARGET_TABS = [
   "Mannequin",
   "Dragaryles",
   "Vulkan",
   "Zairos",
   "Calanthia",
+  "Umbrakan",
   "Tête de lion",
 ] as const;
 
@@ -40,7 +35,30 @@ const normalizeText = (value: string) =>
   value
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const TARGET_ALIASES: Record<TargetTab, string[]> = {
+  Mannequin: [
+    "mannequin",
+    "mannequin d'entrainement",
+    "mannequin d'entraînement",
+    "dummy",
+    "training dummy",
+    "entrainement",
+    "entraînement",
+  ],
+  Dragaryles: ["dragaryles"],
+  Vulkan: ["vulkan"],
+  Zairos: ["zairos"],
+  Calanthia: ["calanthia"],
+  Umbrakan: ["umbrakan"],
+  "Tête de lion": ["tete de lion", "tête de lion"],
+};
+
+const getTargetTokens = (target: TargetTab) =>
+  TARGET_ALIASES[target].map((token) => normalizeText(token));
 
 const formatNumber = (value: number) => {
   if (value >= 1_000_000_000) {
@@ -80,7 +98,7 @@ const trophyColor = (rank: number) => {
 
 const detectTargetFromLog = (content: string): TargetTab | null => {
   const tokens = new Map(
-    TARGET_TABS.map((tab) => [tab, normalizeText(tab)]),
+    TARGET_TABS.map((tab) => [tab, getTargetTokens(tab)]),
   );
   const lines = content.split(/\r?\n/);
   for (const line of lines) {
@@ -100,8 +118,8 @@ const detectTargetFromLog = (content: string): TargetTab | null => {
       continue;
     }
     const normalizedTarget = normalizeText(targetName);
-    for (const [tab, token] of tokens.entries()) {
-      if (normalizedTarget.includes(token)) {
+    for (const [tab, tokenList] of tokens.entries()) {
+      if (tokenList.some((token) => normalizedTarget.includes(token))) {
         return tab;
       }
     }
@@ -111,42 +129,46 @@ const detectTargetFromLog = (content: string): TargetTab | null => {
 
 export default function DPSMeterPage() {
   const router = useRouter();
-  const [logsByTarget, setLogsByTarget] = useState(emptyLogsByTarget);
+  const [savedLogsByTarget, setSavedLogsByTarget] =
+    useState(emptyLogsByTarget);
+  const [pendingLogsByTarget, setPendingLogsByTarget] =
+    useState(emptyLogsByTarget);
   const [activeTarget, setActiveTarget] = useState<TargetTab>(TARGET_TABS[0]);
   const [isDragging, setIsDragging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
-  const [events, setEvents] = useState<EventEntry[]>([]);
   const [guildId, setGuildId] = useState<string | null>(null);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [isLoadingGuild, setIsLoadingGuild] = useState(true);
 
   const parseContent = useCallback((content: string) => {
     const parsed = parseDPSLog(content);
     const detectedTarget = detectTargetFromLog(content);
     const target = detectedTarget ?? activeTarget;
-    setLogsByTarget((prev) => ({ ...prev, [target]: parsed }));
+    setPendingLogsByTarget((prev) => ({ ...prev, [target]: parsed }));
     if (detectedTarget) {
       setActiveTarget(detectedTarget);
     }
   }, [activeTarget]);
 
-  const handleFile = useCallback(
-    async (file: File) => {
-      const text = await file.text();
-      parseContent(text);
+  const handleFiles = useCallback(
+    async (files: File[]) => {
+      for (const file of files) {
+        const text = await file.text();
+        parseContent(text);
+      }
     },
     [parseContent],
   );
 
   useEffect(() => {
     let isMounted = true;
-    const loadEvents = async () => {
+    const loadGuild = async () => {
       const supabase = createSupabaseBrowserClient();
       if (!supabase) {
         setError("Supabase n'est pas configuré (URL / ANON KEY).");
-        setIsLoadingEvents(false);
+        setIsLoadingGuild(false);
         return;
       }
       const { data } = await supabase.auth.getUser();
@@ -170,26 +192,9 @@ export default function DPSMeterPage() {
       if (isMounted) {
         setGuildId(guildId);
       }
-      const { data: eventRows, error: eventError } = (await supabase
-        .from("events")
-        .select("id,title,start_time")
-        .eq("guild_id", guildId)
-        .order("start_time", { ascending: false })) as {
-        data: EventEntry[] | null;
-        error: { message?: string } | null;
-      };
-      if (!isMounted) {
-        return;
-      }
-      if (eventError) {
-        setError(eventError.message || "Impossible de charger les événements.");
-        setIsLoadingEvents(false);
-        return;
-      }
-      setEvents(eventRows ?? []);
-      setIsLoadingEvents(false);
+      setIsLoadingGuild(false);
     };
-    void loadEvents();
+    void loadGuild();
     return () => {
       isMounted = false;
     };
@@ -199,36 +204,24 @@ export default function DPSMeterPage() {
     async (event: React.DragEvent<HTMLDivElement>) => {
       event.preventDefault();
       setIsDragging(false);
-      const file = event.dataTransfer.files?.[0];
-      if (file) {
-        await handleFile(file);
+      const files = Array.from(event.dataTransfer.files ?? []);
+      if (files.length > 0) {
+        await handleFiles(files);
       }
     },
-    [handleFile],
+    [handleFiles],
   );
 
-  const targetEventId = useMemo(() => {
-    if (events.length === 0) {
-      return "";
-    }
-    const token = normalizeText(activeTarget);
-    const match = events.find((event) =>
-      normalizeText(event.title).includes(token),
-    );
-    return match?.id ?? events[0].id;
-  }, [events, activeTarget]);
-
-  const targetEventLabel = useMemo(() => {
-    if (!targetEventId) {
-      return "—";
-    }
-    return events.find((event) => event.id === targetEventId)?.title ?? "—";
-  }, [events, targetEventId]);
-
   const handleSave = async () => {
-    const activeLogs = logsByTarget[activeTarget] ?? [];
-    if (activeLogs.length === 0) {
+    const targetsToSave = TARGET_TABS.filter(
+      (target) => (pendingLogsByTarget[target] ?? []).length > 0,
+    );
+    if (targetsToSave.length === 0) {
       setError("Aucun log parsé.");
+      return;
+    }
+    if (!guildId) {
+      setError("Aucune guilde active.");
       return;
     }
     const supabase = createSupabaseBrowserClient();
@@ -241,116 +234,170 @@ export default function DPSMeterPage() {
     setSuccess(null);
     setWarning(null);
 
-    let eventId = targetEventId;
-    if (!eventId) {
-      if (!guildId) {
-        setError("Aucun raid disponible pour enregistrer.");
+    let totalSaved = 0;
+    let totalMissing = 0;
+
+    for (const target of targetsToSave) {
+      const activeLogs = pendingLogsByTarget[target] ?? [];
+      if (activeLogs.length === 0) {
+        continue;
+      }
+      const names = activeLogs.map((entry) => entry.playerName);
+      const { data: profiles, error: profileError } = (await supabase
+        .from("profiles")
+        .select("user_id,ingame_name")
+        .in("ingame_name", names)) as {
+        data:
+          | Array<{
+              user_id: string;
+              ingame_name: string;
+            }>
+          | null;
+        error: { message?: string } | null;
+      };
+
+      if (profileError) {
+        setError(profileError.message || "Impossible de charger les profils.");
         setIsSaving(false);
         return;
       }
-      const { data: createdEvent, error: createError } = await supabase
-        .from("events")
-        .insert({
-          title: `${activeTarget} DPS`,
-          event_type: "DPS",
-          difficulty: null,
-          start_time: new Date().toISOString(),
-          description: "Import DPS automatique",
-          cohesion_reward: 0,
-          status: "planned",
-          is_points_distributed: false,
-          are_groups_published: false,
-          guild_id: guildId,
+
+      const userByName = new Map(
+        (profiles ?? []).map((profile) => [
+          profile.ingame_name.toLowerCase(),
+          profile.user_id,
+        ]),
+      );
+
+      const rows = activeLogs
+        .map((entry) => {
+          const userId = userByName.get(entry.playerName.toLowerCase()) ?? null;
+          if (!userId) {
+            return null;
+          }
+          return {
+            guild_id: guildId,
+            target_category: target,
+            user_id: userId,
+            class_played: null,
+            dps: entry.dps,
+            total_damage: entry.totalDamage,
+            duration_seconds: entry.duration,
+          };
         })
-        .select("id,title,start_time")
-        .single();
-      if (createError || !createdEvent) {
-        setError("Impossible de créer le raid pour l'import.");
-        setIsSaving(false);
-        return;
-      }
-      eventId = createdEvent.id;
-      setEvents((prev) => [createdEvent as EventEntry, ...prev]);
-    }
+        .filter(Boolean) as Array<{
+        guild_id: string;
+        target_category: string;
+        user_id: string;
+        class_played: string | null;
+        dps: number;
+        total_damage: number;
+        duration_seconds: number;
+      }>;
 
-    const names = activeLogs.map((entry) => entry.playerName);
-    const { data: profiles, error: profileError } = (await supabase
-      .from("profiles")
-      .select("user_id,ingame_name")
-      .in("ingame_name", names)) as {
-      data:
-        | Array<{
-            user_id: string;
-            ingame_name: string;
-          }>
-        | null;
-      error: { message?: string } | null;
-    };
-
-    if (profileError) {
-      setError(profileError.message || "Impossible de charger les profils.");
-      setIsSaving(false);
-      return;
-    }
-
-    const userByName = new Map(
-      (profiles ?? []).map((profile) => [
-        profile.ingame_name.toLowerCase(),
-        profile.user_id,
-      ]),
-    );
-
-    const rows = activeLogs
-      .map((entry) => {
-        const userId = userByName.get(entry.playerName.toLowerCase()) ?? null;
-        if (!userId) {
-          return null;
+      const missingCount = activeLogs.length - rows.length;
+      if (rows.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("raid_performance")
+          .delete()
+          .eq("guild_id", guildId)
+          .eq("target_category", target);
+        if (deleteError) {
+          setError(
+            deleteError.message ||
+              "Impossible de remplacer les anciennes performances.",
+          );
+          setIsSaving(false);
+          return;
         }
-        return {
-          event_id: eventId,
-          user_id: userId,
-          class_played: null,
-          dps: entry.dps,
-          total_damage: entry.totalDamage,
-          duration_seconds: entry.duration,
-        };
-      })
-      .filter(Boolean) as Array<{
-      event_id: string;
-      user_id: string;
-      class_played: string | null;
-      dps: number;
-      total_damage: number;
-      duration_seconds: number;
-    }>;
-
-    const missingCount = activeLogs.length - rows.length;
-    if (rows.length > 0) {
-      const { error: insertError } = await supabase
-        .from("raid_performance")
-        .insert(rows);
-      if (insertError) {
-        setError(
-          insertError.message || "Impossible d'enregistrer les performances.",
-        );
-        setIsSaving(false);
-        return;
+        const { error: insertError } = await supabase
+          .from("raid_performance")
+          .insert(rows);
+        if (insertError) {
+          setError(
+            insertError.message || "Impossible d'enregistrer les performances.",
+          );
+          setIsSaving(false);
+          return;
+        }
       }
+
+      totalMissing += missingCount;
+      totalSaved += rows.length;
+      setSavedLogsByTarget((prev) => ({ ...prev, [target]: activeLogs }));
+      setPendingLogsByTarget((prev) => ({ ...prev, [target]: [] }));
     }
 
-    if (missingCount > 0) {
+    if (totalMissing > 0) {
       setWarning(
-        `${missingCount} joueur(s) introuvable(s) : scores ignorés.`,
+        `${totalMissing} joueur(s) introuvable(s) : scores ignorés.`,
       );
     }
-    setSuccess(`${rows.length} scores importés !`);
+    setSuccess(`${totalSaved} scores importés !`);
     setIsSaving(false);
   };
 
-  const previewRows = useMemo(
-    () => logsByTarget[activeTarget] ?? [],
-    [logsByTarget, activeTarget],
+  const pendingRows = useMemo(
+    () => pendingLogsByTarget[activeTarget] ?? [],
+    [pendingLogsByTarget, activeTarget],
   );
+  const previewRows = useMemo(
+    () => (pendingRows.length > 0 ? pendingRows : savedLogsByTarget[activeTarget] ?? []),
+    [pendingRows, savedLogsByTarget, activeTarget],
+  );
+  const pendingTotal = useMemo(
+    () =>
+      TARGET_TABS.reduce(
+        (sum, tab) => sum + (pendingLogsByTarget[tab]?.length ?? 0),
+        0,
+      ),
+    [pendingLogsByTarget],
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadSavedRankings = async () => {
+      if (!guildId) {
+        return;
+      }
+      const supabase = createSupabaseBrowserClient();
+      if (!supabase) {
+        return;
+      }
+      const { data, error: fetchError } = await supabase
+        .from("raid_performance")
+        .select(
+          "dps,total_damage,duration_seconds,profiles(ingame_name),target_category",
+        )
+        .eq("guild_id", guildId)
+        .eq("target_category", activeTarget);
+      if (!isMounted || fetchError) {
+        return;
+      }
+      const mapped = (data ?? [])
+        .map((row) => {
+          const profile = Array.isArray(row.profiles)
+            ? row.profiles[0]
+            : row.profiles;
+          return {
+            playerName: profile?.ingame_name ?? "Inconnu",
+            dps: row.dps,
+            totalDamage: row.total_damage,
+            duration: row.duration_seconds,
+          };
+        })
+        .sort((a, b) => b.dps - a.dps)
+        .map((entry, index) => ({
+          ...entry,
+          rank: index + 1,
+        }));
+      setSavedLogsByTarget((prev) => ({ ...prev, [activeTarget]: mapped }));
+    };
+    void loadSavedRankings();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTarget, guildId]);
 
   return (
     <div className="min-h-screen text-zinc-100">
@@ -364,6 +411,9 @@ export default function DPSMeterPage() {
           </h1>
           <p className="mt-2 text-sm text-text/70">
             Choisis un raid puis importe ton fichier pour alimenter le classement.
+          </p>
+          <p className="mt-3 text-xs uppercase tracking-[0.35em] text-sky-200/80">
+            Un DPS meter par catégorie de cible
           </p>
           {error ? (
             <p className="mt-3 text-sm text-red-300">{error}</p>
@@ -396,51 +446,44 @@ export default function DPSMeterPage() {
               </button>
             ))}
           </div>
-          {isLoadingEvents || events.length === 0 ? (
+          {isLoadingGuild ? (
             <p className="mt-3 text-xs text-text/50">
-              {isLoadingEvents
-                ? "Chargement des raids..."
-                : "Aucun raid disponible."}
+              Chargement de la guilde...
             </p>
           ) : null}
         </div>
 
         <div className="space-y-6">
           <div className="space-y-4">
-            <div
+            <label
+              className={`flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed px-6 py-10 text-center transition ${
+                isDragging
+                  ? "border-sky-400 bg-sky-400/10"
+                  : "border-white/10 bg-surface/60"
+              }`}
               onDragOver={(event) => {
                 event.preventDefault();
                 setIsDragging(true);
               }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
-              className={`flex min-h-[180px] flex-col items-center justify-center rounded-3xl border border-dashed px-6 py-10 text-center transition ${
-                isDragging
-                  ? "border-sky-400 bg-sky-400/10"
-                  : "border-white/10 bg-surface/60"
-              }`}
             >
               <p className="text-lg text-text">
                 📄 Glissez votre fichier CombatLog.txt ici
               </p>
-              <p className="mt-2 text-xs uppercase tracking-[0.3em] text-text/50">
-                ou cliquez pour sélectionner
-              </p>
-              <label className="mt-4 inline-flex cursor-pointer items-center rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:text-text">
-                Choisir un fichier
-                <input
-                  type="file"
-                  accept=".txt,.csv"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) {
-                      void handleFile(file);
-                    }
-                  }}
-                />
-              </label>
-            </div>
+              <input
+                type="file"
+                accept=".txt,.csv"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  if (files.length > 0) {
+                    void handleFiles(files);
+                  }
+                }}
+              />
+            </label>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-surface/60 p-6">
@@ -451,19 +494,28 @@ export default function DPSMeterPage() {
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={isSaving || previewRows.length === 0}
+                disabled={isSaving || pendingTotal === 0}
                 className="inline-flex items-center rounded-full border border-emerald-400/60 bg-emerald-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSaving ? "Enregistrement..." : "💾 Enregistrer les résultats"}
+                {isSaving
+                  ? "Enregistrement..."
+                  : "💾 Enregistrer les résultats"}
               </button>
             </div>
 
             {previewRows.length === 0 ? (
               <div className="mt-6 rounded-2xl border border-white/10 bg-black/40 px-4 py-6 text-center text-sm text-text/60">
-                Aucun log détecté pour le moment.
+                {pendingRows.length > 0
+                  ? "Prévisualisation locale en cours."
+                  : "Aucun DPS sauvegardé pour cette cible."}
               </div>
             ) : (
               <div className="mt-6 space-y-4">
+                {pendingRows.length > 0 ? (
+                  <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-xs uppercase tracking-[0.25em] text-amber-200">
+                    Aperçu local — non publié tant que vous n&apos;enregistrez pas
+                  </div>
+                ) : null}
                 {previewRows.map((entry) => {
                   const trophyClass = trophyColor(entry.rank);
                   return (

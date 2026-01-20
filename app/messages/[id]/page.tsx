@@ -100,12 +100,12 @@ export default function MessagesThreadPage() {
     setLoadingMessages(true);
     const { data, error: fetchError } = (await supabase
       .from("direct_messages")
-      .select("id,sender_id,recipient_id,body,created_at")
+      .select("id,sender_id,recipient_id,body,created_at,is_read")
       .or(
         `and(sender_id.eq.${currentUserId},recipient_id.eq.${targetId}),and(sender_id.eq.${targetId},recipient_id.eq.${currentUserId})`,
       )
       .order("created_at", { ascending: true })) as {
-      data: DirectMessage[] | null;
+      data: Array<DirectMessage & { is_read?: boolean | null }> | null;
       error: { message?: string } | null;
     };
     if (fetchError) {
@@ -113,7 +113,14 @@ export default function MessagesThreadPage() {
       setLoadingMessages(false);
       return;
     }
-    setMessages(data ?? []);
+    const rows = data ?? [];
+    setMessages(rows);
+    await supabase
+      .from("direct_messages")
+      .update({ is_read: true })
+      .eq("recipient_id", currentUserId)
+      .eq("sender_id", targetId)
+      .eq("is_read", false);
     setLoadingMessages(false);
   };
 
@@ -207,7 +214,7 @@ export default function MessagesThreadPage() {
           ) : null}
         </header>
 
-        <div className="flex flex-col rounded-3xl border border-white/10 bg-surface/60 p-4 backdrop-blur">
+        <div className="flex h-[70vh] flex-col rounded-3xl border border-white/10 bg-surface/60 p-4 backdrop-blur sm:h-[75vh]">
           <div className="border-b border-white/10 pb-3">
             <p className="text-xs uppercase tracking-[0.25em] text-text/50">
               Conversation
@@ -228,10 +235,6 @@ export default function MessagesThreadPage() {
             ) : loadingMessages ? (
               <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/60">
                 Chargement des messages...
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/60">
-                Aucun message pour le moment.
               </div>
             ) : (
               messages.map((message) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, Mail, Settings } from "lucide-react";
 import { createSupabaseBrowserClient } from "../lib/supabase/client";
@@ -12,10 +12,31 @@ export default function TopBar() {
   const pathname = usePathname();
   const [userId, setUserId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const hideComms = pathname === "/profile";
   const showBack = pathname !== "/login";
   const disableBack = pathname === "/";
+
+  const loadUnreadMessages = useCallback(
+    async (currentUserId: string | null) => {
+      if (!currentUserId) {
+        setUnreadMessagesCount(0);
+        return;
+      }
+      const supabase = createSupabaseBrowserClient();
+      if (!supabase) {
+        return;
+      }
+      const { count } = await supabase
+        .from("direct_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_id", currentUserId)
+        .eq("is_read", false);
+      setUnreadMessagesCount(count ?? 0);
+    },
+    [],
+  );
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -24,7 +45,9 @@ export default function TopBar() {
     }
     const syncUser = async () => {
       const { data } = await supabase.auth.getUser();
-      setUserId(data.user?.id ?? null);
+      const id = data.user?.id ?? null;
+      setUserId(id);
+      void loadUnreadMessages(id);
     };
     void syncUser();
     const { data: subscription } = supabase.auth.onAuthStateChange(() => {
@@ -33,7 +56,35 @@ export default function TopBar() {
     return () => {
       subscription.subscription.unsubscribe();
     };
-  }, []);
+  }, [loadUnreadMessages]);
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      return;
+    }
+    const channel = supabase.channel(`dm-unread-${userId}`);
+    channel
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "direct_messages",
+          filter: `recipient_id=eq.${userId}`,
+        },
+        () => {
+          void loadUnreadMessages(userId);
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, loadUnreadMessages]);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -82,10 +133,15 @@ export default function TopBar() {
           {hideComms ? null : (
             <Link
               href="/messages"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-surface/80 text-text/70 transition hover:text-text"
+              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-surface/80 text-text/70 transition hover:text-text"
               aria-label="Messages"
             >
               <Mail className="h-4 w-4" />
+              {unreadMessagesCount > 0 ? (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                  {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
+                </span>
+              ) : null}
             </Link>
           )}
           <h1 className="font-display text-base tracking-[0.16em] text-gold sm:text-lg sm:tracking-[0.2em]">

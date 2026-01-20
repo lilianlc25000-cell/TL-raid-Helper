@@ -28,3 +28,11 @@ create policy "direct_messages_insert"
   on public.direct_messages
   for insert
   with check (sender_id = auth.uid() and recipient_id <> auth.uid());
+
+drop policy if exists "direct_messages_update" on public.direct_messages;
+create policy "direct_messages_update"
+  on public.direct_messages
+  for update
+  to authenticated
+  using (recipient_id = auth.uid())
+  with check (recipient_id = auth.uid());
