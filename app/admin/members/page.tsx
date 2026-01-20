@@ -51,6 +51,9 @@ export default function GuildMembersPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [canManage, setCanManage] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentGuildId, setCurrentGuildId] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const loadAccess = useCallback(async () => {
     const supabase = createSupabaseBrowserClient();
@@ -66,14 +69,31 @@ export default function GuildMembersPage() {
       setIsAuthReady(true);
       return;
     }
+    setCurrentUserId(userId);
     const { data: profile } = (await supabase
       .from("profiles")
+      .select("guild_id")
+      .eq("user_id", userId)
+      .maybeSingle()) as {
+      data: { guild_id?: string | null } | null;
+    };
+    const guildId = profile?.guild_id ?? null;
+    setCurrentGuildId(guildId);
+    if (!guildId) {
+      setIsAdmin(false);
+      setCanManage(false);
+      setIsAuthReady(true);
+      return;
+    }
+    const { data: membership } = (await supabase
+      .from("guild_members")
       .select("role_rank")
+      .eq("guild_id", guildId)
       .eq("user_id", userId)
       .maybeSingle()) as {
       data: { role_rank?: string | null } | null;
     };
-    const rank = profile?.role_rank ?? "soldat";
+    const rank = membership?.role_rank ?? "soldat";
     setIsAdmin(rank === "admin" || rank === "conseiller");
     setCanManage(rank === "admin");
     setIsAuthReady(true);
@@ -86,13 +106,44 @@ export default function GuildMembersPage() {
       setIsLoading(false);
       return;
     }
+    if (!currentGuildId) {
+      setMembers([]);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setError(null);
+    const { data: memberRows, error: membersError } = (await supabase
+      .from("guild_members")
+      .select("user_id,role_rank")
+      .eq("guild_id", currentGuildId)) as {
+      data:
+        | Array<{
+            user_id: string;
+            role_rank: string | null;
+          }>
+        | null;
+      error: { message?: string } | null;
+    };
+
+    if (membersError) {
+      setError(membersError.message || "Impossible de charger les membres.");
+      setIsLoading(false);
+      return;
+    }
+
+    const memberIds = (memberRows ?? []).map((row) => row.user_id);
+    if (memberIds.length === 0) {
+      setMembers([]);
+      setIsLoading(false);
+      return;
+    }
     const { data, error: fetchError } = (await supabase
       .from("profiles")
       .select(
-        "user_id,ingame_name,role,archetype,gear_score,main_weapon,off_weapon,role_rank",
-      )) as {
+        "user_id,ingame_name,role,archetype,gear_score,main_weapon,off_weapon",
+      )
+      .in("user_id", memberIds)) as {
       data:
         | Array<{
             user_id: string;
@@ -102,7 +153,6 @@ export default function GuildMembersPage() {
             gear_score: number | null;
             main_weapon: string | null;
             off_weapon: string | null;
-            role_rank: string | null;
           }>
         | null;
       error: { message?: string } | null;
@@ -114,6 +164,9 @@ export default function GuildMembersPage() {
       return;
     }
 
+    const roleById = new Map(
+      (memberRows ?? []).map((row) => [row.user_id, row.role_rank]),
+    );
     const mapped =
       data?.map((entry) => ({
         userId: entry.user_id,
@@ -123,12 +176,12 @@ export default function GuildMembersPage() {
         gearScore: entry.gear_score,
         mainWeapon: entry.main_weapon,
         offWeapon: entry.off_weapon,
-        roleRank: entry.role_rank,
+        roleRank: roleById.get(entry.user_id) ?? null,
       })) ?? [];
 
     setMembers(mapped);
     setIsLoading(false);
-  }, []);
+  }, [currentGuildId]);
 
   useEffect(() => {
     loadAccess();
@@ -147,19 +200,94 @@ export default function GuildMembersPage() {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
     }
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ role_rank: roleRank })
-      .eq("user_id", userId);
-    if (updateError) {
-      setError(updateError.message || "Impossible de mettre à jour le rôle.");
+    if (!currentGuildId) {
+      setError("Aucune guilde active.");
       return;
     }
-    setMembers((prev) =>
-      prev.map((member) =>
-        member.userId === userId ? { ...member, roleRank } : member,
-      ),
-    );
+    setIsUpdating(true);
+    setError(null);
+
+    const applyRoleUpdate = async (targetId: string, nextRole: string) => {
+      const { error: memberError } = await supabase
+        .from("guild_members")
+        .update({ role_rank: nextRole })
+        .eq("guild_id", currentGuildId)
+        .eq("user_id", targetId);
+      if (memberError) {
+        return memberError;
+      }
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ role_rank: nextRole })
+        .eq("user_id", targetId);
+      if (profileError) {
+        return profileError;
+      }
+      return null;
+    };
+
+    if (roleRank === "admin") {
+      const currentAdmin = members.find(
+        (member) => (member.roleRank ?? "soldat").toLowerCase() === "admin",
+      );
+      if (!currentAdmin) {
+        setError("Aucun admin détecté pour cette guilde.");
+        setIsUpdating(false);
+        return;
+      }
+      if (currentAdmin.userId === userId) {
+        setIsUpdating(false);
+        setMenuOpenId(null);
+        return;
+      }
+      const promoteError = await applyRoleUpdate(userId, "admin");
+      if (promoteError) {
+        setError(promoteError.message || "Impossible de promouvoir en admin.");
+        setIsUpdating(false);
+        return;
+      }
+      const demoteError = await applyRoleUpdate(currentAdmin.userId, "conseiller");
+      if (demoteError) {
+        setError(
+          demoteError.message || "Impossible de transférer le rôle admin.",
+        );
+        setIsUpdating(false);
+        return;
+      }
+      setMembers((prev) =>
+        prev.map((member) => {
+          if (member.userId === userId) {
+            return { ...member, roleRank: "admin" };
+          }
+          if (member.userId === currentAdmin.userId) {
+            return { ...member, roleRank: "conseiller" };
+          }
+          return member;
+        }),
+      );
+      if (currentUserId === currentAdmin.userId) {
+        setCanManage(false);
+        setIsAdmin(true);
+      }
+    } else {
+      const updateError = await applyRoleUpdate(userId, roleRank);
+      if (updateError) {
+        setError(updateError.message || "Impossible de mettre à jour le rôle.");
+        setIsUpdating(false);
+        return;
+      }
+      setMembers((prev) =>
+        prev.map((member) =>
+          member.userId === userId ? { ...member, roleRank } : member,
+        ),
+      );
+      if (currentUserId === userId) {
+        setIsAdmin(roleRank === "admin" || roleRank === "conseiller");
+        setCanManage(roleRank === "admin");
+      }
+    }
+
+    setIsUpdating(false);
     setMenuOpenId(null);
   };
 
@@ -243,6 +371,8 @@ export default function GuildMembersPage() {
               const offImage = getWeaponImage(member.offWeapon);
               const mainKey = `${member.userId}-main`;
               const offKey = `${member.userId}-off`;
+              const isMemberAdmin =
+                (member.roleRank ?? "soldat").toLowerCase() === "admin";
               return (
                 <div
                   key={member.userId}
@@ -335,6 +465,7 @@ export default function GuildMembersPage() {
                           <button
                             type="button"
                             onClick={() => updateRoleRank(member.userId, "admin")}
+                            disabled={isUpdating || isMemberAdmin}
                             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-white/5"
                           >
                             <ShieldCheck className="h-3.5 w-3.5" />
@@ -343,6 +474,7 @@ export default function GuildMembersPage() {
                           <button
                             type="button"
                             onClick={() => updateRoleRank(member.userId, "conseiller")}
+                            disabled={isUpdating}
                             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-white/5"
                           >
                             <Shield className="h-3.5 w-3.5" />
@@ -351,6 +483,7 @@ export default function GuildMembersPage() {
                           <button
                             type="button"
                             onClick={() => updateRoleRank(member.userId, "soldat")}
+                            disabled={isUpdating}
                             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-white/5"
                           >
                             <Shield className="h-3.5 w-3.5" />
@@ -359,6 +492,7 @@ export default function GuildMembersPage() {
                           <button
                             type="button"
                             onClick={() => handleExclude(member.userId)}
+                            disabled={isUpdating}
                             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-red-300 hover:bg-red-500/10"
                           >
                             <UserMinus className="h-3.5 w-3.5" />

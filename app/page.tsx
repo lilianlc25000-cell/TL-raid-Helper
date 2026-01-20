@@ -183,6 +183,31 @@ export default function Home() {
             </span>
           </div>
         </article>
+
+        <article className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-sky-400/30 bg-gradient-to-br from-sky-500/10 via-surface/60 to-surface/80 p-6 shadow-[0_0_30px_rgba(56,189,248,0.25)] backdrop-blur">
+          <div className="absolute -right-8 -top-10 h-28 w-28 rounded-full bg-sky-400/20 blur-2xl" />
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-text">
+              Performance DPS meter
+            </h2>
+            <span className="rounded-full border border-sky-300/40 bg-sky-400/10 p-2 text-sky-200">
+              <CloudRain className="h-5 w-5" />
+            </span>
+          </div>
+          <p className="mt-4 text-sm text-text/70">
+            Importez vos logs de combat et suivez les meilleurs DPS.
+          </p>
+          <div className="relative mt-auto inline-flex w-fit self-start pt-6">
+            <span className="inline-flex rounded-full p-[1px] shadow-[0_0_18px_rgba(56,189,248,0.45)] animate-pulse">
+              <Link
+                href="/dps"
+                className="inline-flex items-center rounded-full border border-sky-400/60 bg-sky-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-sky-100 transition hover:border-sky-300"
+              >
+                Ouvrir
+              </Link>
+            </span>
+          </div>
+        </article>
       </section>
     </div>
   );

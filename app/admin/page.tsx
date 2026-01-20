@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarPlus, Gem, Users } from "lucide-react";
+import { CalendarPlus, Gem } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 
@@ -14,15 +14,6 @@ const tools = [
     accent: "from-violet-500/20 via-violet-500/10 to-amber-400/10",
     border: "border-violet-400/40",
     text: "text-amber-200",
-  },
-  {
-    title: "Gérer les Membres",
-    description: "Promotions, exclusions et rôle de guilde",
-    href: "/admin/members",
-    icon: Users,
-    accent: "from-sky-500/20 via-sky-500/10 to-blue-500/10",
-    border: "border-sky-400/40",
-    text: "text-sky-200",
   },
   {
     title: "Création d'Événement",

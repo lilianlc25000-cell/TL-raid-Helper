@@ -140,6 +140,38 @@ export type Database = {
           are_groups_published?: boolean;
         };
       };
+      raid_performance: {
+        Row: {
+          id: string;
+          event_id: string;
+          user_id: string;
+          class_played: string | null;
+          dps: number;
+          total_damage: number;
+          duration_seconds: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          user_id: string;
+          class_played?: string | null;
+          dps: number;
+          total_damage: number;
+          duration_seconds: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_id?: string;
+          user_id?: string;
+          class_played?: string | null;
+          dps?: number;
+          total_damage?: number;
+          duration_seconds?: number;
+          created_at?: string;
+        };
+      };
       signups: {
         Row: {
           event_id: string;

@@ -55,6 +55,9 @@ export default function GuildPage() {
   const [profileView, setProfileView] = useState<MemberEntry | null>(null);
   const [currentGuildId, setCurrentGuildId] = useState<string | null>(null);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [canManage, setCanManage] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -69,6 +72,7 @@ export default function GuildPage() {
       const userId = auth.user?.id;
       let guildId: string | null = null;
       if (userId) {
+        setCurrentUserId(userId);
         const { data: profile } = (await supabase
           .from("profiles")
           .select("guild_id")
@@ -133,6 +137,11 @@ export default function GuildPage() {
       const roleById = new Map(
         (memberRows ?? []).map((row) => [row.user_id, row.role_rank]),
       );
+      const currentRole =
+        (userId ? roleById.get(userId) : null) ?? "soldat";
+      if (isMounted) {
+        setCanManage(String(currentRole).toLowerCase() === "admin");
+      }
       setMembers(
         (data ?? []).map((entry) => ({
           userId: entry.user_id,
@@ -153,6 +162,133 @@ export default function GuildPage() {
       isMounted = false;
     };
   }, []);
+
+  const updateRoleRank = async (userId: string, roleRank: string) => {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      setError("Supabase n'est pas configuré (URL / ANON KEY).");
+      return;
+    }
+    if (!currentGuildId) {
+      setError("Aucune guilde active.");
+      return;
+    }
+    setIsUpdating(true);
+    setError(null);
+
+    const applyRoleUpdate = async (targetId: string, nextRole: string) => {
+      const { error: memberError } = await supabase
+        .from("guild_members")
+        .update({ role_rank: nextRole })
+        .eq("guild_id", currentGuildId)
+        .eq("user_id", targetId);
+      if (memberError) {
+        return memberError;
+      }
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ role_rank: nextRole })
+        .eq("user_id", targetId);
+      if (profileError) {
+        return profileError;
+      }
+      return null;
+    };
+
+    if (roleRank === "admin") {
+      const currentAdmin = members.find(
+        (member) => (member.roleRank ?? "soldat").toLowerCase() === "admin",
+      );
+      if (!currentAdmin) {
+        setError("Aucun admin détecté pour cette guilde.");
+        setIsUpdating(false);
+        return;
+      }
+      if (currentAdmin.userId === userId) {
+        setIsUpdating(false);
+        setMenuOpenFor(null);
+        return;
+      }
+      const promoteError = await applyRoleUpdate(userId, "admin");
+      if (promoteError) {
+        setError(promoteError.message || "Impossible de promouvoir en admin.");
+        setIsUpdating(false);
+        return;
+      }
+      const demoteError = await applyRoleUpdate(currentAdmin.userId, "conseiller");
+      if (demoteError) {
+        setError(
+          demoteError.message || "Impossible de transférer le rôle admin.",
+        );
+        setIsUpdating(false);
+        return;
+      }
+      setMembers((prev) =>
+        prev.map((member) => {
+          if (member.userId === userId) {
+            return { ...member, roleRank: "admin" };
+          }
+          if (member.userId === currentAdmin.userId) {
+            return { ...member, roleRank: "conseiller" };
+          }
+          return member;
+        }),
+      );
+      if (currentUserId === currentAdmin.userId) {
+        setCanManage(false);
+      }
+    } else {
+      const updateError = await applyRoleUpdate(userId, roleRank);
+      if (updateError) {
+        setError(updateError.message || "Impossible de mettre à jour le rôle.");
+        setIsUpdating(false);
+        return;
+      }
+      setMembers((prev) =>
+        prev.map((member) =>
+          member.userId === userId ? { ...member, roleRank } : member,
+        ),
+      );
+      if (currentUserId === userId) {
+        setCanManage(roleRank === "admin");
+      }
+    }
+
+    setIsUpdating(false);
+    setMenuOpenFor(null);
+  };
+
+  const handleExclude = async (userId: string) => {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      setError("Supabase n'est pas configuré (URL / ANON KEY).");
+      return;
+    }
+    if (!currentGuildId) {
+      setError("Aucune guilde active.");
+      return;
+    }
+    setIsUpdating(true);
+    setError(null);
+    const { error: deleteError } = await supabase
+      .from("guild_members")
+      .delete()
+      .eq("guild_id", currentGuildId)
+      .eq("user_id", userId);
+    if (deleteError) {
+      setError(deleteError.message || "Impossible d'exclure le membre.");
+      setIsUpdating(false);
+      return;
+    }
+    await supabase
+      .from("profiles")
+      .update({ guild_id: null, role_rank: "exclu" })
+      .eq("user_id", userId);
+    await supabase.from("event_signups").delete().eq("user_id", userId);
+    setMembers((prev) => prev.filter((member) => member.userId !== userId));
+    setIsUpdating(false);
+    setMenuOpenFor(null);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -318,6 +454,8 @@ export default function GuildPage() {
               const mainKey = `${member.userId}-main`;
               const offKey = `${member.userId}-off`;
               const isOnline = onlineMemberIds.has(member.userId);
+              const isMemberAdmin =
+                (member.roleRank ?? "soldat").toLowerCase() === "admin";
               return (
                 <div
                   key={member.userId}
@@ -433,6 +571,44 @@ export default function GuildPage() {
                       >
                         Envoyer un message
                       </a>
+                      {canManage ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => updateRoleRank(member.userId, "admin")}
+                            disabled={isUpdating || isMemberAdmin}
+                            className="mt-2 w-full rounded-lg px-3 py-2 text-left text-sm text-text/80 transition hover:bg-white/5 hover:text-text disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Nommer admin
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateRoleRank(member.userId, "conseiller")
+                            }
+                            disabled={isUpdating}
+                            className="w-full rounded-lg px-3 py-2 text-left text-sm text-text/80 transition hover:bg-white/5 hover:text-text disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Nommer conseiller
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateRoleRank(member.userId, "soldat")}
+                            disabled={isUpdating}
+                            className="w-full rounded-lg px-3 py-2 text-left text-sm text-text/80 transition hover:bg-white/5 hover:text-text disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Passer soldat
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleExclude(member.userId)}
+                            disabled={isUpdating}
+                            className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Exclure
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
