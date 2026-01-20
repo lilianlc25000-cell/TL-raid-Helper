@@ -118,9 +118,12 @@ export default function CalendarPage() {
       return;
     }
 
-    if (eventsData && eventsData.length > 0) {
+    const visibleEvents = (eventsData ?? []).filter(
+      (event) => event.event_type !== "DPS",
+    );
+    if (visibleEvents.length > 0) {
       setEvents(
-        eventsData.map((event) => ({
+        visibleEvents.map((event) => ({
           id: event.id,
           title: event.title,
           eventType: event.event_type,
@@ -132,7 +135,7 @@ export default function CalendarPage() {
       );
     }
 
-    const eventIds = (eventsData ?? []).map((event) => event.id);
+    const eventIds = visibleEvents.map((event) => event.id);
     if (eventIds.length === 0) {
       return;
     }

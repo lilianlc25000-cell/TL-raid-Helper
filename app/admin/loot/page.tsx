@@ -73,6 +73,7 @@ export default function LootDistributionPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [assignment, setAssignment] = useState<AssignmentState>(emptyAssignment);
+  const [currentGuildId, setCurrentGuildId] = useState<string | null>(null);
 
   const loadAdminRole = useCallback(async () => {
     const supabase = createSupabaseBrowserClient();
@@ -91,11 +92,12 @@ export default function LootDistributionPage() {
     }
     const { data: profile } = (await supabase
       .from("profiles")
-      .select("role_rank")
+      .select("role_rank,guild_id")
       .eq("user_id", userId)
       .maybeSingle()) as {
-      data: { role_rank?: string | null } | null;
+      data: { role_rank?: string | null; guild_id?: string | null } | null;
     };
+    setCurrentGuildId(profile?.guild_id ?? null);
     setIsAdmin(
       profile?.role_rank === "admin" || profile?.role_rank === "conseiller",
     );
@@ -108,11 +110,17 @@ export default function LootDistributionPage() {
       setQueueError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
     }
+    if (!currentGuildId) {
+      setQueue([]);
+      setIsQueueLoading(false);
+      return;
+    }
     setIsQueueLoading(true);
     setQueueError(null);
     const { data, error } = await supabase
       .from("active_loot_sessions")
       .select("id,item_name,is_active,image_url")
+      .eq("guild_id", currentGuildId)
       .order("id", { ascending: false });
     if (error) {
       setQueueError(
@@ -131,7 +139,7 @@ export default function LootDistributionPage() {
       .filter((row) => Boolean(row.id));
     setQueue(mapped);
     setIsQueueLoading(false);
-  }, []);
+  }, [currentGuildId]);
 
   const openAddModal = () => {
     setSelectedCategory(null);
@@ -154,10 +162,15 @@ export default function LootDistributionPage() {
       setQueueError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
     }
+    if (!currentGuildId) {
+      setQueueError("Aucune guilde active.");
+      return;
+    }
     setIsAdding(true);
     const { error } = await supabase.from("active_loot_sessions").insert({
       item_name: selectedItem.name,
       is_active: false,
+      guild_id: currentGuildId,
     });
     if (error) {
       setQueueError(

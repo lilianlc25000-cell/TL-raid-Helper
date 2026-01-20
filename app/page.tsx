@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CloudRain, Skull, Users } from "lucide-react";
 import { createSupabaseBrowserClient } from "../lib/supabase/client";
+import ActivePoll from "../components/ActivePoll";
 
 export default function Home() {
   const router = useRouter();
@@ -208,6 +209,8 @@ export default function Home() {
             </span>
           </div>
         </article>
+
+        <ActivePoll />
       </section>
     </div>
   );

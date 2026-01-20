@@ -3,8 +3,10 @@ create unique index if not exists profiles_user_id_unique
 
 create table if not exists public.raid_performance (
   id uuid primary key default gen_random_uuid(),
-  event_id uuid not null references public.events(id) on delete cascade,
+  event_id uuid references public.events(id) on delete cascade,
+  guild_id uuid references public.guilds(id) on delete cascade,
   user_id uuid not null references public.profiles(user_id) on delete cascade,
+  target_category text,
   class_played text,
   dps integer not null,
   total_damage bigint not null,
@@ -22,10 +24,9 @@ create policy "raid_performance_select"
   using (
     exists (
       select 1
-      from public.events e
-      join public.guild_members gm on gm.guild_id = e.guild_id
-      where e.id = raid_performance.event_id
-        and gm.user_id = auth.uid()
+      from public.guild_members gm
+      where gm.user_id = auth.uid()
+        and gm.guild_id = raid_performance.guild_id
     )
   );
 
@@ -37,9 +38,8 @@ create policy "raid_performance_insert"
   with check (
     exists (
       select 1
-      from public.events e
-      join public.guild_members gm on gm.guild_id = e.guild_id
-      where e.id = raid_performance.event_id
-        and gm.user_id = auth.uid()
+      from public.guild_members gm
+      where gm.user_id = auth.uid()
+        and gm.guild_id = raid_performance.guild_id
     )
   );

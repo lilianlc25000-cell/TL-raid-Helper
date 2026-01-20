@@ -118,9 +118,12 @@ export default function AdminEventsPage() {
         return;
       }
 
-      if (data && data.length > 0) {
+      const visibleEvents = (data ?? []).filter(
+        (event) => event.event_type !== "DPS",
+      );
+      if (visibleEvents.length > 0) {
         setEvents(
-          data.map((event) => ({
+          visibleEvents.map((event) => ({
             id: event.id,
             title: event.title,
             eventType: event.event_type as EventType,

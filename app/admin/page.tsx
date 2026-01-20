@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarPlus, Gem } from "lucide-react";
+import { CalendarPlus, Gem, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 
@@ -23,6 +23,15 @@ const tools = [
     accent: "from-emerald-500/20 via-emerald-500/10 to-green-500/10",
     border: "border-emerald-400/40",
     text: "text-emerald-200",
+  },
+  {
+    title: "Sondages",
+    description: "Créer et suivre les votes de guilde",
+    href: "/admin/polls",
+    icon: Users,
+    accent: "from-sky-500/20 via-sky-500/10 to-blue-500/10",
+    border: "border-sky-400/40",
+    text: "text-sky-200",
   },
 ];
 

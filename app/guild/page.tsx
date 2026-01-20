@@ -564,9 +564,9 @@ export default function GuildPage() {
                         Voir le profil
                       </button>
                       <a
-                        href={`/messages?user=${encodeURIComponent(
+                        href={`/messages/${encodeURIComponent(
                           member.userId,
-                        )}&name=${encodeURIComponent(member.ingameName)}`}
+                        )}?name=${encodeURIComponent(member.ingameName)}`}
                         className="block w-full rounded-lg px-3 py-2 text-left text-sm text-text/80 transition hover:bg-white/5 hover:text-text"
                       >
                         Envoyer un message
@@ -648,9 +648,9 @@ export default function GuildPage() {
               </div>
             </div>
             <a
-              href={`/messages?user=${encodeURIComponent(
+              href={`/messages/${encodeURIComponent(
                 profileView.userId,
-              )}&name=${encodeURIComponent(profileView.ingameName)}`}
+              )}?name=${encodeURIComponent(profileView.ingameName)}`}
               className="mt-5 inline-flex w-full items-center justify-center rounded-2xl border border-amber-400/60 bg-amber-400/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
             >
               Envoyer un message

@@ -1,5 +1,6 @@
 "use client";
 
+import type { DragEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
@@ -100,6 +101,11 @@ export default function RaidGroupsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isPublished, setIsPublished] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [draggedPlayerId, setDraggedPlayerId] = useState<string | null>(null);
+  const [dragOverReserve, setDragOverReserve] = useState(false);
+  const [dragOverGroupId, setDragOverGroupId] = useState<number | null>(null);
 
   const allPlayers = useMemo(
     () => [
@@ -108,6 +114,9 @@ export default function RaidGroupsPage() {
     ],
     [reserve, groups],
   );
+
+  const getPlayerById = (playerId: string) =>
+    allPlayers.find((player) => player.userId === playerId) ?? null;
 
   useEffect(() => {
     const loadData = async () => {
@@ -122,10 +131,12 @@ export default function RaidGroupsPage() {
 
       const { data: event } = await supabase
         .from("events")
-        .select("title")
+        .select("title,are_groups_published")
         .eq("id", eventId)
         .maybeSingle();
       setEventTitle(event?.title ?? "Événement");
+      setIsPublished(Boolean(event?.are_groups_published));
+      setIsDirty(false);
 
       const { data, error } = (await supabase
         .from("event_signups")
@@ -201,6 +212,13 @@ export default function RaidGroupsPage() {
     );
   };
 
+  const markDirty = () => {
+    setIsDirty(true);
+    if (isPublished) {
+      setIsPublished(false);
+    }
+  };
+
   const handleSelect = (player: PlayerCard) => {
     setSelectedPlayer((current) =>
       current?.userId === player.userId ? null : player,
@@ -215,6 +233,7 @@ export default function RaidGroupsPage() {
       const filtered = prev.filter((item) => item.userId !== player.userId);
       return [player, ...filtered];
     });
+    markDirty();
     setSelectedPlayer(null);
     setGroupPickerId(null);
   };
@@ -243,6 +262,7 @@ export default function RaidGroupsPage() {
         };
       }),
     );
+    markDirty();
     setSelectedPlayer(null);
     setGroupPickerId(null);
   };
@@ -265,8 +285,43 @@ export default function RaidGroupsPage() {
         };
       }),
     );
+    markDirty();
     setSelectedPlayer(null);
     setGroupPickerId(null);
+  };
+
+  const handleDropOnGroup = (groupId: number) => (
+    event: DragEvent<HTMLDivElement>,
+  ) => {
+    event.preventDefault();
+    setDragOverGroupId(null);
+    const playerId =
+      event.dataTransfer.getData("text/plain") || draggedPlayerId;
+    if (!playerId) {
+      return;
+    }
+    const player = getPlayerById(playerId);
+    if (!player) {
+      return;
+    }
+    movePlayerToGroup(player, groupId);
+    setDraggedPlayerId(null);
+  };
+
+  const handleDropOnReserve = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragOverReserve(false);
+    const playerId =
+      event.dataTransfer.getData("text/plain") || draggedPlayerId;
+    if (!playerId) {
+      return;
+    }
+    const player = getPlayerById(playerId);
+    if (!player) {
+      return;
+    }
+    moveToReserve(player);
+    setDraggedPlayerId(null);
   };
 
   const handleSave = async () => {
@@ -302,6 +357,7 @@ export default function RaidGroupsPage() {
     );
 
     setIsSaving(false);
+    setIsDirty(false);
   };
 
   const handlePublish = async () => {
@@ -340,6 +396,8 @@ export default function RaidGroupsPage() {
       }
     }
 
+    setIsPublished(true);
+    setIsDirty(false);
     setIsPublishing(false);
   };
 
@@ -366,35 +424,48 @@ export default function RaidGroupsPage() {
   return (
     <div className="min-h-screen bg-zinc-950 px-6 py-10 text-zinc-100">
       <section className="mx-auto w-full max-w-6xl space-y-6">
-        <header className="rounded-lg border border-zinc-800 bg-zinc-950/80 px-6 py-5">
-          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+        <header className="rounded-3xl border border-white/10 bg-surface/70 px-6 py-6 shadow-[0_0_35px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10">
+          <p className="text-xs uppercase tracking-[0.35em] text-text/50">
             Squad Builder
           </p>
-          <h1 className="mt-2 text-2xl font-semibold text-zinc-100">
+          <h1 className="mt-2 font-display text-3xl tracking-[0.15em] text-text">
             Construction des groupes — {eventTitle}
           </h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            Cliquez un joueur puis choisissez un groupe.
+          <p className="mt-2 text-sm text-text/70">
+            Glissez les joueurs pour composer les groupes.
           </p>
         </header>
 
         {actionError ? (
-          <div className="rounded-lg border border-red-500/40 bg-red-950/30 px-6 py-4 text-sm text-red-200">
+          <div className="rounded-2xl border border-red-500/40 bg-red-950/30 px-6 py-4 text-sm text-red-200">
             {actionError}
           </div>
         ) : null}
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_1.6fr]">
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-5 py-5">
-            <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-zinc-500">
+        <div className="grid gap-6 lg:grid-cols-[1fr_1.8fr]">
+          <div
+            className={[
+              "rounded-3xl border bg-surface/60 px-5 py-5 shadow-[0_0_20px_rgba(0,0,0,0.35)] backdrop-blur transition",
+              dragOverReserve
+                ? "border-sky-400/70 bg-sky-400/10 shadow-[0_0_25px_rgba(56,189,248,0.35)]"
+                : "border-white/10",
+            ].join(" ")}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragOverReserve(true);
+            }}
+            onDragLeave={() => setDragOverReserve(false)}
+            onDrop={handleDropOnReserve}
+          >
+            <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-text/50">
               <span>Réserve / Banc</span>
-              <span className="font-mono text-zinc-400">
+              <span className="font-mono text-text/50">
                 {reserve.length.toString().padStart(2, "0")}
               </span>
             </div>
             <div className="mt-4 space-y-3">
               {reserve.length === 0 ? (
-                <div className="rounded-md border border-zinc-900 px-4 py-6 text-sm text-zinc-500">
+                <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-6 text-sm text-text/60">
                   Tous les joueurs sont assignés.
                 </div>
               ) : (
@@ -411,6 +482,11 @@ export default function RaidGroupsPage() {
                       )
                     }
                     onAssignGroup={(groupId) => movePlayerToGroup(player, groupId)}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData("text/plain", player.userId);
+                      setDraggedPlayerId(player.userId);
+                    }}
+                    onDragEnd={() => setDraggedPlayerId(null)}
                   />
                 ))
               )}
@@ -421,24 +497,30 @@ export default function RaidGroupsPage() {
             {groups.map((group) => (
               <div
                 key={group.id}
-                className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-4 py-4"
+                className={[
+                  "rounded-3xl border bg-surface/60 px-4 py-4 shadow-[0_0_18px_rgba(0,0,0,0.3)] backdrop-blur transition",
+                  dragOverGroupId === group.id
+                    ? "border-amber-400/70 bg-amber-400/10 shadow-[0_0_22px_rgba(251,191,36,0.35)]"
+                    : "border-white/10",
+                ].join(" ")}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setDragOverGroupId(group.id);
+                }}
+                onDragLeave={() =>
+                  setDragOverGroupId((prev) => (prev === group.id ? null : prev))
+                }
+                onDrop={handleDropOnGroup(group.id)}
               >
-                <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-zinc-500">
+                <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-text/50">
                   <span>Groupe {group.id}</span>
-                  <span className="font-mono text-zinc-400">
+                  <span className="font-mono text-text/50">
                     {group.players.length}/{GROUP_SIZE}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => moveToGroup(group.id)}
-                  className="mt-3 w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-zinc-300 transition hover:border-amber-400/60 hover:text-amber-100"
-                >
-                  Ajouter le joueur sélectionné
-                </button>
                 <div className="mt-4 space-y-3">
                   {group.players.length === 0 ? (
-                    <div className="rounded-md border border-zinc-900 px-3 py-4 text-xs text-zinc-500">
+                    <div className="rounded-2xl border border-white/10 bg-black/40 px-3 py-4 text-xs text-text/60">
                       Aucun joueur assigné.
                     </div>
                   ) : (
@@ -448,14 +530,11 @@ export default function RaidGroupsPage() {
                         player={player}
                         selected={selectedPlayer?.userId === player.userId}
                         onSelect={() => handleSelect(player)}
-                        onRemove={() => moveToReserve(player)}
-                        showGroupPicker={groupPickerId === player.userId}
-                        onToggleGroupPicker={() =>
-                          setGroupPickerId((prev) =>
-                            prev === player.userId ? null : player.userId,
-                          )
-                        }
-                        onAssignGroup={(groupId) => movePlayerToGroup(player, groupId)}
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData("text/plain", player.userId);
+                          setDraggedPlayerId(player.userId);
+                        }}
+                        onDragEnd={() => setDraggedPlayerId(null)}
                       />
                     ))
                   )}
@@ -465,24 +544,30 @@ export default function RaidGroupsPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="rounded-md border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSaving ? "Sauvegarde..." : "Sauvegarder les groupes"}
-          </button>
-          <button
-            type="button"
-            onClick={handlePublish}
-            disabled={isPublishing}
-            className="rounded-md border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPublishing ? "Publication..." : "Publier les groupes"}
-          </button>
-        </div>
+        {isDirty || !isPublished ? (
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {isDirty ? (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="rounded-full border border-amber-400/60 bg-amber-400/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSaving ? "Sauvegarde..." : "Sauvegarder les groupes"}
+              </button>
+            ) : null}
+            {!isPublished ? (
+              <button
+                type="button"
+                onClick={handlePublish}
+                disabled={isPublishing}
+                className="rounded-full border border-emerald-500/60 bg-emerald-500/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isPublishing ? "Publication..." : "Publier les groupes"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </section>
     </div>
   );
@@ -492,20 +577,22 @@ type PlayerCardProps = {
   player: PlayerCard;
   selected: boolean;
   onSelect: () => void;
-  onRemove?: () => void;
   showGroupPicker?: boolean;
   onToggleGroupPicker?: () => void;
   onAssignGroup?: (groupId: number) => void;
+  onDragStart?: (event: DragEvent<HTMLDivElement>) => void;
+  onDragEnd?: () => void;
 };
 
 function PlayerCard({
   player,
   selected,
   onSelect,
-  onRemove,
   showGroupPicker,
   onToggleGroupPicker,
   onAssignGroup,
+  onDragStart,
+  onDragEnd,
 }: PlayerCardProps) {
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const RoleBadgeStyle = getRoleStyle(player.role);
@@ -520,12 +607,17 @@ function PlayerCard({
   return (
     <div
       className={[
-        "flex items-center justify-between rounded-lg border bg-zinc-950/50 px-3 py-3 text-sm transition",
-        selected ? "border-amber-400/70 shadow-[0_0_16px_rgba(251,191,36,0.25)]" : "border-zinc-900",
+        "flex flex-col gap-3 rounded-2xl border bg-black/40 px-3 py-3 text-sm transition sm:flex-row sm:items-center sm:justify-between",
+        selected
+          ? "border-amber-400/70 shadow-[0_0_16px_rgba(251,191,36,0.25)]"
+          : "border-white/10",
       ].join(" ")}
       onClick={onSelect}
       role="button"
       tabIndex={0}
+      draggable
+      onDragStart={(event) => onDragStart?.(event)}
+      onDragEnd={() => onDragEnd?.()}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           onSelect();
@@ -616,18 +708,6 @@ function PlayerCard({
               </div>
             ) : null}
           </div>
-        ) : null}
-        {onRemove ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onRemove();
-            }}
-            className="rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-zinc-300 transition hover:border-amber-400/60 hover:text-amber-100"
-          >
-            Retirer
-          </button>
         ) : null}
       </div>
     </div>

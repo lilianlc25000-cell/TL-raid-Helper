@@ -143,8 +143,10 @@ export type Database = {
       raid_performance: {
         Row: {
           id: string;
-          event_id: string;
+          event_id: string | null;
+          guild_id: string | null;
           user_id: string;
+          target_category: string | null;
           class_played: string | null;
           dps: number;
           total_damage: number;
@@ -153,8 +155,10 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          event_id: string;
+          event_id?: string | null;
+          guild_id?: string | null;
           user_id: string;
+          target_category?: string | null;
           class_played?: string | null;
           dps: number;
           total_damage: number;
@@ -163,8 +167,10 @@ export type Database = {
         };
         Update: {
           id?: string;
-          event_id?: string;
+          event_id?: string | null;
+          guild_id?: string | null;
           user_id?: string;
+          target_category?: string | null;
           class_played?: string | null;
           dps?: number;
           total_damage?: number;
@@ -439,6 +445,72 @@ export type Database = {
           type?: string;
           message?: string;
           is_read?: boolean;
+          created_at?: string;
+        };
+      };
+      polls: {
+        Row: {
+          id: string;
+          question: string;
+          created_by: string;
+          ends_at: string;
+          is_archived: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          question: string;
+          created_by: string;
+          ends_at: string;
+          is_archived?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          question?: string;
+          created_by?: string;
+          ends_at?: string;
+          is_archived?: boolean;
+          created_at?: string;
+        };
+      };
+      poll_options: {
+        Row: {
+          id: string;
+          poll_id: string;
+          label: string;
+        };
+        Insert: {
+          id?: string;
+          poll_id: string;
+          label: string;
+        };
+        Update: {
+          id?: string;
+          poll_id?: string;
+          label?: string;
+        };
+      };
+      poll_votes: {
+        Row: {
+          id: string;
+          poll_id: string;
+          option_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          poll_id: string;
+          option_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          poll_id?: string;
+          option_id?: string;
+          user_id?: string;
           created_at?: string;
         };
       };

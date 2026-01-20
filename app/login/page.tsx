@@ -17,6 +17,24 @@ export default function LoginPage() {
   const [oauthLoading, setOauthLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
+  const isProfileComplete = (profile: {
+    ingame_name?: string | null;
+    main_weapon?: string | null;
+    off_weapon?: string | null;
+    role?: string | null;
+    archetype?: string | null;
+    gear_score?: number | null;
+  } | null) =>
+    Boolean(
+      profile?.ingame_name?.trim() &&
+        profile?.main_weapon &&
+        profile?.off_weapon &&
+        profile?.role &&
+        profile?.archetype &&
+        typeof profile?.gear_score === "number" &&
+        profile.gear_score > 0,
+    );
+
   useEffect(() => {
     let isMounted = true;
     const checkSession = async () => {
@@ -37,13 +55,29 @@ export default function LoginPage() {
       }
       const { data: profile } = (await supabase
         .from("profiles")
-        .select("guild_id")
+        .select("guild_id,ingame_name,main_weapon,off_weapon,role,archetype,gear_score")
         .eq("user_id", userId)
-        .maybeSingle()) as { data: { guild_id?: string | null } | null };
+        .maybeSingle()) as {
+        data:
+          | {
+              guild_id?: string | null;
+              ingame_name?: string | null;
+              main_weapon?: string | null;
+              off_weapon?: string | null;
+              role?: string | null;
+              archetype?: string | null;
+              gear_score?: number | null;
+            }
+          | null;
+      };
       if (!isMounted) {
         return;
       }
-      const nextRoute = profile?.guild_id ? "/" : "/guild/join";
+      const nextRoute = isProfileComplete(profile)
+        ? profile?.guild_id
+          ? "/"
+          : "/guild/join"
+        : "/profile";
       router.replace(nextRoute);
     };
     void checkSession();
@@ -64,9 +98,24 @@ export default function LoginPage() {
     }
     const { data: profile } = (await supabase
       .from("profiles")
-      .select("guild_id")
+      .select("guild_id,ingame_name,main_weapon,off_weapon,role,archetype,gear_score")
       .eq("user_id", userId)
-      .maybeSingle()) as { data: { guild_id?: string | null } | null };
+      .maybeSingle()) as {
+      data:
+        | {
+            guild_id?: string | null;
+            ingame_name?: string | null;
+            main_weapon?: string | null;
+            off_weapon?: string | null;
+            role?: string | null;
+            archetype?: string | null;
+            gear_score?: number | null;
+          }
+        | null;
+    };
+    if (!isProfileComplete(profile)) {
+      return "/profile";
+    }
     return profile?.guild_id ? "/" : "/guild/join";
   };
 
@@ -89,7 +138,14 @@ export default function LoginPage() {
       password,
     });
     if (signInError) {
-      setError(signInError.message);
+      const message =
+        signInError.message === "Invalid login credentials"
+          ? "Aucun compte trouvé. Inscris-toi d'abord."
+          : signInError.message;
+      setError(message);
+      if (signInError.message === "Invalid login credentials") {
+        setTab("signup");
+      }
       setLoading(false);
       return;
     }

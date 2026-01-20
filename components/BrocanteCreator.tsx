@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChangeEvent, ClipboardEvent, DragEvent } from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "../lib/supabase/client";
 
 type BrocanteCreatorProps = {
@@ -25,6 +25,7 @@ export default function BrocanteCreator({
   >([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [guildId, setGuildId] = useState<string | null>(null);
 
   const playDing = useCallback(() => {
     try {
@@ -115,6 +116,30 @@ export default function BrocanteCreator({
     [analyzeImage, playDing],
   );
 
+  const loadGuildId = useCallback(async () => {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      return;
+    }
+    const { data } = await supabase.auth.getUser();
+    const userId = data.user?.id;
+    if (!userId) {
+      return;
+    }
+    const { data: profile } = (await supabase
+      .from("profiles")
+      .select("guild_id")
+      .eq("user_id", userId)
+      .maybeSingle()) as {
+      data: { guild_id?: string | null } | null;
+    };
+    setGuildId(profile?.guild_id ?? null);
+  }, []);
+
+  useEffect(() => {
+    void loadGuildId();
+  }, [loadGuildId]);
+
   const handlePaste = useCallback(
     (event: ClipboardEvent<HTMLDivElement>) => {
       if (!isAdmin || isAnalyzing) return;
@@ -175,6 +200,10 @@ export default function BrocanteCreator({
       setError("Zone réservée aux officiers.");
       return;
     }
+    if (!guildId) {
+      setError("Aucune guilde active.");
+      return;
+    }
     const itemsToPublish =
       scanItems.length > 0
         ? scanItems
@@ -204,6 +233,7 @@ export default function BrocanteCreator({
       category: "brocante",
       is_active: true,
       image_url: item.imagePath || null,
+      guild_id: guildId,
     }));
 
     const { error: insertError } = await supabase

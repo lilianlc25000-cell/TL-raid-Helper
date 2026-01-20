@@ -11,6 +11,7 @@ import DiceRoller from "../components/DiceRoller";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const weapons = [
   "Arbalète",
@@ -232,6 +233,7 @@ function WeaponSelector({ label, value, onChange, highlighted }: WeaponSelectorP
 }
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [cp, setCp] = useState("");
   const [weapon1, setWeapon1] = useState("");
@@ -242,12 +244,21 @@ export default function ProfilePage() {
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [discordLinked, setDiscordLinked] = useState(false);
   const [discordLinkLoading, setDiscordLinkLoading] = useState(false);
   const [discordLinkError, setDiscordLinkError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const rollChannelRef = useRef<BroadcastChannel | null>(null);
   const playerName = name || "Mozorh";
+  const isProfileValid =
+    Boolean(name.trim()) &&
+    Number.isFinite(Number(cp)) &&
+    Number(cp) > 0 &&
+    Boolean(weapon1) &&
+    Boolean(weapon2) &&
+    Boolean(role) &&
+    Boolean(archetype);
 
   useEffect(() => {
     let isMounted = true;
@@ -345,52 +356,62 @@ export default function ProfilePage() {
     };
   }, [userId]);
 
-  useEffect(() => {
-    if (!isProfileLoaded || !userId) {
+  const handleSaveProfile = async () => {
+    if (!userId) {
+      setProfileError("Veuillez vous connecter pour sauvegarder votre profil.");
+      return;
+    }
+    if (!isProfileValid) {
+      setProfileError(
+        "Complète toutes les cases (pseudo, puissance, armes, rôle et sous-classe).",
+      );
       return;
     }
     const supabase = createSupabaseBrowserClient();
     if (!supabase) {
+      setProfileError("Supabase n'est pas configuré.");
       return;
     }
-    const handle = window.setTimeout(async () => {
-      setIsSavingProfile(true);
-      setProfileError(null);
-      const { data: existingProfile, error: existingError } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("user_id", userId)
-        .maybeSingle();
-      if (existingError) {
-        setProfileError(
-          `Impossible de sauvegarder le profil (${existingError.message}).`,
-        );
-        setIsSavingProfile(false);
-        return;
-      }
-
-      const payload = {
-        user_id: userId,
-        ingame_name: name || "Sans nom",
-        main_weapon: weapon1 || null,
-        off_weapon: weapon2 || null,
-        role: role || null,
-        archetype: archetype || null,
-        gear_score: Number.isFinite(Number(cp)) ? Number(cp) : null,
-      };
-
-      const { error } = existingProfile?.id
-        ? await supabase.from("profiles").update(payload).eq("id", existingProfile.id)
-        : await supabase.from("profiles").insert(payload);
-
-      if (error) {
-        setProfileError(`Impossible de sauvegarder le profil (${error.message}).`);
-      }
+    setIsSavingProfile(true);
+    setProfileError(null);
+    setProfileSuccess(null);
+    const { data: existingProfile, error: existingError } = await supabase
+      .from("profiles")
+      .select("id,guild_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (existingError) {
+      setProfileError(
+        `Impossible de sauvegarder le profil (${existingError.message}).`,
+      );
       setIsSavingProfile(false);
-    }, 600);
+      return;
+    }
 
-    return () => window.clearTimeout(handle);
-  }, [isProfileLoaded, name, cp, weapon1, weapon2, role, archetype, userId]);
+    const payload = {
+      user_id: userId,
+      ingame_name: name.trim(),
+      main_weapon: weapon1,
+      off_weapon: weapon2,
+      role,
+      archetype,
+      gear_score: Number(cp),
+    };
+
+    const { error } = existingProfile?.id
+      ? await supabase.from("profiles").update(payload).eq("id", existingProfile.id)
+      : await supabase.from("profiles").insert(payload);
+
+    if (error) {
+      setProfileError(`Impossible de sauvegarder le profil (${error.message}).`);
+      setIsSavingProfile(false);
+      return;
+    }
+    setProfileSuccess("Profil sauvegardé.");
+    setIsSavingProfile(false);
+    const targetRoute = existingProfile?.guild_id ? "/" : "/guild/join";
+    router.replace(targetRoute);
+  };
 
   useEffect(() => {
     const handlePayload = (payload: {
@@ -480,13 +501,28 @@ export default function ProfilePage() {
             {profileError ? (
               <p className="mt-2 text-sm text-red-300">{profileError}</p>
             ) : null}
-            {isSavingProfile ? null : null}
+            {profileSuccess ? (
+              <p className="mt-2 text-sm text-emerald-300">{profileSuccess}</p>
+            ) : null}
           </div>
           <div className="text-left sm:text-right">
             <p className="text-xs uppercase tracking-[0.2em] text-text/50 sm:tracking-[0.25em]">
               Rang de Guilde
             </p>
             <p className="mt-2 text-lg font-semibold text-text">Soldat</p>
+            <button
+              type="button"
+              onClick={handleSaveProfile}
+              disabled={!isProfileValid || isSavingProfile}
+              className="mt-4 w-full rounded-2xl border border-amber-400/60 bg-amber-400/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            >
+              {isSavingProfile ? "Sauvegarde..." : "Sauvegarder"}
+            </button>
+            {!isProfileValid ? (
+              <p className="mt-2 text-xs text-text/50">
+                Complète toutes les infos pour sauvegarder.
+              </p>
+            ) : null}
           </div>
         </div>
       </header>

@@ -105,6 +105,7 @@ export default function PlayerLootPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [guildId, setGuildId] = useState<string | null>(null);
   const [selectedTraitByItem, setSelectedTraitByItem] = useState<
     Record<string, string>
   >({});
@@ -153,6 +154,22 @@ export default function PlayerLootPage() {
     if (!userId) {
       return;
     }
+    const loadGuildId = async () => {
+      const supabase = createSupabaseBrowserClient();
+      if (!supabase) {
+        return;
+      }
+      const { data: profile } = (await supabase
+        .from("profiles")
+        .select("guild_id")
+        .eq("user_id", userId)
+        .maybeSingle()) as {
+        data: { guild_id?: string | null } | null;
+      };
+      setGuildId(profile?.guild_id ?? null);
+    };
+    void loadGuildId();
+
     const loadSessions = async () => {
       setIsLoading(true);
       setError(null);
@@ -262,9 +279,14 @@ export default function PlayerLootPage() {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
     }
+    if (!guildId) {
+      setError("Aucune guilde active.");
+      return;
+    }
     await supabase.from("active_loot_sessions").insert({
       item_name: itemName,
       is_active: true,
+      guild_id: guildId,
     });
     setIsPickerOpen(false);
     setSelectedCategory(null);
@@ -301,8 +323,13 @@ export default function PlayerLootPage() {
       setSelectedItem(null);
       return;
     }
+    if (!guildId) {
+      setError("Aucune guilde active.");
+      return;
+    }
     await supabase.from("loot_rolls").insert({
       user_id: userId,
+      guild_id: guildId,
       item_name: selectedItem.name,
       roll_value: rollValue,
       loot_session_id: selectedItem.id,

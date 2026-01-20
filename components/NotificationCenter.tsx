@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bell, TrendingUp } from "lucide-react";
+import { Bell, Check, TrendingUp, Volume2, VolumeX } from "lucide-react";
 import { createSupabaseBrowserClient } from "../lib/supabase/client";
 
 type Notification = {
@@ -27,7 +27,58 @@ export default function NotificationCenter() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const playNotificationSound = useCallback(() => {
+    if (!soundEnabled) {
+      return;
+    }
+    if (document.visibilityState !== "visible") {
+      return;
+    }
+    try {
+      const audioContext = new AudioContext();
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+      gain.gain.setValueAtTime(0.06, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        audioContext.currentTime + 0.5,
+      );
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.5);
+    } catch {
+      // Ignore audio errors (autoplay restrictions, etc.)
+    }
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    const stored =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("notifications-sound")
+        : null;
+    if (stored === "off") {
+      setSoundEnabled(false);
+    }
+  }, []);
+
+  const toggleSound = () => {
+    setSoundEnabled((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          "notifications-sound",
+          next ? "on" : "off",
+        );
+      }
+      return next;
+    });
+  };
+
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.is_read).length,
     [notifications],
@@ -96,10 +147,27 @@ export default function NotificationCenter() {
         },
         (payload) => {
           const next = payload.new as Notification & { user_id: string };
-          setNotifications((prev) => [next, ...prev].slice(0, 12));
-          if (next.type === "points_received") {
-            setToast(next.message);
-          }
+          setNotifications((prev) => {
+            const filtered = prev.filter((item) => item.id !== next.id);
+            return [next, ...filtered].slice(0, 12);
+          });
+          setToast(next.message);
+          playNotificationSound();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const updated = payload.new as Notification & { user_id: string };
+          setNotifications((prev) =>
+            prev.map((item) => (item.id === updated.id ? updated : item)),
+          );
         },
       )
       .subscribe();
@@ -154,6 +222,17 @@ export default function NotificationCenter() {
     );
   };
 
+  const markAsRead = async (id: string) => {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      return;
+    }
+    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    setNotifications((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, is_read: true } : item)),
+    );
+  };
+
   return (
     <div ref={wrapperRef} className="relative">
       <button
@@ -164,7 +243,9 @@ export default function NotificationCenter() {
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 ? (
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
         ) : null}
       </button>
 
@@ -174,13 +255,27 @@ export default function NotificationCenter() {
             <span className="text-xs uppercase tracking-[0.3em] text-text/60">
               Notifications
             </span>
-            <button
-              type="button"
-              onClick={markAllAsRead}
-              className="text-[10px] uppercase tracking-[0.25em] text-text/60 transition hover:text-text"
-            >
-              Tout marquer comme lu
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleSound}
+                className="flex items-center gap-1 text-[10px] uppercase tracking-[0.25em] text-text/60 transition hover:text-text"
+              >
+                {soundEnabled ? (
+                  <Volume2 className="h-3.5 w-3.5" />
+                ) : (
+                  <VolumeX className="h-3.5 w-3.5" />
+                )}
+                Son
+              </button>
+              <button
+                type="button"
+                onClick={markAllAsRead}
+                className="text-[10px] uppercase tracking-[0.25em] text-text/60 transition hover:text-text"
+              >
+                Tout marquer comme lu
+              </button>
+            </div>
           </div>
 
           <div className="mt-3 max-h-72 space-y-3 overflow-y-auto pr-1">
@@ -190,11 +285,15 @@ export default function NotificationCenter() {
               </div>
             ) : (
               notifications.map((item) => (
-                <div
+                <button
                   key={item.id}
+                  type="button"
+                  onClick={() => markAsRead(item.id)}
                   className={[
-                    "rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-text/70",
-                    item.is_read ? "" : "border-emerald-500/30",
+                    "group w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-left text-sm text-text/70 transition hover:border-white/20 hover:bg-black/50",
+                    item.is_read
+                      ? ""
+                      : "border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.2)]",
                   ].join(" ")}
                 >
                   <div className="flex items-start gap-2">
@@ -216,8 +315,11 @@ export default function NotificationCenter() {
                         {formatTime(item.created_at)}
                       </p>
                     </div>
+                    {item.is_read ? null : (
+                      <Check className="h-3.5 w-3.5 text-emerald-300 opacity-0 transition group-hover:opacity-100" />
+                    )}
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
