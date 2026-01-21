@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 
 import ManageClient from "../manage/ManageClient";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { PARTICIPATION_POINTS_PER_RAID } from "@/lib/game-constants";
 
 type PageProps = {
   params: { id: string };
@@ -116,7 +117,7 @@ export default async function CloseEventPage({ params }: PageProps) {
         return supabaseServer
           .from("profiles")
           .update({
-            cohesion_points: currentPoints + currentEvent.cohesion_reward,
+            cohesion_points: currentPoints + PARTICIPATION_POINTS_PER_RAID,
           })
           .eq("user_id", signup.user_id);
       }),
@@ -130,7 +131,7 @@ export default async function CloseEventPage({ params }: PageProps) {
           eligibleParticipants.map((signup) => ({
             user_id: signup.user_id,
             type: "points_received",
-            message: `Raid ${currentEvent.title} terminé : +${currentEvent.cohesion_reward} points de cohésion !`,
+            message: `Raid ${currentEvent.title} terminé : +${PARTICIPATION_POINTS_PER_RAID} point${PARTICIPATION_POINTS_PER_RAID > 1 ? "s" : ""} de participation !`,
             is_read: false,
           })),
         );

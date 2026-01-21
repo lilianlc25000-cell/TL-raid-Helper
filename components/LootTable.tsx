@@ -58,7 +58,7 @@ export default function LootTable() {
       <div className="mt-4 overflow-hidden rounded-xl border border-white/10">
         <div className="hidden grid-cols-12 gap-3 bg-black/40 px-4 py-2 text-[11px] uppercase tracking-[0.25em] text-text/50 sm:grid">
           <span className="col-span-4">Joueur</span>
-          <span className="col-span-2 text-center">Cohésion</span>
+          <span className="col-span-2 text-center">Participation</span>
           <span className="col-span-4">Item</span>
           <span className="col-span-2 text-right">Priorité</span>
         </div>
@@ -90,7 +90,7 @@ export default function LootTable() {
                 </div>
                 <div className="flex items-center justify-between sm:col-span-2 sm:justify-center">
                   <span className="text-[10px] uppercase tracking-[0.2em] text-text/50 sm:hidden">
-                    Cohésion
+                    Participation
                   </span>
                   <span className="font-mono text-text/90">
                     {entry.points_cohesion}

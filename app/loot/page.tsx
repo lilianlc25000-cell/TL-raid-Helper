@@ -7,7 +7,10 @@ import DiceRoller from "../components/DiceRoller";
 import { getItemImage, getSlotPlaceholder } from "../../lib/items";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 import { useAdminMode } from "../contexts/AdminContext";
-import { TRAITS_BY_SLOT } from "../../lib/game-constants";
+import {
+  DEFAULT_PARTICIPATION_THRESHOLD,
+  TRAITS_BY_SLOT,
+} from "../../lib/game-constants";
 
 type ActiveLootSession = {
   id: string;
@@ -106,6 +109,10 @@ export default function PlayerLootPage() {
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [guildId, setGuildId] = useState<string | null>(null);
+  const [participationPoints, setParticipationPoints] = useState<number>(0);
+  const [participationThreshold, setParticipationThreshold] = useState<number>(
+    DEFAULT_PARTICIPATION_THRESHOLD,
+  );
   const [selectedTraitByItem, setSelectedTraitByItem] = useState<
     Record<string, string>
   >({});
@@ -161,12 +168,14 @@ export default function PlayerLootPage() {
       }
       const { data: profile } = (await supabase
         .from("profiles")
-        .select("guild_id")
+        .select("guild_id,cohesion_points")
         .eq("user_id", userId)
         .maybeSingle()) as {
-        data: { guild_id?: string | null } | null;
+        data: { guild_id?: string | null; cohesion_points?: number | null } | null;
       };
       setGuildId(profile?.guild_id ?? null);
+      setParticipationPoints(profile?.cohesion_points ?? 0);
+      setParticipationThreshold(DEFAULT_PARTICIPATION_THRESHOLD);
     };
     void loadGuildId();
 
@@ -258,6 +267,27 @@ export default function PlayerLootPage() {
     loadSessions();
   }, [userId]);
 
+  useEffect(() => {
+    if (!guildId) {
+      return;
+    }
+    const loadThreshold = async () => {
+      const supabase = createSupabaseBrowserClient();
+      if (!supabase) {
+        return;
+      }
+      const { data } = await supabase
+        .from("guild_settings")
+        .select("participation_threshold")
+        .eq("guild_id", guildId)
+        .maybeSingle();
+      setParticipationThreshold(
+        data?.participation_threshold ?? DEFAULT_PARTICIPATION_THRESHOLD,
+      );
+    };
+    void loadThreshold();
+  }, [guildId]);
+
   const filteredItems = useMemo(() => {
     if (!selectedCategory) {
       return [];
@@ -315,6 +345,17 @@ export default function PlayerLootPage() {
 
   const handleSubmitRoll = async (rollValue: number) => {
     if (!selectedItem || !userId) {
+      return;
+    }
+    const hasWishlist = eligibleItems.has(selectedItem.name);
+    const hasEnoughPoints = participationPoints >= participationThreshold;
+    if (!hasWishlist || !hasEnoughPoints) {
+      setError(
+        !hasWishlist
+          ? "Non éligible : l'objet n'est pas dans votre wishlist."
+          : "Non éligible : pas assez de points de participation.",
+      );
+      setSelectedItem(null);
       return;
     }
     const supabase = createSupabaseBrowserClient();
@@ -563,9 +604,10 @@ export default function PlayerLootPage() {
         ) : (
           activeItems.map((session) => {
             const isBrocante = session.category === "brocante";
+            const hasEnoughPoints = participationPoints >= participationThreshold;
             const isEligible = isBrocante
               ? true
-              : eligibleItems.has(session.itemName);
+              : eligibleItems.has(session.itemName) && hasEnoughPoints;
             const rollResult = rollsByItem[session.id];
             const title = session.customName?.trim() || session.itemName;
             const rarityConfig = isBrocante ? getRarityConfig("epic") : null;
@@ -703,7 +745,11 @@ export default function PlayerLootPage() {
                       </button>
                     ) : (
                       <div className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.2em] text-text/50 sm:w-auto">
-                        Non éligible (Pas dans votre Wishlist)
+                        {eligibleItems.has(session.itemName)
+                          ? `Non éligible (${participationThreshold} point${
+                              participationThreshold > 1 ? "s" : ""
+                            } requis)`
+                          : "Non éligible (pas dans votre Wishlist)"}
                       </div>
                     )}
                     <button

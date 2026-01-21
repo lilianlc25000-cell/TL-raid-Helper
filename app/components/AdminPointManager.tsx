@@ -160,7 +160,7 @@ export default function AdminPointManager({ user }: AdminPointManagerProps) {
             Registre Militaire
           </p>
           <h2 className="text-lg font-semibold text-zinc-100">
-            Gestion des Points de Cohésion
+            Gestion des Points de participation
           </h2>
         </div>
         <div className="text-left text-xs text-zinc-400 sm:text-right">
@@ -222,7 +222,8 @@ export default function AdminPointManager({ user }: AdminPointManagerProps) {
 
       <div className="flex flex-col gap-3 border-t border-zinc-800 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="text-xs text-zinc-500">
-          Mise à jour simulée : <span className="font-mono">profiles.cohesion_points</span>
+          Mise à jour simulée :{" "}
+          <span className="font-mono">profiles.cohesion_points</span>
         </div>
         <button
           type="button"
@@ -230,7 +231,9 @@ export default function AdminPointManager({ user }: AdminPointManagerProps) {
           disabled={isSaving || creditedCount === 0}
           className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-semibold text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
         >
-          {isSaving ? "Validation..." : "Valider les Présences (+10 pts)"}
+          {isSaving
+            ? "Validation..."
+            : "Valider les Présences (+1 pt de participation)"}
         </button>
       </div>
 

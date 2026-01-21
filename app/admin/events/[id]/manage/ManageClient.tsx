@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { PARTICIPATION_POINTS_PER_RAID } from "@/lib/game-constants";
 
 type SignupStatus = "present" | "tentative" | "bench";
 type KnownStatus = SignupStatus | "absent" | "unknown";
@@ -199,7 +200,9 @@ export default function ManageClient({
           {event.title}
         </h1>
         <p className="mt-2 text-sm text-text/60">
-          +{event.cohesionReward} points par joueur présent.
+          +{PARTICIPATION_POINTS_PER_RAID} point
+          {PARTICIPATION_POINTS_PER_RAID > 1 ? "s" : ""} de participation par
+          joueur présent.
         </p>
       </header>
 

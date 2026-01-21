@@ -776,7 +776,7 @@ export default function LootDistributionPage() {
                         </div>
                         <div className="text-xs text-zinc-500">
                           {candidate.lootReceivedCount} loots reçus ·{" "}
-                          {candidate.cohesionPoints} cohésion
+                          {candidate.cohesionPoints} points de participation
                         </div>
                         <div className="text-xs text-emerald-300">
                           ✅ Wishlist · Priorité {candidate.itemPriority}

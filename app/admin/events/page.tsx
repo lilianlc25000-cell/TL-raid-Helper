@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CalendarPlus } from "lucide-react";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { PARTICIPATION_POINTS_PER_RAID } from "../../../lib/game-constants";
 
 type EventType =
   | "Raid de Guilde"
@@ -23,7 +24,7 @@ type EventEntry = {
   eventType: EventType;
   difficulty?: Difficulty;
   dateTime: string;
-  cohesionReward: number;
+  participationReward: number;
   note?: string;
 };
 
@@ -95,7 +96,6 @@ export default function AdminEventsPage() {
   const [title, setTitle] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("Normal");
   const [dateTime, setDateTime] = useState("");
-  const [cohesionReward, setCohesionReward] = useState(10);
   const [alliance, setAlliance] = useState("");
   const [note, setNote] = useState("");
 
@@ -129,7 +129,7 @@ export default function AdminEventsPage() {
             eventType: event.event_type as EventType,
             difficulty: event.difficulty as Difficulty | null,
             dateTime: event.start_time,
-            cohesionReward: event.cohesion_reward ?? 0,
+            participationReward: event.cohesion_reward ?? PARTICIPATION_POINTS_PER_RAID,
             note: event.description ?? undefined,
           })),
         );
@@ -188,7 +188,7 @@ export default function AdminEventsPage() {
         difficulty: needsDifficulty ? difficulty : null,
         start_time: startTime,
         description: combinedNote || null,
-        cohesion_reward: cohesionReward,
+        cohesion_reward: PARTICIPATION_POINTS_PER_RAID,
         status: "planned",
         is_points_distributed: false,
       })
@@ -206,7 +206,8 @@ export default function AdminEventsPage() {
       eventType: data.event_type as EventType,
       difficulty: data.difficulty as Difficulty | null,
       dateTime: data.start_time,
-      cohesionReward: data.cohesion_reward ?? 0,
+      participationReward:
+        data.cohesion_reward ?? PARTICIPATION_POINTS_PER_RAID,
       note: data.description ?? undefined,
     };
     setEvents((prev) => [newEvent, ...prev]);
@@ -334,7 +335,8 @@ export default function AdminEventsPage() {
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.25em] text-text/60">
                   <span className="rounded-full border border-white/10 bg-black/40 px-3 py-1">
-                    +{event.cohesionReward} Cohésion
+                    +{event.participationReward} point
+                    {event.participationReward > 1 ? "s" : ""} de participation
                   </span>
                   {event.note ? (
                     <span className="text-text/50">{event.note}</span>
@@ -449,19 +451,19 @@ export default function AdminEventsPage() {
                 />
               </label>
 
-              <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.25em] text-text/50">
-                  Points de Cohésion
-                </span>
-                <input
-                  type="number"
-                  value={cohesionReward}
-                  onChange={(event) =>
-                    setCohesionReward(Number(event.target.value))
-                  }
-                  className="bg-transparent text-sm text-text outline-none"
-                />
-              </label>
+              <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.25em] text-emerald-200/70">
+                  Points de participation
+                </p>
+                <p className="mt-2 text-sm text-emerald-100/80">
+                  Chaque raid helper validé vaut{" "}
+                  <span className="font-semibold text-emerald-100">
+                    +{PARTICIPATION_POINTS_PER_RAID} point
+                    {PARTICIPATION_POINTS_PER_RAID > 1 ? "s" : ""}
+                  </span>{" "}
+                  de participation.
+                </p>
+              </div>
 
               <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
                 <span className="text-xs uppercase tracking-[0.25em] text-text/50">

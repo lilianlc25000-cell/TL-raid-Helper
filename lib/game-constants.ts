@@ -88,3 +88,6 @@ export const RARITY_COLORS = {
   epic: "#8b5cf6",
   legendary: "#f97316",
 } as const;
+
+export const PARTICIPATION_POINTS_PER_RAID = 1;
+export const DEFAULT_PARTICIPATION_THRESHOLD = 1;

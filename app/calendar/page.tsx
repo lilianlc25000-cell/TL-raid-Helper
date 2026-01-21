@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
+import { PARTICIPATION_POINTS_PER_RAID } from "../../lib/game-constants";
 
 type EventEntry = {
   id: string;
@@ -311,7 +312,8 @@ export default function CalendarPage() {
 
               <div className="mt-4 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.25em] text-text/60">
                 <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 text-emerald-200">
-                  +{event.cohesionReward} Points de Cohésion
+                  +{PARTICIPATION_POINTS_PER_RAID} point
+                  {PARTICIPATION_POINTS_PER_RAID > 1 ? "s" : ""} de participation
                 </span>
                 {event.description ? (
                   <span className="text-text/50">{event.description}</span>

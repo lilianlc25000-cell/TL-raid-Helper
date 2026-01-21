@@ -249,6 +249,7 @@ export default function ProfilePage() {
   const [discordLinkLoading, setDiscordLinkLoading] = useState(false);
   const [discordLinkError, setDiscordLinkError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [participationPoints, setParticipationPoints] = useState<number>(0);
   const rollChannelRef = useRef<BroadcastChannel | null>(null);
   const playerName = name || "Mozorh";
   const isProfileValid =
@@ -331,7 +332,9 @@ export default function ProfilePage() {
       }
       const { data } = await supabase
         .from("profiles")
-        .select("ingame_name,main_weapon,off_weapon,role,archetype,gear_score")
+        .select(
+          "ingame_name,main_weapon,off_weapon,role,archetype,gear_score,cohesion_points",
+        )
         .eq("user_id", userId)
         .single();
       if (!isMounted) {
@@ -346,6 +349,7 @@ export default function ProfilePage() {
         setWeapon2(data.off_weapon ?? "");
         setRole(data.role ?? "");
         setArchetype(data.archetype ?? "");
+        setParticipationPoints(data.cohesion_points ?? 0);
       }
       setIsProfileLoaded(true);
     };
@@ -510,6 +514,10 @@ export default function ProfilePage() {
               Rang de Guilde
             </p>
             <p className="mt-2 text-lg font-semibold text-text">Soldat</p>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-emerald-200">
+              <Sparkles className="h-3.5 w-3.5" />
+              {participationPoints} points de participation
+            </div>
             <button
               type="button"
               onClick={handleSaveProfile}

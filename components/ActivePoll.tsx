@@ -90,7 +90,7 @@ export default function ActivePoll() {
         {activeCount} sondage(s) disponible(s).
       </p>
 
-      <div className="relative mt-5 inline-flex w-fit self-start">
+      <div className="relative mt-auto inline-flex w-fit self-start pt-5">
         <span className="inline-flex rounded-full p-[1px] shadow-[0_0_18px_rgba(139,92,246,0.45)] animate-pulse">
           <Link
             href="/polls"

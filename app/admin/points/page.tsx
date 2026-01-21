@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { PARTICIPATION_POINTS_PER_RAID } from "../../../lib/game-constants";
 
 type EventRow = {
   id: string;
@@ -54,7 +55,7 @@ export default function AdminPointsPage() {
     <div className="min-h-screen text-zinc-100">
       <header className="rounded-3xl border border-white/10 bg-surface/70 px-4 py-6 shadow-[0_0_35px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10">
         <p className="text-xs uppercase tracking-[0.4em] text-text/60">
-          Distribution des points
+          Distribution des points de participation
         </p>
         <h1 className="mt-2 font-display text-2xl tracking-[0.12em] text-text sm:text-3xl">
           Raids terminés
@@ -96,7 +97,9 @@ export default function AdminPointsPage() {
                 </div>
                 <div className="flex flex-col items-start gap-2 sm:items-end">
                   <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 text-xs uppercase tracking-[0.25em] text-emerald-200">
-                    +{event.cohesion_reward} Cohésion
+                    +{PARTICIPATION_POINTS_PER_RAID} point
+                    {PARTICIPATION_POINTS_PER_RAID > 1 ? "s" : ""} de
+                    participation
                   </span>
                   <span className="text-xs uppercase tracking-[0.2em] text-text/50">
                     Statut: {event.status}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarPlus, Gem, Users } from "lucide-react";
+import { CalendarPlus, Gem, ShieldCheck, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 
@@ -32,6 +32,15 @@ const tools = [
     accent: "from-sky-500/20 via-sky-500/10 to-blue-500/10",
     border: "border-sky-400/40",
     text: "text-sky-200",
+  },
+  {
+    title: "Éligibilité des membres",
+    description: "Classement participation + wishlist loot",
+    href: "/admin/eligibility",
+    icon: ShieldCheck,
+    accent: "from-amber-500/20 via-amber-500/10 to-red-500/10",
+    border: "border-amber-400/40",
+    text: "text-amber-200",
   },
 ];
 
