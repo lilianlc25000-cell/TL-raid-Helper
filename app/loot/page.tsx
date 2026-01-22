@@ -347,9 +347,11 @@ export default function PlayerLootPage() {
     if (!selectedItem || !userId) {
       return;
     }
+    const session = sessions.find((item) => item.id === selectedItem.id);
+    const isBrocante = session?.category === "brocante";
     const hasWishlist = eligibleItems.has(selectedItem.name);
     const hasEnoughPoints = participationPoints >= participationThreshold;
-    if (!hasWishlist || !hasEnoughPoints) {
+    if (!isBrocante && (!hasWishlist || !hasEnoughPoints)) {
       setError(
         !hasWishlist
           ? "Non éligible : l'objet n'est pas dans votre wishlist."

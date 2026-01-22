@@ -31,6 +31,8 @@ type GroupState = {
 };
 
 const GROUP_SIZE = 6;
+const PVP_EVENT_TYPES = ["Pierre de Faille", "Château", "War Game", "Taxe"];
+const PVE_EVENT_TYPES = ["Raid de Guilde", "Calanthia"];
 
 const roleStyles: Record<string, string> = {
   tank: "border-sky-500/50 bg-sky-500/10 text-sky-200",
@@ -131,16 +133,19 @@ export default function RaidGroupsPage() {
 
       const { data: event } = await supabase
         .from("events")
-        .select("title,are_groups_published")
+        .select("title,are_groups_published,event_type")
         .eq("id", eventId)
         .maybeSingle();
       setEventTitle(event?.title ?? "Événement");
-      setIsPublished(Boolean(event?.are_groups_published));
+      const published = Boolean(event?.are_groups_published);
+      setIsPublished(published);
       setIsDirty(false);
 
       const { data, error } = (await supabase
         .from("event_signups")
-        .select("user_id,status,group_index,profiles(ingame_name,role,main_weapon,off_weapon)")
+        .select(
+          "user_id,status,group_index,selected_build_id,profiles(ingame_name,role,main_weapon,off_weapon),player_builds(id,build_name,role,archetype,main_weapon,off_weapon)",
+        )
         .eq("event_id", eventId)
         .in("status", ["present", "tentative"])) as {
         data:
@@ -148,9 +153,18 @@ export default function RaidGroupsPage() {
               user_id: string;
               status: "present" | "tentative";
               group_index: number | null;
+              selected_build_id: string | null;
               profiles: {
                 ingame_name: string;
                 role: string | null;
+                main_weapon: string | null;
+                off_weapon: string | null;
+              } | null;
+              player_builds: {
+                id: string;
+                build_name: string;
+                role: string | null;
+                archetype: string | null;
                 main_weapon: string | null;
                 off_weapon: string | null;
               } | null;
@@ -171,18 +185,25 @@ export default function RaidGroupsPage() {
         id: index + 1,
         players: [] as PlayerCard[],
       }));
-      const nextReserve: PlayerCard[] = [];
+      let nextReserve: PlayerCard[] = [];
+      const hasExistingGroups = (data ?? []).some(
+        (entry) => entry.group_index !== null,
+      );
+      let didAutoAssign = false;
 
       (data ?? []).forEach((entry) => {
         const profile = Array.isArray(entry.profiles)
           ? entry.profiles[0]
           : entry.profiles;
+        const build = Array.isArray(entry.player_builds)
+          ? entry.player_builds[0]
+          : entry.player_builds;
         const card: PlayerCard = {
           userId: entry.user_id,
           ingameName: profile?.ingame_name ?? "Inconnu",
-          role: profile?.role ?? null,
-          mainWeapon: profile?.main_weapon ?? null,
-          offWeapon: profile?.off_weapon ?? null,
+          role: build?.role ?? profile?.role ?? null,
+          mainWeapon: build?.main_weapon ?? profile?.main_weapon ?? null,
+          offWeapon: build?.off_weapon ?? profile?.off_weapon ?? null,
           status: entry.status,
           groupIndex: entry.group_index,
         };
@@ -193,8 +214,47 @@ export default function RaidGroupsPage() {
         }
       });
 
+      const eventType = event?.event_type ?? "";
+      const contentMode = PVP_EVENT_TYPES.includes(eventType)
+        ? "pvp"
+        : PVE_EVENT_TYPES.includes(eventType)
+          ? "pve"
+          : null;
+
+      if (
+        !published &&
+        !hasExistingGroups &&
+        nextReserve.length &&
+        contentMode
+      ) {
+        const { data: staticsTeams } = await supabase
+          .from("statics_teams")
+          .select("user_id,team_index")
+          .eq("mode", contentMode);
+        if (staticsTeams && staticsTeams.length > 0) {
+          const teamByUser = new Map(
+            staticsTeams.map((row) => [row.user_id, row.team_index]),
+          );
+          const remainingReserve: PlayerCard[] = [];
+          nextReserve.forEach((player) => {
+            const teamIndex = teamByUser.get(player.userId);
+            if (teamIndex && teamIndex >= 1 && teamIndex <= 6) {
+              nextGroups[teamIndex - 1].players.push({
+                ...player,
+                groupIndex: teamIndex,
+              });
+              didAutoAssign = true;
+            } else {
+              remainingReserve.push(player);
+            }
+          });
+          nextReserve = remainingReserve;
+        }
+      }
+
       setGroups(nextGroups);
       setReserve(nextReserve);
+      setIsDirty(didAutoAssign);
       setIsLoading(false);
     };
 

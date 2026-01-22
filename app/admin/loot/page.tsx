@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ItemSelector, { ItemOption } from "../../components/ItemSelector";
 import BrocanteCreator from "../../../components/BrocanteCreator";
@@ -18,6 +17,7 @@ type LootQueueItem = {
   itemName: string;
   isActive: boolean;
   imageUrl?: string | null;
+  category?: "guild_raid" | "brocante" | null;
 };
 
 type WishlistCandidate = {
@@ -25,8 +25,8 @@ type WishlistCandidate = {
   ingameName: string;
   cohesionPoints: number;
   lootReceivedCount: number;
-  itemPriority: 1 | 2;
-  slotName: string;
+  itemPriority: number | null;
+  slotName: string | null;
   rollValue?: number;
 };
 
@@ -43,6 +43,7 @@ const emptyAssignment: AssignmentState = {
   isLoading: false,
   error: null,
 };
+
 
 const mapGameItemsToOptions = (
   items: (typeof gameItemsByCategory)[GameItemCategory],
@@ -74,6 +75,9 @@ export default function LootDistributionPage() {
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [assignment, setAssignment] = useState<AssignmentState>(emptyAssignment);
   const [currentGuildId, setCurrentGuildId] = useState<string | null>(null);
+  const [rollCountsByLootId, setRollCountsByLootId] = useState<
+    Record<string, number>
+  >({});
 
   const loadAdminRole = useCallback(async () => {
     const supabase = createSupabaseBrowserClient();
@@ -119,7 +123,7 @@ export default function LootDistributionPage() {
     setQueueError(null);
     const { data, error } = await supabase
       .from("active_loot_sessions")
-      .select("id,item_name,is_active,image_url")
+      .select("id,item_name,is_active,image_url,category")
       .eq("guild_id", currentGuildId)
       .order("id", { ascending: false });
     if (error) {
@@ -135,9 +139,29 @@ export default function LootDistributionPage() {
         itemName: row.item_name,
         isActive: row.is_active,
         imageUrl: (row as { image_url?: string | null }).image_url ?? null,
+        category: (row as { category?: "guild_raid" | "brocante" | null })
+          .category,
       }))
       .filter((row) => Boolean(row.id));
     setQueue(mapped);
+    if (mapped.length > 0) {
+      const sessionIds = mapped.map((row) => row.id);
+      const { data: rollsData } = await supabase
+        .from("loot_rolls")
+        .select("loot_session_id")
+        .in("loot_session_id", sessionIds);
+      const counts: Record<string, number> = {};
+      (rollsData ?? []).forEach((row) => {
+        const id = row.loot_session_id as string | null;
+        if (!id) {
+          return;
+        }
+        counts[id] = (counts[id] ?? 0) + 1;
+      });
+      setRollCountsByLootId(counts);
+    } else {
+      setRollCountsByLootId({});
+    }
     setIsQueueLoading(false);
   }, [currentGuildId]);
 
@@ -201,7 +225,16 @@ export default function LootDistributionPage() {
     if (!supabase) {
       return;
     }
-    await supabase.from("active_loot_sessions").delete().eq("id", lootId);
+    const { error } = await supabase
+      .from("active_loot_sessions")
+      .delete()
+      .eq("id", lootId);
+    if (error) {
+      setQueueError(
+        `Impossible de supprimer le loot: ${error.message || "Erreur inconnue."}`,
+      );
+      return;
+    }
     await loadQueue();
   };
 
@@ -216,36 +249,7 @@ export default function LootDistributionPage() {
       return;
     }
     setAssignment({ loot, candidates: [], isLoading: true, error: null });
-    const { data, error } = (await supabase
-      .from("gear_wishlist")
-      .select(
-        "user_id,item_priority,slot_name,profiles(ingame_name,cohesion_points,loot_received_count)",
-      )
-      .eq("item_name", loot.itemName)) as {
-      data:
-        | Array<{
-            user_id: string;
-            item_priority: number;
-            slot_name: string;
-            profiles: {
-              ingame_name: string;
-              cohesion_points: number;
-              loot_received_count: number;
-            } | null;
-          }>
-        | null;
-      error: { message?: string } | null;
-    };
-    if (error) {
-      setAssignment({
-        loot,
-        candidates: [],
-        isLoading: false,
-        error: "Impossible de récupérer les candidats.",
-      });
-      return;
-    }
-    const { data: rollsData } = (await supabase
+    const { data: rollsData, error: rollsError } = (await supabase
       .from("loot_rolls")
       .select("user_id,roll_value")
       .eq("loot_session_id", loot.id)) as {
@@ -255,30 +259,78 @@ export default function LootDistributionPage() {
             roll_value: number;
           }>
         | null;
+      error: { message?: string } | null;
+    };
+    if (rollsError) {
+      setAssignment({
+        loot,
+        candidates: [],
+        isLoading: false,
+        error: "Impossible de récupérer les rolls.",
+      });
+      return;
+    }
+    const userIds = Array.from(
+      new Set((rollsData ?? []).map((roll) => roll.user_id).filter(Boolean)),
+    );
+    if (userIds.length === 0) {
+      setAssignment({
+        loot,
+        candidates: [],
+        isLoading: false,
+        error: null,
+      });
+      return;
+    }
+
+    const { data: profilesData } = (await supabase
+      .from("profiles")
+      .select("user_id,ingame_name,cohesion_points,loot_received_count")
+      .in("user_id", userIds)) as {
+      data:
+        | Array<{
+            user_id: string;
+            ingame_name: string;
+            cohesion_points: number;
+            loot_received_count: number;
+          }>
+        | null;
     };
 
-    const rollMap: Record<string, number> = {};
-    (rollsData ?? []).forEach((roll) => {
-      const current = rollMap[roll.user_id];
-      if (current === undefined || roll.roll_value > current) {
-        rollMap[roll.user_id] = roll.roll_value;
-      }
-    });
+    const { data: wishlistData } = (await supabase
+      .from("gear_wishlist")
+      .select("user_id,item_priority,slot_name")
+      .eq("item_name", loot.itemName)
+      .in("user_id", userIds)) as {
+      data:
+        | Array<{
+            user_id: string;
+            item_priority: number;
+            slot_name: string;
+          }>
+        | null;
+    };
 
-    const mapped = (data ?? [])
-      .map((row) => {
-        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-        return {
-          userId: row.user_id,
-          ingameName: profile?.ingame_name ?? "Inconnu",
-          cohesionPoints: profile?.cohesion_points ?? 0,
-          lootReceivedCount: profile?.loot_received_count ?? 0,
-          itemPriority: row.item_priority as 1 | 2,
-          slotName: row.slot_name,
-          rollValue: rollMap[row.user_id],
-        };
-      })
-      .filter((row) => Boolean(row.userId));
+    const profileMap = new Map(
+      (profilesData ?? []).map((profile) => [profile.user_id, profile]),
+    );
+    const wishlistMap = new Map(
+      (wishlistData ?? []).map((row) => [row.user_id, row]),
+    );
+
+    const mapped = (rollsData ?? []).map((roll) => {
+      const profile = profileMap.get(roll.user_id);
+      const wishlist = wishlistMap.get(roll.user_id);
+      return {
+        userId: roll.user_id,
+        ingameName: profile?.ingame_name ?? "Inconnu",
+        cohesionPoints: profile?.cohesion_points ?? 0,
+        lootReceivedCount: profile?.loot_received_count ?? 0,
+        itemPriority: wishlist?.item_priority ?? null,
+        slotName: wishlist?.slot_name ?? null,
+        rollValue: roll.roll_value,
+      };
+    });
     setAssignment({
       loot,
       candidates: mapped,
@@ -344,14 +396,27 @@ export default function LootDistributionPage() {
     };
   }, [loadAdminRole]);
 
+  const filteredQueue = useMemo(() => {
+    if (activeTab === "brocante") {
+      return queue.filter((loot) => loot.category === "brocante");
+    }
+    return queue.filter((loot) => loot.category !== "brocante");
+  }, [activeTab, queue]);
+
   const pendingLoots = useMemo(
-    () => queue.filter((loot) => !loot.isActive),
-    [queue],
+    () => filteredQueue.filter((loot) => !loot.isActive),
+    [filteredQueue],
   );
   const activeLoots = useMemo(
-    () => queue.filter((loot) => loot.isActive),
-    [queue],
+    () => filteredQueue.filter((loot) => loot.isActive),
+    [filteredQueue],
   );
+  const sortedActiveLoots = useMemo(() => {
+    return [...activeLoots].sort(
+      (a, b) =>
+        (rollCountsByLootId[b.id] ?? 0) - (rollCountsByLootId[a.id] ?? 0),
+    );
+  }, [activeLoots, rollCountsByLootId]);
 
   const selectedCategoryConfig = selectedCategory
     ? gameItemCategories.find((category) => category.key === selectedCategory)
@@ -415,7 +480,7 @@ export default function LootDistributionPage() {
         <div className="flex flex-wrap gap-2">
           {[
             { key: "catalogue", label: "Catalogue de Raid" },
-            { key: "brocante", label: "Créer Lot Brocante" },
+            { key: "brocante", label: "Catalogue de Brocante" },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -435,221 +500,199 @@ export default function LootDistributionPage() {
 
         {activeTab === "brocante" ? (
           <BrocanteCreator isAdmin={isAdmin} onCreated={loadQueue} />
-        ) : (
-          <>
-            {isAdmin ? (
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-                      Commandes admin
-                    </p>
-                    <p className="mt-1 text-sm text-zinc-400">
-                      Ajoutez un loot, ouvrez les rolls ou attribuez-le.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={openAddModal}
-                    className="rounded-md border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
-                  >
-                    Ajouter un loot à distribuer
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-zinc-900 bg-zinc-950/50 px-6 py-5 text-sm text-zinc-500">
-                Zone réservée aux officiers. Vous pouvez uniquement voir les
-                loots en cours de distribution.
-              </div>
-            )}
-
+        ) : null}
+        {activeTab === "catalogue" ? (
+          isAdmin ? (
             <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
-              <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-zinc-500">
-                <span>Loots ouverts</span>
-                <span className="font-mono text-zinc-400">
-                  {activeLoots.length.toString().padStart(2, "0")}
-                </span>
-              </div>
-              <div className="mt-4 space-y-3">
-                {activeLoots.length === 0 ? (
-                  <div className="rounded-md border border-zinc-900 px-4 py-6 text-center text-sm text-zinc-500">
-                    Aucun loot actif.
-                  </div>
-                ) : (
-                  activeLoots.map((loot) => {
-                    const imageSrc = imageErrors[loot.id]
-                      ? getSlotPlaceholder("main_hand")
-                      : loot.imageUrl || getItemImage(loot.itemName);
-                    return (
-                      <div
-                        key={loot.id}
-                        className="flex flex-col gap-3 rounded-md border border-zinc-900 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-200 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/70">
-                            <Image
-                              src={imageSrc}
-                              alt={loot.itemName}
-                              width={88}
-                              height={88}
-                              className="h-[88px] w-[88px] rounded-xl object-contain"
-                              unoptimized
-                              onError={() =>
-                                setImageErrors((prev) => ({
-                                  ...prev,
-                                  [loot.id]: true,
-                                }))
-                              }
-                            />
-                          </div>
-                          <div>
-                            <div className="text-base font-medium text-zinc-100">
-                              {loot.itemName}
-                            </div>
-                            <div className="text-xs text-emerald-300">
-                              Rolls ouverts
-                            </div>
-                          </div>
-                        </div>
-                        {isAdmin ? (
-                          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-                            {loot.id ? (
-                              <Link
-                                href={`/admin/loot/active/${loot.id}`}
-                                className="w-full rounded-md border border-amber-400/60 bg-amber-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300 sm:w-auto"
-                              >
-                                Gérer
-                              </Link>
-                            ) : (
-                              <span className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs uppercase tracking-[0.2em] text-zinc-500 sm:w-auto">
-                                Gérer
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => loadCandidates(loot)}
-                              className="w-full rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500 sm:w-auto"
-                            >
-                              Attribuer
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteLoot(loot.id)}
-                              className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
-                            >
-                              Supprimer
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })
-                )}
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                    Commandes admin
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    Ajoutez un loot, ouvrez les rolls ou attribuez-le.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={openAddModal}
+                  className="rounded-md border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+                >
+                  Ajouter un loot à distribuer
+                </button>
               </div>
             </div>
+          ) : (
+            <div className="rounded-lg border border-zinc-900 bg-zinc-950/50 px-6 py-5 text-sm text-zinc-500">
+              Zone réservée aux officiers. Vous pouvez uniquement voir les loots
+              en cours de distribution.
+            </div>
+          )
+        ) : null}
 
-            {isAdmin ? (
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
-                <div className="mb-4 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-zinc-500">
-                  <span>Loots en attente</span>
-                  <span className="font-mono text-zinc-400">
-                    {pendingLoots.length.toString().padStart(2, "0")}
-                  </span>
-                </div>
-                {isQueueLoading ? (
-                  <div className="rounded-md border border-zinc-900 px-4 py-6 text-sm text-zinc-500">
-                    Chargement...
-                  </div>
-                ) : queueError ? (
-                  <div className="rounded-md border border-red-500/40 bg-red-950/30 px-4 py-6 text-sm text-red-200">
-                    {queueError}
-                  </div>
-                ) : pendingLoots.length === 0 ? (
-                  <div className="rounded-md border border-zinc-900 px-4 py-6 text-sm text-zinc-500">
-                    Aucun loot en attente.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {pendingLoots.map((loot) => {
-                      const imageSrc = imageErrors[loot.id]
-                        ? getSlotPlaceholder("main_hand")
-                        : loot.imageUrl || getItemImage(loot.itemName);
-                      return (
-                        <div
-                          key={loot.id}
-                          className="flex flex-col gap-3 rounded-md border border-zinc-900 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-200 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900/70">
-                              <Image
-                                src={imageSrc}
-                                alt={loot.itemName}
-                                width={40}
-                                height={40}
-                                className="h-10 w-10 rounded-md object-contain"
-                                unoptimized
-                                onError={() =>
-                                  setImageErrors((prev) => ({
-                                    ...prev,
-                                    [loot.id]: true,
-                                  }))
-                                }
-                              />
-                            </div>
-                            <div>
-                              <div className="font-medium text-zinc-100">
-                                {loot.itemName}
-                              </div>
-                              <div className="text-xs text-zinc-500">
-                                En attente de publication
-                              </div>
-                            </div>
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
+          <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-zinc-500">
+            <span>Loots ouverts</span>
+            <span className="font-mono text-zinc-400">
+              {activeLoots.length.toString().padStart(2, "0")}
+            </span>
+          </div>
+          <div className="mt-4 space-y-3">
+            {sortedActiveLoots.length === 0 ? (
+              <div className="rounded-md border border-zinc-900 px-4 py-6 text-center text-sm text-zinc-500">
+                Aucun loot actif.
+              </div>
+            ) : (
+              sortedActiveLoots.map((loot) => {
+                const imageSrc = imageErrors[loot.id]
+                  ? getSlotPlaceholder("main_hand")
+                  : loot.imageUrl || getItemImage(loot.itemName);
+                return (
+                  <div
+                    key={loot.id}
+                    className="flex flex-col gap-3 rounded-md border border-zinc-900 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-200 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/70">
+                        <Image
+                          src={imageSrc}
+                          alt={loot.itemName}
+                          width={88}
+                          height={88}
+                          className="h-[88px] w-[88px] rounded-xl object-contain"
+                          unoptimized
+                          onError={() =>
+                            setImageErrors((prev) => ({
+                              ...prev,
+                              [loot.id]: true,
+                            }))
+                          }
+                        />
+                      </div>
+                        <div>
+                        <div className="text-base font-medium text-zinc-100">
+                          {loot.itemName}
+                        </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-300">
+                            <span>Rolls ouverts</span>
+                            <span className="rounded-full border border-emerald-400/40 bg-emerald-950/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-emerald-200">
+                              {(rollCountsByLootId[loot.id] ?? 0).toString()} rolls
+                            </span>
                           </div>
-                        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-                            {loot.id ? (
-                              <Link
-                                href={`/admin/loot/${loot.id}`}
-                              className="w-full rounded-md border border-amber-400/60 bg-amber-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300 sm:w-auto"
-                              >
-                                Gérer
-                              </Link>
-                            ) : (
-                            <span className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs uppercase tracking-[0.2em] text-zinc-500 sm:w-auto">
-                                Gérer
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleOpenRolls(loot.id)}
-                            className="w-full rounded-md border border-sky-500/60 bg-sky-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-200 transition hover:border-sky-400 sm:w-auto"
-                            >
-                              Ouvrir les rolls
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => loadCandidates(loot)}
-                            className="w-full rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500 sm:w-auto"
-                            >
-                              Attribuer
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteLoot(loot.id)}
-                            className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
-                            >
-                              Supprimer
-                            </button>
+                      </div>
+                    </div>
+                    {isAdmin ? (
+                      <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => loadCandidates(loot)}
+                          className="w-full rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500 sm:w-auto"
+                        >
+                          Attribuer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLoot(loot.id)}
+                          className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {isAdmin ? (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
+            <div className="mb-4 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-zinc-500">
+              <span>Loots en attente</span>
+              <span className="font-mono text-zinc-400">
+                {pendingLoots.length.toString().padStart(2, "0")}
+              </span>
+            </div>
+            {isQueueLoading ? (
+              <div className="rounded-md border border-zinc-900 px-4 py-6 text-sm text-zinc-500">
+                Chargement...
+              </div>
+            ) : queueError ? (
+              <div className="rounded-md border border-red-500/40 bg-red-950/30 px-4 py-6 text-sm text-red-200">
+                {queueError}
+              </div>
+            ) : pendingLoots.length === 0 ? (
+              <div className="rounded-md border border-zinc-900 px-4 py-6 text-sm text-zinc-500">
+                Aucun loot en attente.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pendingLoots.map((loot) => {
+                  const imageSrc = imageErrors[loot.id]
+                    ? getSlotPlaceholder("main_hand")
+                    : loot.imageUrl || getItemImage(loot.itemName);
+                  return (
+                    <div
+                      key={loot.id}
+                      className="flex flex-col gap-3 rounded-md border border-zinc-900 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-200 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900/70">
+                          <Image
+                            src={imageSrc}
+                            alt={loot.itemName}
+                            width={40}
+                            height={40}
+                            className="h-10 w-10 rounded-md object-contain"
+                            unoptimized
+                            onError={() =>
+                              setImageErrors((prev) => ({
+                                ...prev,
+                                [loot.id]: true,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div>
+                          <div className="font-medium text-zinc-100">
+                            {loot.itemName}
+                          </div>
+                          <div className="text-xs text-zinc-500">
+                            En attente de publication
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      </div>
+                      <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenRolls(loot.id)}
+                          className="w-full rounded-md border border-sky-500/60 bg-sky-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-200 transition hover:border-sky-400 sm:w-auto"
+                        >
+                          Ouvrir les rolls
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => loadCandidates(loot)}
+                          className="w-full rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500 sm:w-auto"
+                        >
+                          Attribuer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLoot(loot.id)}
+                          className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ) : null}
-          </>
-        )}
+            )}
+          </div>
+        ) : null}
       </section>
 
       {isAddModalOpen ? (
@@ -761,7 +804,7 @@ export default function LootDistributionPage() {
                 </div>
               ) : sortedCandidates.length === 0 ? (
                 <div className="rounded-md border border-zinc-900 px-4 py-6 text-sm text-zinc-500">
-                  Aucun joueur n&apos;a demandé cet item.
+                  Aucun roll pour cet item.
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -778,9 +821,15 @@ export default function LootDistributionPage() {
                           {candidate.lootReceivedCount} loots reçus ·{" "}
                           {candidate.cohesionPoints} points de participation
                         </div>
-                        <div className="text-xs text-emerald-300">
-                          ✅ Wishlist · Priorité {candidate.itemPriority}
-                        </div>
+                        {candidate.itemPriority ? (
+                          <div className="text-xs text-emerald-300">
+                            ✅ Wishlist · Priorité {candidate.itemPriority}
+                          </div>
+                        ) : assignment.loot.category !== "brocante" ? (
+                          <div className="text-xs text-amber-300">
+                            ⚠️ Pas dans la wishlist
+                          </div>
+                        ) : null}
                       </div>
                       {candidate.rollValue !== undefined ? (
                         <span className="rounded-full border border-amber-400/60 bg-amber-950/40 px-3 py-1 text-sm font-semibold text-amber-200">
@@ -802,6 +851,7 @@ export default function LootDistributionPage() {
           </div>
         </div>
       ) : null}
+
     </div>
   );
 }

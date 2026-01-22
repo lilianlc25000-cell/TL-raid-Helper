@@ -28,14 +28,12 @@ type EventEntry = {
   note?: string;
 };
 
-const eventTypes: EventType[] = [
-  "Raid de Guilde",
-  "Pierre de Faille",
-  "Château",
-  "Calanthia",
-  "War Game",
-  "Taxe",
-];
+type ContentType = "PVE" | "PVP";
+
+const EVENT_TYPES_BY_CONTENT: Record<ContentType, EventType[]> = {
+  PVE: ["Raid de Guilde", "Calanthia"],
+  PVP: ["Pierre de Faille", "Château", "War Game", "Taxe"],
+};
 
 const difficulties: Difficulty[] = ["Normal", "Difficile", "Nightmare"];
 
@@ -92,6 +90,7 @@ export default function AdminEventsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [contentType, setContentType] = useState<ContentType | null>(null);
   const [eventType, setEventType] = useState<EventType>("Raid de Guilde");
   const [title, setTitle] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("Normal");
@@ -141,6 +140,12 @@ export default function AdminEventsPage() {
   }, []);
 
   useEffect(() => {
+    if (contentType) {
+      const options = EVENT_TYPES_BY_CONTENT[contentType];
+      if (!options.includes(eventType)) {
+        setEventType(options[0]);
+      }
+    }
     if (!requiresTitle(eventType)) {
       setTitle("");
     }
@@ -150,7 +155,7 @@ export default function AdminEventsPage() {
     if (!requiresDifficulty(eventType)) {
       setDifficulty("Normal");
     }
-  }, [eventType]);
+  }, [contentType, eventType]);
 
   const handleCreateEvent = async () => {
     const needsTitle = requiresTitle(eventType);
@@ -258,6 +263,7 @@ export default function AdminEventsPage() {
   const needsAlliance = requiresAlliance(eventType);
   const needsDifficulty = requiresDifficulty(eventType);
   const isCreateDisabled =
+    !contentType ||
     !dateTime ||
     (needsTitle && !title.trim()) ||
     (needsAlliance && !alliance.trim());
@@ -275,7 +281,10 @@ export default function AdminEventsPage() {
         </div>
         <button
           type="button"
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setIsModalOpen(true);
+            setContentType(null);
+          }}
           className="inline-flex items-center gap-2 rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300"
         >
           <CalendarPlus className="h-4 w-4" />
@@ -371,26 +380,53 @@ export default function AdminEventsPage() {
             </div>
 
             <div className="mt-6 grid gap-4">
-              <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.25em] text-text/50">
-                  Type
-                </span>
-                <select
-                  value={eventType}
-                  onChange={(event) =>
-                    setEventType(event.target.value as EventType)
-                  }
-                  className="bg-transparent text-sm text-text outline-none"
-                >
-                  {eventTypes.map((type) => (
-                    <option key={type} value={type} className="text-black">
+              <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+                  Quel contenu voulez-vous créer ?
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {(["PVE", "PVP"] as ContentType[]).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setContentType(type)}
+                      className={[
+                        "rounded-2xl border px-4 py-4 text-left text-sm uppercase tracking-[0.25em] transition",
+                        contentType === type
+                          ? "border-amber-400/70 bg-amber-400/10 text-amber-100"
+                          : "border-white/10 bg-black/40 text-text/70 hover:border-white/20",
+                      ].join(" ")}
+                    >
                       {type}
-                    </option>
+                    </button>
                   ))}
-                </select>
-              </label>
+                </div>
+              </div>
 
-              {needsTitle ? (
+              {contentType ? (
+                <>
+                  <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                    <span className="text-xs uppercase tracking-[0.25em] text-text/50">
+                      Type
+                    </span>
+                    <select
+                      value={eventType}
+                      onChange={(event) =>
+                        setEventType(event.target.value as EventType)
+                      }
+                      className="bg-transparent text-sm text-text outline-none"
+                    >
+                      {EVENT_TYPES_BY_CONTENT[contentType].map((type) => (
+                        <option key={type} value={type} className="text-black">
+                          {type}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              ) : null}
+
+              {contentType && needsTitle ? (
                 <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
                   <span className="text-xs uppercase tracking-[0.25em] text-text/50">
                     Titre
@@ -404,7 +440,7 @@ export default function AdminEventsPage() {
                 </label>
               ) : null}
 
-              {needsAlliance ? (
+              {contentType && needsAlliance ? (
                 <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
                   <span className="text-xs uppercase tracking-[0.25em] text-text/50">
                     Alliance
@@ -418,7 +454,7 @@ export default function AdminEventsPage() {
                 </label>
               ) : null}
 
-              {needsDifficulty ? (
+              {contentType && needsDifficulty ? (
                 <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
                   <span className="text-xs uppercase tracking-[0.25em] text-text/50">
                     Difficulté
@@ -439,43 +475,47 @@ export default function AdminEventsPage() {
                 </label>
               ) : null}
 
-              <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.25em] text-text/50">
-                  Date &amp; Heure (Paris)
-                </span>
-                <input
-                  type="datetime-local"
-                  value={dateTime}
-                  onChange={(event) => setDateTime(event.target.value)}
-                  className="bg-transparent text-sm text-text outline-none"
-                />
-              </label>
+              {contentType ? (
+                <>
+                  <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                    <span className="text-xs uppercase tracking-[0.25em] text-text/50">
+                      Date &amp; Heure (Paris)
+                    </span>
+                    <input
+                      type="datetime-local"
+                      value={dateTime}
+                      onChange={(event) => setDateTime(event.target.value)}
+                      className="bg-transparent text-sm text-text outline-none"
+                    />
+                  </label>
 
-              <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.25em] text-emerald-200/70">
-                  Points de participation
-                </p>
-                <p className="mt-2 text-sm text-emerald-100/80">
-                  Chaque raid helper validé vaut{" "}
-                  <span className="font-semibold text-emerald-100">
-                    +{PARTICIPATION_POINTS_PER_RAID} point
-                    {PARTICIPATION_POINTS_PER_RAID > 1 ? "s" : ""}
-                  </span>{" "}
-                  de participation.
-                </p>
-              </div>
+                  <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.25em] text-emerald-200/70">
+                      Points de participation
+                    </p>
+                    <p className="mt-2 text-sm text-emerald-100/80">
+                      Chaque raid helper validé vaut{" "}
+                      <span className="font-semibold text-emerald-100">
+                        +{PARTICIPATION_POINTS_PER_RAID} point
+                        {PARTICIPATION_POINTS_PER_RAID > 1 ? "s" : ""}
+                      </span>{" "}
+                      de participation.
+                    </p>
+                  </div>
 
-              <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.25em] text-text/50">
-                  Note / Commentaire
-                </span>
-                <textarea
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder="Commentaire de l'admin..."
-                  className="min-h-[90px] resize-none bg-transparent text-sm text-text outline-none"
-                />
-              </label>
+                  <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                    <span className="text-xs uppercase tracking-[0.25em] text-text/50">
+                      Note / Commentaire
+                    </span>
+                    <textarea
+                      value={note}
+                      onChange={(event) => setNote(event.target.value)}
+                      placeholder="Commentaire de l'admin..."
+                      className="min-h-[90px] resize-none bg-transparent text-sm text-text outline-none"
+                    />
+                  </label>
+                </>
+              ) : null}
             </div>
 
             <div className="mt-6 flex items-center justify-end gap-3">

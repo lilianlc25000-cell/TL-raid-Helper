@@ -1,8 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Swords } from "lucide-react";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 import { PARTICIPATION_POINTS_PER_RAID } from "../../lib/game-constants";
+import { getWeaponImage } from "../../lib/weapons";
 
 type EventEntry = {
   id: string;
@@ -15,6 +18,14 @@ type EventEntry = {
 };
 
 type SignupStatus = "present" | "tentative" | "bench" | "absent";
+type BuildEntry = {
+  id: string;
+  name: string;
+  role: string | null;
+  archetype: string | null;
+  mainWeapon: string | null;
+  offWeapon: string | null;
+};
 
 const statusOptions: Array<{
   value: SignupStatus;
@@ -68,6 +79,16 @@ export default function CalendarPage() {
   const [statusByEvent, setStatusByEvent] = useState<
     Record<string, SignupStatus>
   >({});
+  const [builds, setBuilds] = useState<BuildEntry[]>([]);
+  const [selectedBuildByEvent, setSelectedBuildByEvent] = useState<
+    Record<string, string>
+  >({});
+  const [isBuildPickerOpen, setIsBuildPickerOpen] = useState(false);
+  const [pendingSignup, setPendingSignup] = useState<{
+    eventId: string;
+    status: SignupStatus;
+  } | null>(null);
+  const [selectedBuildId, setSelectedBuildId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [profileReady, setProfileReady] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -142,40 +163,56 @@ export default function CalendarPage() {
     }
     const { data: signupData } = (await supabase
       .from("event_signups")
-      .select("event_id,status")
+      .select("event_id,status,selected_build_id")
       .eq("user_id", sessionUser.id)
       .in("event_id", eventIds)) as {
       data:
         | Array<{
             event_id: string;
             status: SignupStatus;
+          selected_build_id: string | null;
           }>
         | null;
     };
 
     const statusMap: Record<string, SignupStatus> = {};
+    const buildMap: Record<string, string> = {};
     (signupData ?? []).forEach((signup) => {
       statusMap[signup.event_id] = signup.status as SignupStatus;
+      if (signup.selected_build_id) {
+        buildMap[signup.event_id] = signup.selected_build_id;
+      }
     });
     setStatusByEvent(statusMap);
+    setSelectedBuildByEvent(buildMap);
 
-    const { data: profileData } = (await supabase
-      .from("profiles")
-      .select("ingame_name,role,main_weapon,off_weapon")
+    const { data: buildsData } = (await supabase
+      .from("player_builds")
+      .select("id,build_name,role,archetype,main_weapon,off_weapon")
       .eq("user_id", sessionUser.id)
-      .single()) as {
+      .order("updated_at", { ascending: false })) as {
       data:
-        | {
-            ingame_name: string;
+        | Array<{
+            id: string;
+            build_name: string;
             role: string | null;
+            archetype: string | null;
             main_weapon: string | null;
             off_weapon: string | null;
-          }
+          }>
         | null;
     };
-    const hasRole = Boolean(profileData?.role);
-    const hasClass = Boolean(profileData?.main_weapon && profileData?.off_weapon);
-    setProfileReady(hasRole && hasClass);
+    const mappedBuilds =
+      buildsData?.map((build) => ({
+        id: build.id,
+        name: build.build_name,
+        role: build.role,
+        archetype: build.archetype,
+        mainWeapon: build.main_weapon,
+        offWeapon: build.off_weapon,
+      })) ?? [];
+    setBuilds(mappedBuilds);
+    setProfileReady(mappedBuilds.length > 0);
   }, []);
 
   useEffect(() => {
@@ -197,7 +234,11 @@ export default function CalendarPage() {
     );
   }, [events]);
 
-  const handleStatusChange = async (eventId: string, status: SignupStatus) => {
+  const handleStatusChange = async (
+    eventId: string,
+    status: SignupStatus,
+    buildId: string,
+  ) => {
     const isUuid =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         eventId,
@@ -208,7 +249,7 @@ export default function CalendarPage() {
     }
     if (!profileReady) {
       setError(
-        "Veuillez renseigner votre classe et votre rôle avant de vous inscrire.",
+        "Créez au moins un build dans votre profil avant de vous inscrire.",
       );
       return;
     }
@@ -217,6 +258,7 @@ export default function CalendarPage() {
       return;
     }
     setStatusByEvent((prev) => ({ ...prev, [eventId]: status }));
+    setSelectedBuildByEvent((prev) => ({ ...prev, [eventId]: buildId }));
     const supabase = createSupabaseBrowserClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
@@ -232,7 +274,7 @@ export default function CalendarPage() {
     if (existing?.user_id) {
       const { error: updateError } = await supabase
         .from("event_signups")
-        .update({ status })
+        .update({ status, selected_build_id: buildId })
         .eq("user_id", userId)
         .eq("event_id", eventId);
       if (updateError) {
@@ -246,6 +288,7 @@ export default function CalendarPage() {
         user_id: userId,
         event_id: eventId,
         status,
+        selected_build_id: buildId,
         created_at: new Date().toISOString(),
       });
       if (insertError) {
@@ -254,6 +297,21 @@ export default function CalendarPage() {
         );
       }
     }
+  };
+
+  const handleOpenBuildPicker = (eventId: string, status: SignupStatus) => {
+    if (!profileReady) {
+      setError(
+        "Créez au moins un build dans votre profil avant de vous inscrire.",
+      );
+      return;
+    }
+    const preselected =
+      selectedBuildByEvent[eventId] ?? builds[0]?.id ?? null;
+    setSelectedBuildId(preselected);
+    setPendingSignup({ eventId, status });
+    setIsBuildPickerOpen(true);
+    setError(null);
   };
 
   return (
@@ -270,8 +328,8 @@ export default function CalendarPage() {
         ) : null}
         {!profileReady ? (
           <p className="mt-3 text-sm text-amber-200">
-            Vous devez compléter votre classe et votre rôle dans votre profil
-            pour vous inscrire aux événements.
+            Vous devez créer au moins un build dans votre profil pour vous
+            inscrire aux événements.
           </p>
         ) : null}
       </header>
@@ -329,7 +387,7 @@ export default function CalendarPage() {
                     <button
                       key={option.value}
                       type="button"
-                      onClick={() => handleStatusChange(event.id, option.value)}
+                      onClick={() => handleOpenBuildPicker(event.id, option.value)}
                       className={[
                         "rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition",
                         option.color,
@@ -347,6 +405,132 @@ export default function CalendarPage() {
           );
         })}
       </section>
+
+      {isBuildPickerOpen && pendingSignup ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-surface/95 p-6 shadow-[0_0_40px_rgba(0,0,0,0.6)] backdrop-blur">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-text/50">
+                  Inscription
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-text">
+                  Avec quel build participez-vous ?
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBuildPickerOpen(false);
+                  setPendingSignup(null);
+                }}
+                className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:text-text"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              {builds.map((build) => {
+                const mainImage = getWeaponImage(build.mainWeapon ?? "");
+                const offImage = getWeaponImage(build.offWeapon ?? "");
+                const isSelected = selectedBuildId === build.id;
+                return (
+                  <button
+                    key={build.id}
+                    type="button"
+                    onClick={() => setSelectedBuildId(build.id)}
+                    className={[
+                      "flex flex-col gap-4 rounded-2xl border px-4 py-4 text-left text-sm transition",
+                      isSelected
+                        ? "border-amber-400/70 bg-amber-400/10 text-amber-100"
+                        : "border-white/10 bg-black/40 text-text/80 hover:border-white/20",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-text">
+                          {build.name}
+                        </p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.2em] text-text/50">
+                          {build.role ?? "Rôle inconnu"}
+                        </p>
+                        {build.archetype ? (
+                          <p className="mt-2 text-xs text-text/60">
+                            {build.archetype}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-text/70">
+                          {mainImage ? (
+                            <Image
+                              src={mainImage}
+                              alt={build.mainWeapon ?? "Arme 1"}
+                              width={36}
+                              height={36}
+                              className="h-9 w-9 rounded-lg object-contain"
+                              unoptimized
+                            />
+                          ) : (
+                            <Swords className="h-4 w-4" />
+                          )}
+                        </span>
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-text/70">
+                          {offImage ? (
+                            <Image
+                              src={offImage}
+                              alt={build.offWeapon ?? "Arme 2"}
+                              width={36}
+                              height={36}
+                              className="h-9 w-9 rounded-lg object-contain"
+                              unoptimized
+                            />
+                          ) : (
+                            <Swords className="h-4 w-4" />
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBuildPickerOpen(false);
+                  setPendingSignup(null);
+                }}
+                className="rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:text-text"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={!selectedBuildId}
+                onClick={() => {
+                  if (!pendingSignup || !selectedBuildId) {
+                    return;
+                  }
+                  handleStatusChange(
+                    pendingSignup.eventId,
+                    pendingSignup.status,
+                    selectedBuildId,
+                  );
+                  setIsBuildPickerOpen(false);
+                  setPendingSignup(null);
+                }}
+                className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Valider le build
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

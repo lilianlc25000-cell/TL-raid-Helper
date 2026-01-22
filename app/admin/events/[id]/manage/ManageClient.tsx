@@ -74,14 +74,22 @@ export default function ManageClient({
       console.log("[manage] load signups eventId", eventId);
       const { data, error } = (await supabase
         .from("event_signups")
-        .select("user_id,status,profiles(ingame_name,role)")
+        .select(
+          "user_id,status,selected_build_id,profiles(ingame_name,role),player_builds(id,build_name,role)",
+        )
         .eq("event_id", eventId)) as {
         data:
           | Array<{
               user_id: string;
               status: string;
+              selected_build_id: string | null;
               profiles: {
                 ingame_name: string;
+                role: string | null;
+              } | null;
+              player_builds: {
+                id: string;
+                build_name: string;
                 role: string | null;
               } | null;
             }>
@@ -112,11 +120,14 @@ export default function ManageClient({
             normalized === "absent"
               ? (normalized as KnownStatus)
               : "unknown";
+          const build = Array.isArray(signup.player_builds)
+            ? signup.player_builds[0]
+            : signup.player_builds;
           return {
             userId: signup.user_id,
             status,
             ingameName: profile?.ingame_name ?? "Inconnu",
-            role: profile?.role ?? null,
+            role: build?.role ?? profile?.role ?? null,
           };
         }) ?? [];
       setSignupsState(mapped);

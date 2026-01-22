@@ -37,7 +37,7 @@ export default async function ManageEventPage({ params }: PageProps) {
   const { data: signups } = await supabase
     .from("event_signups")
     .select(
-      "user_id,status,profiles(ingame_name,role,archetype,main_weapon,off_weapon)",
+      "user_id,status,selected_build_id,profiles(ingame_name,role,archetype,main_weapon,off_weapon),player_builds(id,build_name,role,archetype,main_weapon,off_weapon)",
     )
     .eq("event_id", resolvedParams.id)
     .in("status", ["present", "tentative", "bench"]);
@@ -47,14 +47,17 @@ export default async function ManageEventPage({ params }: PageProps) {
       const profile = Array.isArray(signup.profiles)
         ? signup.profiles[0]
         : signup.profiles;
+      const build = Array.isArray(signup.player_builds)
+        ? signup.player_builds[0]
+        : signup.player_builds;
       return {
         userId: signup.user_id,
         status: signup.status as "present" | "tentative" | "bench",
         ingameName: profile?.ingame_name ?? "Inconnu",
-        role: profile?.role ?? null,
-        archetype: profile?.archetype ?? null,
-        mainWeapon: profile?.main_weapon ?? null,
-        offWeapon: profile?.off_weapon ?? null,
+        role: build?.role ?? profile?.role ?? null,
+        archetype: build?.archetype ?? profile?.archetype ?? null,
+        mainWeapon: build?.main_weapon ?? profile?.main_weapon ?? null,
+        offWeapon: build?.off_weapon ?? profile?.off_weapon ?? null,
       };
     }) ?? [];
   return (

@@ -226,6 +226,7 @@ export type Database = {
           status: string;
           created_at: string;
           group_index: number | null;
+          selected_build_id: string | null;
         };
         Insert: {
           user_id: string;
@@ -234,6 +235,7 @@ export type Database = {
           status: string;
           created_at?: string;
           group_index?: number | null;
+          selected_build_id?: string | null;
         };
         Update: {
           user_id?: string;
@@ -242,6 +244,51 @@ export type Database = {
           status?: string;
           created_at?: string;
           group_index?: number | null;
+          selected_build_id?: string | null;
+        };
+      };
+      player_builds: {
+        Row: {
+          id: string;
+          user_id: string;
+          guild_id: string | null;
+          build_name: string;
+          role: string;
+          archetype: string | null;
+          main_weapon: string;
+          off_weapon: string;
+          content_type: string | null;
+          gear_score: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          guild_id?: string | null;
+          build_name: string;
+          role: string;
+          archetype?: string | null;
+          main_weapon: string;
+          off_weapon: string;
+          content_type?: string | null;
+          gear_score?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          guild_id?: string | null;
+          build_name?: string;
+          role?: string;
+          archetype?: string | null;
+          main_weapon?: string;
+          off_weapon?: string;
+          content_type?: string | null;
+          gear_score?: number | null;
+          created_at?: string;
+          updated_at?: string;
         };
       };
       wishlists: {

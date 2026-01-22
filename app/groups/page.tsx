@@ -151,14 +151,24 @@ export default function PlayerGroupsPage() {
 
     const { data: signups, error: signupsError } = (await supabase
       .from("event_signups")
-      .select("user_id,group_index,profiles(ingame_name,role,main_weapon,off_weapon)")
+      .select(
+        "user_id,group_index,selected_build_id,profiles(ingame_name,role,main_weapon,off_weapon),player_builds(id,build_name,role,main_weapon,off_weapon)",
+      )
       .eq("event_id", event.id)) as {
       data:
         | Array<{
             user_id: string;
             group_index: number | null;
+            selected_build_id: string | null;
             profiles: {
               ingame_name: string;
+              role: string | null;
+              main_weapon: string | null;
+              off_weapon: string | null;
+            } | null;
+            player_builds: {
+              id: string;
+              build_name: string;
               role: string | null;
               main_weapon: string | null;
               off_weapon: string | null;
@@ -189,12 +199,15 @@ export default function PlayerGroupsPage() {
       const profile = Array.isArray(entry.profiles)
         ? entry.profiles[0]
         : entry.profiles;
+      const build = Array.isArray(entry.player_builds)
+        ? entry.player_builds[0]
+        : entry.player_builds;
       const member: GroupMember = {
         userId: entry.user_id,
         ingameName: profile?.ingame_name ?? "Inconnu",
-        role: profile?.role ?? null,
-        mainWeapon: profile?.main_weapon ?? null,
-        offWeapon: profile?.off_weapon ?? null,
+        role: build?.role ?? profile?.role ?? null,
+        mainWeapon: build?.main_weapon ?? profile?.main_weapon ?? null,
+        offWeapon: build?.off_weapon ?? profile?.off_weapon ?? null,
         groupIndex: entry.group_index,
       };
       nextGroups[entry.group_index - 1].members.push(member);
