@@ -1,17 +1,53 @@
 import Link from "next/link";
+import DiscordProvisionClient from "@/app/admin/settings/DiscordProvisionClient";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 const discordClientId = process.env.DISCORD_CLIENT_ID ?? "";
 const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
-export default function AdminSettingsPage() {
+const successMessages: Record<string, string> = {
+  discord_connected: "Discord est bien connecté.",
+};
+
+const errorMessages: Record<string, string> = {
+  discord_missing_code: "Code Discord manquant.",
+  discord_missing_env: "Variables d'environnement Discord manquantes.",
+  discord_oauth_failed: "Échec de l'autorisation Discord.",
+  discord_webhook_missing: "Webhook Discord introuvable.",
+  discord_save_failed: "Impossible d'enregistrer la config Discord.",
+};
+
+export default async function AdminSettingsPage({
+  searchParams,
+}: {
+  searchParams?: { success?: string; error?: string };
+}) {
   const appUrl = appUrlFromEnv.trim().replace(/\/+$/, "");
   const redirectUri = `${appUrl}/api/auth/discord/callback`;
   const discordOauthUrl = `https://discord.com/oauth2/authorize?client_id=${discordClientId}&redirect_uri=${encodeURIComponent(
     redirectUri,
   )}&response_type=code&scope=webhook.incoming`;
   const isDiscordReady = Boolean(discordClientId && appUrl);
+
+  const successMessage =
+    searchParams?.success && successMessages[searchParams.success];
+  const errorMessage =
+    searchParams?.error && errorMessages[searchParams.error];
+
+  const supabase = await createSupabaseServerClient();
+  const { data: authData } = await supabase.auth.getUser();
+  const ownerId = authData.user?.id ?? null;
+  const { data: guildConfig } = ownerId
+    ? await supabase
+        .from("guild_configs")
+        .select(
+          "raid_channel_id,polls_channel_id,loot_channel_id,groups_channel_id,dps_channel_id",
+        )
+        .eq("owner_id", ownerId)
+        .maybeSingle()
+    : { data: null };
 
   return (
     <div className="min-h-screen text-zinc-100">
@@ -25,6 +61,16 @@ export default function AdminSettingsPage() {
         <p className="mt-2 text-sm text-text/70">
           Connecte ton serveur Discord pour activer les webhooks.
         </p>
+        {successMessage ? (
+          <p className="mt-3 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+            {successMessage}
+          </p>
+        ) : null}
+        {errorMessage ? (
+          <p className="mt-3 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            {errorMessage}
+          </p>
+        ) : null}
       </header>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
@@ -36,7 +82,7 @@ export default function AdminSettingsPage() {
             Connecter un webhook
           </h2>
           <p className="mt-2 text-sm text-text/70">
-            Le scope incoming.webhook permet de choisir un salon et générer
+            Le scope webhook.incoming permet de choisir un salon et générer
             l&apos;URL automatiquement.
           </p>
           {isDiscordReady ? (
@@ -53,6 +99,15 @@ export default function AdminSettingsPage() {
             </div>
           )}
         </div>
+        <DiscordProvisionClient
+          initialStatus={{
+            raid_channel_id: guildConfig?.raid_channel_id ?? null,
+            polls_channel_id: guildConfig?.polls_channel_id ?? null,
+            loot_channel_id: guildConfig?.loot_channel_id ?? null,
+            groups_channel_id: guildConfig?.groups_channel_id ?? null,
+            dps_channel_id: guildConfig?.dps_channel_id ?? null,
+          }}
+        />
       </section>
     </div>
   );

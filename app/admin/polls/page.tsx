@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { notifyDiscordViaFunction } from "../../../lib/discord";
 
 type PollEntry = {
   id: string;
@@ -193,6 +194,15 @@ export default function AdminPollsPage() {
     setOptions(["", ""]);
     setSuccess("Sondage lancé !");
     setIsSaving(false);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (accessToken) {
+      await notifyDiscordViaFunction(accessToken, {
+        type: "polls",
+        content: `🗳️ Nouveau sondage: ${trimmedQuestion}`,
+      });
+    }
   };
 
   const resultsContent = useMemo(() => {

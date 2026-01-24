@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { CalendarPlus } from "lucide-react";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
 import { PARTICIPATION_POINTS_PER_RAID } from "../../../lib/game-constants";
+import { notifyDiscordViaFunction } from "../../../lib/discord";
 
 type EventType =
   | "Raid de Guilde"
@@ -220,6 +221,18 @@ export default function AdminEventsPage() {
     setDateTime("");
     setAlliance("");
     setNote("");
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (accessToken) {
+      const displayDate = new Date(newEvent.dateTime).toLocaleString("fr-FR", {
+        timeZone: "Europe/Paris",
+      });
+      await notifyDiscordViaFunction(accessToken, {
+        type: "raid",
+        content: `🗓️ Nouveau raid: ${newEvent.title} (${newEvent.eventType}) — ${displayDate}`,
+      });
+    }
   };
 
   const handleDeleteEvent = async (eventId: string) => {

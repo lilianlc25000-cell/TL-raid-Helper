@@ -13,6 +13,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { createSupabaseBrowserClient } from "../../../../../lib/supabase/client";
+import { notifyDiscordViaFunction } from "../../../../../lib/discord";
 import { getWeaponImage } from "../../../../../lib/weapons";
 
 type PlayerCard = {
@@ -459,6 +460,15 @@ export default function RaidGroupsPage() {
     setIsPublished(true);
     setIsDirty(false);
     setIsPublishing(false);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (accessToken) {
+      await notifyDiscordViaFunction(accessToken, {
+        type: "groups",
+        content: `📣 Groupes publiés pour "${eventTitle}".`,
+      });
+    }
   };
 
   if (isLoading) {
