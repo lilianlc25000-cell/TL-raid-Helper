@@ -10,7 +10,7 @@ export default function AdminSettingsPage() {
   const redirectUri = `${appUrl}/api/auth/discord/callback`;
   const discordOauthUrl = `https://discord.com/oauth2/authorize?client_id=${discordClientId}&redirect_uri=${encodeURIComponent(
     redirectUri,
-  )}&response_type=code&scope=incoming.webhook`;
+  )}&response_type=code&scope=webhook.incoming`;
   const isDiscordReady = Boolean(discordClientId && appUrl);
 
   return (
