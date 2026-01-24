@@ -6,7 +6,7 @@ const discordClientId = process.env.DISCORD_CLIENT_ID ?? "";
 const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
 export default function AdminSettingsPage() {
-  const appUrl = appUrlFromEnv;
+  const appUrl = appUrlFromEnv.trim().replace(/\/+$/, "");
   const redirectUri = `${appUrl}/api/auth/discord/callback`;
   const discordOauthUrl = `https://discord.com/api/oauth2/authorize?client_id=${discordClientId}&redirect_uri=${encodeURIComponent(
     redirectUri,

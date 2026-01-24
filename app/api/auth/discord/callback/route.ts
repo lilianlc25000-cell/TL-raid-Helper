@@ -12,7 +12,8 @@ type DiscordTokenResponse = {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || url.origin;
+  const appUrl =
+    (process.env.NEXT_PUBLIC_APP_URL || url.origin).trim().replace(/\/+$/, "");
 
   if (!code) {
     return NextResponse.redirect(
