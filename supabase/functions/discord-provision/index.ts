@@ -12,6 +12,10 @@ type ChannelInfo = {
   name: string;
 };
 
+type GuildInfo = {
+  name?: string;
+};
+
 const CHANNELS = [
   { key: "raid", name: "raid-helper" },
   { key: "polls", name: "sondages" },
@@ -115,6 +119,16 @@ serve(async (req) => {
   }
 
   const discordHeaders = getDiscordHeaders(discordBotToken);
+  let guildName: string | null = null;
+  const guildResponse = await fetch(
+    `https://discord.com/api/v10/guilds/${config.discord_guild_id}`,
+    { headers: discordHeaders },
+  );
+  if (guildResponse.ok) {
+    const guild = (await guildResponse.json()) as GuildInfo;
+    guildName = guild.name ?? null;
+  }
+
   const channelsResponse = await fetch(
     `https://discord.com/api/v10/guilds/${config.discord_guild_id}/channels`,
     { headers: discordHeaders },
@@ -177,6 +191,9 @@ serve(async (req) => {
     groups_webhook_url: webhooks.groups ?? null,
     dps_webhook_url: webhooks.dps ?? null,
   };
+  if (guildName) {
+    updatePayload.guild_name = guildName;
+  }
 
   const { error: updateError } = await adminClient
     .from("guild_configs")

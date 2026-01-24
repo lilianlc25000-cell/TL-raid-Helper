@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type ChannelStatus = {
@@ -13,13 +14,47 @@ type ChannelStatus = {
 
 type Props = {
   initialStatus: ChannelStatus;
+  hasDiscordGuild: boolean;
+  guildName?: string | null;
+  refreshOnLoad?: boolean;
+  refreshOnFocus?: boolean;
 };
 
-export default function DiscordProvisionClient({ initialStatus }: Props) {
+export default function DiscordProvisionClient({
+  initialStatus,
+  hasDiscordGuild,
+  guildName,
+  refreshOnLoad = false,
+  refreshOnFocus = false,
+}: Props) {
+  const router = useRouter();
   const [status, setStatus] = useState<ChannelStatus>(initialStatus);
   const [isProvisioning, setIsProvisioning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!refreshOnLoad) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      router.refresh();
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [refreshOnLoad, router]);
+
+  useEffect(() => {
+    if (!refreshOnFocus) {
+      return;
+    }
+    const handleFocus = () => {
+      router.refresh();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [refreshOnFocus, router]);
 
   const handleProvision = async () => {
     const supabase = createSupabaseBrowserClient();
@@ -35,6 +70,11 @@ export default function DiscordProvisionClient({ initialStatus }: Props) {
     const accessToken = data.session?.access_token;
     if (!accessToken) {
       setError("Connecte-toi avant de configurer Discord.");
+      setIsProvisioning(false);
+      return;
+    }
+    if (!hasDiscordGuild) {
+      setError("Pas de connexion à discord.");
       setIsProvisioning(false);
       return;
     }
@@ -95,6 +135,11 @@ export default function DiscordProvisionClient({ initialStatus }: Props) {
       <p className="text-xs uppercase tracking-[0.25em] text-text/50">
         Salons Discord
       </p>
+      {guildName ? (
+        <p className="mt-2 text-xs text-text/50">
+          Serveur connecté : {guildName}
+        </p>
+      ) : null}
       <h2 className="mt-2 text-xl font-semibold text-text">
         Création automatique
       </h2>

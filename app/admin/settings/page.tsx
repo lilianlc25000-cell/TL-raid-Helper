@@ -22,8 +22,9 @@ const errorMessages: Record<string, string> = {
 export default async function AdminSettingsPage({
   searchParams,
 }: {
-  searchParams?: { success?: string; error?: string };
+  searchParams?: { success?: string; error?: string } | Promise<{ success?: string; error?: string }>;
 }) {
+  const resolvedSearchParams = await Promise.resolve(searchParams);
   const appUrl = appUrlFromEnv.trim().replace(/\/+$/, "");
   const redirectUri = `${appUrl}/api/auth/discord/callback`;
   const discordOauthUrl = `https://discord.com/oauth2/authorize?client_id=${discordClientId}&redirect_uri=${encodeURIComponent(
@@ -35,10 +36,11 @@ export default async function AdminSettingsPage({
   const isDiscordReady = Boolean(discordClientId);
   const isWebhookReady = Boolean(discordClientId && appUrl);
 
-  const successMessage =
-    searchParams?.success && successMessages[searchParams.success];
+  const successKey = resolvedSearchParams?.success ?? null;
+  const successMessage = successKey && successMessages[successKey];
   const errorMessage =
-    searchParams?.error && errorMessages[searchParams.error];
+    resolvedSearchParams?.error &&
+    errorMessages[resolvedSearchParams.error];
 
   const supabase = await createSupabaseServerClient();
   const { data: authData } = await supabase.auth.getUser();
@@ -130,6 +132,10 @@ export default async function AdminSettingsPage({
             groups_channel_id: guildConfig?.groups_channel_id ?? null,
             dps_channel_id: guildConfig?.dps_channel_id ?? null,
           }}
+          hasDiscordGuild={hasDiscordGuild}
+          guildName={connectedGuildName}
+          refreshOnLoad={Boolean(successKey)}
+          refreshOnFocus={!hasDiscordGuild}
         />
       </section>
     </div>
