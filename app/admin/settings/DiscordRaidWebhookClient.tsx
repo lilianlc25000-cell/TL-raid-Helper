@@ -78,7 +78,9 @@
        .upsert(payload, { onConflict: "owner_id" });
  
      if (upsertError) {
-       setError("Impossible d'enregistrer le webhook.");
+      setError(
+        `Impossible d'enregistrer le webhook. ${upsertError.message ?? ""}`,
+      );
        setIsSaving(false);
        return;
      }
