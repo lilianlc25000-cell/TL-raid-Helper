@@ -55,7 +55,6 @@ export default function DiscordProvisionClient({ initialStatus }: Props) {
     const response = await fetch(`${baseUrl}/functions/v1/discord-provision`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${accessToken}`,
         apikey: anonKey,
         "Content-Type": "application/json",
       },
