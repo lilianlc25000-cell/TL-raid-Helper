@@ -75,11 +75,28 @@ serve(async (req) => {
   const adminClient = createClient(supabaseUrl, supabaseServiceKey);
   const { data: authData, error: authError } =
     await adminClient.auth.getUser(token);
-  if (authError || !authData.user) {
-    return json(401, { ok: false, error: "invalid_auth" });
+  let resolvedUser = authData.user;
+  let resolvedError = authError;
+
+  if (!resolvedUser) {
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: fallbackData, error: fallbackError } =
+      await authClient.auth.getUser();
+    resolvedUser = fallbackData.user ?? null;
+    resolvedError = fallbackError ?? resolvedError;
   }
 
-  const adminId = authData.user.id;
+  if (!resolvedUser) {
+    return json(401, {
+      ok: false,
+      error: "invalid_auth",
+      detail: resolvedError?.message ?? null,
+    });
+  }
+
+  const adminId = resolvedUser.id;
   const { data: config } = await adminClient
     .from("guild_configs")
     .select("id,owner_id,discord_guild_id")
@@ -87,7 +104,11 @@ serve(async (req) => {
     .maybeSingle() as { data: GuildConfigRow | null };
 
   if (!config?.discord_guild_id) {
-    return json(404, { ok: false, error: "missing_guild_config" });
+    return json(404, {
+      ok: false,
+      error: "missing_guild_config",
+      detail: "Aucune configuration Discord trouvée pour ce compte.",
+    });
   }
 
   const discordHeaders = getDiscordHeaders(discordBotToken);

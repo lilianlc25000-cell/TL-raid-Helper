@@ -59,10 +59,15 @@ export default function DiscordProvisionClient({ initialStatus }: Props) {
       setIsProvisioning(false);
       return;
     }
-    const payloadError =
-      (payload as { error?: string } | null)?.error ?? null;
+    const payloadError = (payload as { error?: string } | null)?.error ?? null;
+    const payloadDetail =
+      (payload as { detail?: string } | null)?.detail ?? null;
     if (payloadError) {
-      setError(`Impossible de créer les salons Discord. ${payloadError}`);
+      setError(
+        `Impossible de créer les salons Discord. ${payloadError}${
+          payloadDetail ? ` (${payloadDetail})` : ""
+        }`,
+      );
       setIsProvisioning(false);
       return;
     }

@@ -47,11 +47,13 @@ export default async function AdminSettingsPage({
     ? await supabase
         .from("guild_configs")
         .select(
-          "raid_channel_id,polls_channel_id,loot_channel_id,groups_channel_id,dps_channel_id",
+          "guild_name,discord_guild_id,raid_channel_id,polls_channel_id,loot_channel_id,groups_channel_id,dps_channel_id",
         )
         .eq("owner_id", ownerId)
         .maybeSingle()
     : { data: null };
+  const connectedGuildName = guildConfig?.guild_name ?? null;
+  const hasDiscordGuild = Boolean(guildConfig?.discord_guild_id);
 
   return (
     <div className="min-h-screen text-zinc-100">
@@ -88,7 +90,11 @@ export default async function AdminSettingsPage({
           <p className="mt-2 text-sm text-text/70">
             Le bot doit être installé sur le serveur avant de créer les salons.
           </p>
-          {isDiscordReady ? (
+          {hasDiscordGuild ? (
+            <div className="mt-5 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-xs uppercase tracking-[0.25em] text-emerald-200">
+              {connectedGuildName || "Serveur Discord connecté"}
+            </div>
+          ) : isDiscordReady ? (
             <Link
               href={discordBotInviteUrl}
               className="mt-5 inline-flex items-center rounded-full border border-sky-400/60 bg-sky-500/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-sky-200 transition hover:border-sky-300"
