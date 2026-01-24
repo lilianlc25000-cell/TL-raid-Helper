@@ -44,7 +44,7 @@ export default function DiscordProvisionClient({ initialStatus }: Props) {
       await supabase.functions.invoke<{ created?: Record<string, string> }>(
         "discord-provision",
         {
-          body: {},
+          body: { access_token: accessToken },
           headers: {
             Authorization: `Bearer ${accessToken}`,
             ...(anonKey ? { apikey: anonKey } : {}),
@@ -53,10 +53,20 @@ export default function DiscordProvisionClient({ initialStatus }: Props) {
       );
 
     if (invokeError) {
-      setError("Impossible de créer les salons Discord.");
+      setError(
+        `Impossible de créer les salons Discord. ${invokeError.message}`,
+      );
       setIsProvisioning(false);
       return;
     }
+    const payloadError =
+      (payload as { error?: string } | null)?.error ?? null;
+    if (payloadError) {
+      setError(`Impossible de créer les salons Discord. ${payloadError}`);
+      setIsProvisioning(false);
+      return;
+    }
+
     if (payload?.created) {
       setStatus((prev) => ({
         ...prev,

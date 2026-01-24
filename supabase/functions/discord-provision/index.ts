@@ -58,10 +58,16 @@ serve(async (req) => {
     return json(500, { ok: false, error: "missing_discord_bot_token" });
   }
 
+  const payload = (await req.json().catch(() => null)) as
+    | { access_token?: string }
+    | null;
   const authHeader = req.headers.get("Authorization") ?? "";
-  const token = authHeader.startsWith("Bearer ")
+  let token = authHeader.startsWith("Bearer ")
     ? authHeader.replace("Bearer ", "")
     : "";
+  if (!token && payload?.access_token) {
+    token = payload.access_token;
+  }
   if (!token) {
     return json(401, { ok: false, error: "missing_auth" });
   }
