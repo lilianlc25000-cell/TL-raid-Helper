@@ -39,41 +39,26 @@ export default function DiscordProvisionClient({ initialStatus }: Props) {
       return;
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-    if (!baseUrl) {
-      setError("NEXT_PUBLIC_SUPABASE_URL manquant.");
+    const { data: payload, error: invokeError } = await supabase.functions
+      .invoke<{
+        created?: Record<string, string>;
+        error?: string;
+        detail?: string;
+      }>("discord-provision", {
+        body: { access_token: accessToken },
+      });
+
+    if (invokeError) {
+      setError(
+        `Impossible de créer les salons Discord. ${invokeError.message}`,
+      );
       setIsProvisioning(false);
       return;
     }
-    if (!anonKey) {
-      setError("NEXT_PUBLIC_SUPABASE_ANON_KEY manquant.");
-      setIsProvisioning(false);
-      return;
-    }
 
-    const response = await fetch(`${baseUrl}/functions/v1/discord-provision`, {
-      method: "POST",
-      headers: {
-        apikey: anonKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ access_token: accessToken }),
-    });
-
-    const rawText = await response.text().catch(() => "");
-    const payload = rawText
-      ? (JSON.parse(rawText) as {
-          created?: Record<string, string>;
-          error?: string;
-          detail?: string;
-        })
-      : null;
-
-    if (!response.ok) {
-      const payloadError = payload?.error ?? `status_${response.status}`;
-      const payloadDetail =
-        payload?.detail ?? (rawText ? rawText.slice(0, 200) : null);
+    const payloadError = payload?.error ?? null;
+    const payloadDetail = payload?.detail ?? null;
+    if (payloadError) {
       setError(
         `Impossible de créer les salons Discord. ${payloadError}${
           payloadDetail ? ` (${payloadDetail})` : ""
