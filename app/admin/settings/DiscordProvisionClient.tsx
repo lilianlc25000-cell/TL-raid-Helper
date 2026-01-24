@@ -47,11 +47,18 @@ export default function DiscordProvisionClient({ initialStatus }: Props) {
       setIsProvisioning(false);
       return;
     }
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+    if (!anonKey) {
+      setError("NEXT_PUBLIC_SUPABASE_ANON_KEY manquant.");
+      setIsProvisioning(false);
+      return;
+    }
 
     const response = await fetch(functionsUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
+        apikey: anonKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({}),

@@ -35,6 +35,7 @@ export async function notifyDiscordViaFunction(
   payload: DiscordNotifyPayload,
 ) {
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
   if (!baseUrl) {
     return { ok: false, skipped: true };
   }
@@ -43,6 +44,7 @@ export async function notifyDiscordViaFunction(
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
+      apikey: anonKey,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
