@@ -62,13 +62,19 @@ export default function DiscordProvisionClient({ initialStatus }: Props) {
       body: JSON.stringify({ access_token: accessToken }),
     });
 
-    const payload = (await response.json().catch(() => null)) as
-      | { created?: Record<string, string>; error?: string; detail?: string }
-      | null;
+    const rawText = await response.text().catch(() => "");
+    const payload = rawText
+      ? (JSON.parse(rawText) as {
+          created?: Record<string, string>;
+          error?: string;
+          detail?: string;
+        })
+      : null;
 
     if (!response.ok) {
-      const payloadError = payload?.error ?? "unknown_error";
-      const payloadDetail = payload?.detail ?? null;
+      const payloadError = payload?.error ?? `status_${response.status}`;
+      const payloadDetail =
+        payload?.detail ?? (rawText ? rawText.slice(0, 200) : null);
       setError(
         `Impossible de créer les salons Discord. ${payloadError}${
           payloadDetail ? ` (${payloadDetail})` : ""
