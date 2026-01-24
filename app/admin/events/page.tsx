@@ -233,6 +233,7 @@ export default function AdminEventsPage() {
         content: `🗓️ Nouveau raid: ${newEvent.title} (${newEvent.eventType}) — ${displayDate}`,
       });
     }
+
   };
 
   const handleDeleteEvent = async (eventId: string) => {

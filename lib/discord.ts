@@ -6,7 +6,14 @@ export type DiscordNotificationPayload = {
 };
 
 export type DiscordNotifyPayload = {
-  type: "raid" | "polls" | "loot" | "groups" | "dps";
+  type:
+    | "raid"
+    | "polls"
+    | "loot"
+    | "groups"
+    | "dps"
+    | "statics_pvp"
+    | "statics_pve";
   content?: string;
   embeds?: Array<Record<string, unknown>>;
 };
@@ -34,21 +41,28 @@ export async function notifyDiscordViaFunction(
   accessToken: string,
   payload: DiscordNotifyPayload,
 ) {
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  if (!baseUrl) {
-    return { ok: false, skipped: true };
-  }
-
-  const response = await fetch(`${baseUrl}/functions/v1/discord-notify`, {
+  const response = await fetch("/api/discord/notify", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${accessToken}`,
-      apikey: anonKey,
       "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
     body: JSON.stringify(payload),
   });
 
-  return { ok: response.ok, status: response.status };
+  const raw = await response.text().catch(() => "");
+  let parsed: Record<string, unknown> | null = null;
+  if (raw && raw.trim().startsWith("{")) {
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      parsed = null;
+    }
+  }
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    ...(parsed ?? {}),
+  };
 }

@@ -1,23 +1,42 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-type ChannelInfo = {
+type ChannelConfig = {
+  key: string;
+  name: string;
+  channelIdField: string;
+  webhookField: string;
+};
+
+type DiscordChannel = {
   id: string;
+  name: string;
+  type: number;
+};
+
+type DiscordWebhook = {
+  id: string;
+  url: string;
   name: string;
 };
 
 type GuildInfo = {
-  name?: string;
+  id: string;
+  name: string;
 };
 
-const CHANNELS = [
-  { key: "raid", name: "raid-helper" },
-  { key: "polls", name: "sondages" },
-  { key: "loot", name: "loot" },
-  { key: "groups", name: "groupes" },
-  { key: "dps", name: "dps" },
-] as const;
+const CHANNELS: ChannelConfig[] = [
+  { key: "raid", name: "raid-helper", channelIdField: "raid_channel_id", webhookField: "raid_webhook_url" },
+  { key: "polls", name: "sondages", channelIdField: "polls_channel_id", webhookField: "polls_webhook_url" },
+  { key: "loot", name: "loot", channelIdField: "loot_channel_id", webhookField: "loot_webhook_url" },
+  { key: "groups", name: "groupes", channelIdField: "groups_channel_id", webhookField: "groups_webhook_url" },
+  { key: "dps", name: "dps-meter", channelIdField: "dps_channel_id", webhookField: "dps_webhook_url" },
+  { key: "statics_pvp", name: "statics-pvp", channelIdField: "statics_pvp_channel_id", webhookField: "statics_pvp_webhook_url" },
+  { key: "statics_pve", name: "statics-pve", channelIdField: "statics_pve_channel_id", webhookField: "statics_pve_webhook_url" },
+];
+
+const WEBHOOK_NAME = "TL Raid Manager";
 
 export async function POST() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -60,15 +79,17 @@ export async function POST() {
     "Content-Type": "application/json",
   };
 
-  let guildName: string | null = null;
   const guildResponse = await fetch(
     `https://discord.com/api/v10/guilds/${config.discord_guild_id}`,
     { headers: discordHeaders },
   );
-  if (guildResponse.ok) {
-    const guild = (await guildResponse.json()) as GuildInfo;
-    guildName = guild.name ?? null;
+  if (!guildResponse.ok) {
+    return NextResponse.json(
+      { error: "bot_not_in_guild" },
+      { status: 403 },
+    );
   }
+  const guildInfo = (await guildResponse.json()) as GuildInfo;
 
   const channelsResponse = await fetch(
     `https://discord.com/api/v10/guilds/${config.discord_guild_id}/channels`,
@@ -76,73 +97,77 @@ export async function POST() {
   );
   if (!channelsResponse.ok) {
     return NextResponse.json(
-      { error: "discord_channels_failed" },
+      { error: "channels_fetch_failed" },
       { status: 500 },
     );
   }
+  const existingChannels = (await channelsResponse.json()) as DiscordChannel[];
 
-  const channels = (await channelsResponse.json()) as ChannelInfo[];
-  const created: Record<string, string> = {};
-  const webhooks: Record<string, string> = {};
+  const updatePayload: Record<string, string | null> = {
+    guild_name: guildInfo.name ?? null,
+  };
+  const createdChannels: Record<string, string> = {};
+  const createdWebhooks: Record<string, string> = {};
 
-  for (const entry of CHANNELS) {
-    const existing = channels.find((channel) => channel.name === entry.name);
-    let channelId = existing?.id;
-
-    if (!channelId) {
+  for (const channelConfig of CHANNELS) {
+    let channel = existingChannels.find(
+      (entry) => entry.name === channelConfig.name && entry.type === 0,
+    );
+    if (!channel) {
       const createResponse = await fetch(
         `https://discord.com/api/v10/guilds/${config.discord_guild_id}/channels`,
         {
           method: "POST",
           headers: discordHeaders,
-          body: JSON.stringify({ name: entry.name, type: 0 }),
+          body: JSON.stringify({ name: channelConfig.name, type: 0 }),
         },
       );
       if (!createResponse.ok) {
         return NextResponse.json(
-          { error: "discord_channel_create_failed" },
+          { error: "channel_create_failed", channel: channelConfig.name },
           { status: 500 },
         );
       }
-      const createdChannel = (await createResponse.json()) as ChannelInfo;
-      channelId = createdChannel.id;
-      created[entry.key] = channelId;
+      channel = (await createResponse.json()) as DiscordChannel;
+      createdChannels[channelConfig.key] = channel.id;
     }
 
-    const webhookResponse = await fetch(
-      `https://discord.com/api/v10/channels/${channelId}/webhooks`,
-      {
-        method: "POST",
-        headers: discordHeaders,
-        body: JSON.stringify({ name: "TL Raid Manager" }),
-      },
+    updatePayload[channelConfig.channelIdField] = channel.id;
+
+    const webhooksResponse = await fetch(
+      `https://discord.com/api/v10/channels/${channel.id}/webhooks`,
+      { headers: discordHeaders },
     );
-    if (!webhookResponse.ok) {
+    if (!webhooksResponse.ok) {
       return NextResponse.json(
-        { error: "discord_webhook_create_failed" },
+        { error: "webhook_fetch_failed", channel: channelConfig.name },
         { status: 500 },
       );
     }
-    const webhook = (await webhookResponse.json()) as { url?: string };
-    if (webhook.url) {
-      webhooks[entry.key] = webhook.url;
+    const existingWebhooks = (await webhooksResponse.json()) as DiscordWebhook[];
+    let webhook = existingWebhooks.find(
+      (entry) => entry.name === WEBHOOK_NAME,
+    );
+    if (!webhook) {
+      const createWebhookResponse = await fetch(
+        `https://discord.com/api/v10/channels/${channel.id}/webhooks`,
+        {
+          method: "POST",
+          headers: discordHeaders,
+          body: JSON.stringify({ name: WEBHOOK_NAME }),
+        },
+      );
+      if (!createWebhookResponse.ok) {
+        return NextResponse.json(
+          { error: "webhook_create_failed", channel: channelConfig.name },
+          { status: 500 },
+        );
+      }
+      webhook = (await createWebhookResponse.json()) as DiscordWebhook;
     }
-  }
 
-  const updatePayload: Record<string, string | null> = {
-    raid_channel_id: created.raid ?? null,
-    polls_channel_id: created.polls ?? null,
-    loot_channel_id: created.loot ?? null,
-    groups_channel_id: created.groups ?? null,
-    dps_channel_id: created.dps ?? null,
-    raid_webhook_url: webhooks.raid ?? null,
-    polls_webhook_url: webhooks.polls ?? null,
-    loot_webhook_url: webhooks.loot ?? null,
-    groups_webhook_url: webhooks.groups ?? null,
-    dps_webhook_url: webhooks.dps ?? null,
-  };
-  if (guildName) {
-    updatePayload.guild_name = guildName;
+    updatePayload[channelConfig.webhookField] = webhook.url;
+    createdWebhooks[channelConfig.key] = webhook.url;
   }
 
   const { error: updateError } = await adminClient
@@ -157,5 +182,10 @@ export async function POST() {
     );
   }
 
-  return NextResponse.json({ ok: true, created, webhooks });
+  return NextResponse.json({
+    ok: true,
+    createdChannels,
+    createdWebhooks,
+    guildName: guildInfo.name ?? null,
+  });
 }

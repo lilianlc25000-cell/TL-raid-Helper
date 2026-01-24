@@ -203,6 +203,7 @@ export default function AdminPollsPage() {
         content: `🗳️ Nouveau sondage: ${trimmedQuestion}`,
       });
     }
+
   };
 
   const resultsContent = useMemo(() => {

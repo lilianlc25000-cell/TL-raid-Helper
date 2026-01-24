@@ -229,6 +229,7 @@ export default function LootDistributionPage() {
         content: `🎁 Loot ouvert: ${openedLoot.itemName}`,
       });
     }
+
   };
 
   const handleDeleteLoot = async (lootId: string) => {

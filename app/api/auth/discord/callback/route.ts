@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-type DiscordTokenResponse = {
+type DiscordWebhookResponse = {
   webhook?: {
+    id?: string;
     url?: string;
     guild_id?: string;
     channel_id?: string;
@@ -10,89 +11,82 @@ type DiscordTokenResponse = {
 };
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const code = url.searchParams.get("code");
-  const appUrl =
-    (process.env.NEXT_PUBLIC_APP_URL || url.origin).trim().replace(/\/+$/, "");
+  const { searchParams } = new URL(request.url);
+  const code = searchParams.get("code");
+  const discordClientId = process.env.DISCORD_CLIENT_ID ?? "";
+  const discordClientSecret = process.env.DISCORD_CLIENT_SECRET ?? "";
+  const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = appUrlFromEnv.trim().replace(/\/+$/, "");
 
   if (!code) {
     return NextResponse.redirect(
-      new URL("/admin/settings?error=discord_missing_code", appUrl),
+      `${appUrl}/admin/settings?error=discord_missing_code`,
     );
   }
-
-  const clientId = process.env.DISCORD_CLIENT_ID;
-  const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
+  if (!discordClientId || !discordClientSecret || !appUrl) {
     return NextResponse.redirect(
-      new URL("/admin/settings?error=discord_missing_env", appUrl),
+      `${appUrl}/admin/settings?error=discord_missing_env`,
     );
   }
 
   const redirectUri = `${appUrl}/api/auth/discord/callback`;
-  const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: "authorization_code",
-    code,
-    redirect_uri: redirectUri,
-  });
-
   const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body,
+    body: new URLSearchParams({
+      client_id: discordClientId,
+      client_secret: discordClientSecret,
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri,
+    }),
   });
 
   if (!tokenResponse.ok) {
     return NextResponse.redirect(
-      new URL("/admin/settings?error=discord_oauth_failed", appUrl),
+      `${appUrl}/admin/settings?error=discord_oauth_failed`,
     );
   }
 
-  const tokenData = (await tokenResponse.json().catch(() => null)) as
-    | DiscordTokenResponse
+  const tokenPayload = (await tokenResponse.json().catch(() => null)) as
+    | DiscordWebhookResponse
     | null;
-  const webhook = tokenData?.webhook;
-  if (!webhook?.url || !webhook?.guild_id) {
+  const webhook = tokenPayload?.webhook;
+  if (!webhook?.url || !webhook.guild_id) {
     return NextResponse.redirect(
-      new URL("/admin/settings?error=discord_webhook_missing", appUrl),
+      `${appUrl}/admin/settings?error=discord_webhook_missing`,
     );
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data: authData } = await supabase.auth.getUser();
-  const ownerId = authData.user?.id;
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const ownerId = authData.user?.id ?? null;
   if (!ownerId) {
-    return NextResponse.redirect(new URL("/login", appUrl));
+    return NextResponse.redirect(
+      `${appUrl}/admin/settings?error=discord_oauth_failed`,
+    );
   }
 
-  const { data: existing } = await supabase
+  const { error: upsertError } = await supabase
     .from("guild_configs")
-    .select("id,guild_name")
-    .eq("owner_id", ownerId)
-    .maybeSingle();
+    .upsert(
+      {
+        owner_id: ownerId,
+        discord_guild_id: webhook.guild_id,
+        discord_webhook_url: webhook.url,
+      },
+      { onConflict: "owner_id" },
+    );
 
-  const payload = {
-    owner_id: ownerId,
-    discord_guild_id: webhook.guild_id,
-    discord_webhook_url: webhook.url,
-    guild_name: existing?.guild_name ?? webhook.guild_id,
-  };
-
-  const { error } = existing?.id
-    ? await supabase.from("guild_configs").update(payload).eq("id", existing.id)
-    : await supabase.from("guild_configs").insert(payload);
-
-  if (error) {
+  if (upsertError) {
     return NextResponse.redirect(
-      new URL("/admin/settings?error=discord_save_failed", appUrl),
+      `${appUrl}/admin/settings?error=discord_save_failed`,
     );
   }
 
   return NextResponse.redirect(
-    new URL("/admin/settings?success=discord_connected", appUrl),
+    `${appUrl}/admin/settings?success=discord_connected`,
   );
 }

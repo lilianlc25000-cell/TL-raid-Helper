@@ -1,15 +1,15 @@
 import Link from "next/link";
 import DiscordProvisionClient from "@/app/admin/settings/DiscordProvisionClient";
-import DiscordRaidWebhookClient from "@/app/admin/settings/DiscordRaidWebhookClient";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 const discordClientId = process.env.DISCORD_CLIENT_ID ?? "";
 const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL ?? "";
+const discordBotToken = process.env.DISCORD_BOT_TOKEN ?? "";
 
 const successMessages: Record<string, string> = {
-  discord_connected: "Discord est bien connecté.",
+  discord_connected: "Webhook Discord connecté avec succès.",
 };
 
 const errorMessages: Record<string, string> = {
@@ -50,13 +50,36 @@ export default async function AdminSettingsPage({
     ? await supabase
         .from("guild_configs")
         .select(
-          "guild_name,discord_guild_id,discord_webhook_url,raid_webhook_url,raid_channel_id,polls_channel_id,loot_channel_id,groups_channel_id,dps_channel_id",
+          "guild_name,discord_guild_id,discord_webhook_url,raid_channel_id,polls_channel_id,loot_channel_id,groups_channel_id,dps_channel_id,statics_pvp_channel_id,statics_pve_channel_id",
         )
         .eq("owner_id", ownerId)
         .maybeSingle()
     : { data: null };
-  const connectedGuildName = guildConfig?.guild_name ?? null;
-  const hasDiscordGuild = Boolean(guildConfig?.discord_guild_id);
+
+  const hasWebhook = Boolean(
+    guildConfig?.discord_guild_id && guildConfig?.discord_webhook_url,
+  );
+
+  let botLinked = false;
+  let botGuildName: string | null = null;
+  if (discordBotToken && guildConfig?.discord_guild_id) {
+    const guildResponse = await fetch(
+      `https://discord.com/api/v10/guilds/${guildConfig.discord_guild_id}`,
+      {
+        headers: { Authorization: `Bot ${discordBotToken}` },
+        cache: "no-store",
+      },
+    );
+    if (guildResponse.ok) {
+      const guild = (await guildResponse.json()) as { name?: string };
+      botLinked = true;
+      botGuildName = guild.name ?? null;
+    }
+  }
+
+  const connectedGuildName =
+    botGuildName ?? guildConfig?.guild_name ?? null;
+  const canProvision = botLinked && hasWebhook;
 
   return (
     <div className="min-h-screen text-zinc-100">
@@ -68,7 +91,7 @@ export default async function AdminSettingsPage({
           Paramètres Admin
         </h1>
         <p className="mt-2 text-sm text-text/70">
-          Connecte ton serveur Discord pour activer les webhooks.
+          Connecte ton serveur Discord pour activer les notifications.
         </p>
         {successMessage ? (
           <p className="mt-3 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
@@ -85,46 +108,64 @@ export default async function AdminSettingsPage({
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
         <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
           <p className="text-xs uppercase tracking-[0.25em] text-text/50">
-            Discord
+            Étape 1 · Webhook
+          </p>
+          <h2 className="mt-2 text-xl font-semibold text-text">
+            Connecter un webhook
+          </h2>
+          <p className="mt-2 text-sm text-text/70">
+            Choisis un salon pour lier la guilde à l’application.
+          </p>
+          {hasWebhook ? (
+            <div className="mt-5 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-xs uppercase tracking-[0.25em] text-emerald-200">
+              Webhook connecté
+            </div>
+          ) : isWebhookReady ? (
+            <Link
+              href={discordOauthUrl}
+              className="mt-5 inline-flex items-center rounded-full border border-emerald-400/60 bg-emerald-500/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300"
+            >
+              Connecter un webhook
+            </Link>
+          ) : (
+            <div className="mt-5 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-xs text-amber-200">
+              Configure NEXT_PUBLIC_APP_URL pour activer le webhook.
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
+          <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+            Étape 2 · Bot
           </p>
           <h2 className="mt-2 text-xl font-semibold text-text">
             Installer le bot Discord
           </h2>
           <p className="mt-2 text-sm text-text/70">
-            Le bot doit être installé sur le serveur avant de créer les salons.
+            Le bot doit être ajouté au serveur pour créer les salons.
           </p>
-          {hasDiscordGuild ? (
-            <div className="mt-5 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-xs uppercase tracking-[0.25em] text-emerald-200">
-              {connectedGuildName || "Serveur Discord connecté"}
+          {botLinked ? (
+            <div className="mt-5 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-xs uppercase tracking-[0.25em] text-emerald-200">
+              Bot installé · {connectedGuildName ?? "Serveur Discord"}
             </div>
           ) : isDiscordReady ? (
             <Link
               href={discordBotInviteUrl}
+              target="_blank"
+              rel="noreferrer"
               className="mt-5 inline-flex items-center rounded-full border border-sky-400/60 bg-sky-500/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-sky-200 transition hover:border-sky-300"
             >
-              Installer le bot
+              Installer le bot (nouvel onglet)
             </Link>
           ) : (
             <div className="mt-5 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-xs text-amber-200">
               Configure DISCORD_CLIENT_ID pour activer l'installation du bot.
             </div>
           )}
-          <p className="mt-4 text-xs text-text/50">
-            Ensuite, connecte un webhook pour lier la guilde.
-          </p>
-          {isWebhookReady ? (
-            <Link
-              href={discordOauthUrl}
-              className="mt-2 inline-flex items-center text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:text-emerald-100"
-            >
-              Connecter un webhook
-            </Link>
-          ) : (
-            <p className="mt-2 text-xs text-amber-200">
-              Configure NEXT_PUBLIC_APP_URL pour activer le webhook.
-            </p>
-          )}
         </div>
+      </section>
+
+      <section className="mt-8">
         <DiscordProvisionClient
           initialStatus={{
             raid_channel_id: guildConfig?.raid_channel_id ?? null,
@@ -132,22 +173,11 @@ export default async function AdminSettingsPage({
             loot_channel_id: guildConfig?.loot_channel_id ?? null,
             groups_channel_id: guildConfig?.groups_channel_id ?? null,
             dps_channel_id: guildConfig?.dps_channel_id ?? null,
+            statics_pvp_channel_id: guildConfig?.statics_pvp_channel_id ?? null,
+            statics_pve_channel_id: guildConfig?.statics_pve_channel_id ?? null,
           }}
-          hasDiscordGuild={hasDiscordGuild}
+          canProvision={canProvision}
           guildName={connectedGuildName}
-          refreshOnLoad={Boolean(successKey)}
-          refreshOnFocus={!hasDiscordGuild}
-        />
-      </section>
-      <section className="mt-8">
-        <DiscordRaidWebhookClient
-          initialGuildId={guildConfig?.discord_guild_id ?? ""}
-          initialGuildName={guildConfig?.guild_name ?? ""}
-          initialWebhookUrl={
-            guildConfig?.raid_webhook_url ??
-            guildConfig?.discord_webhook_url ??
-            ""
-          }
         />
       </section>
     </div>

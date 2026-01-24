@@ -469,6 +469,7 @@ export default function RaidGroupsPage() {
         content: `📣 Groupes publiés pour "${eventTitle}".`,
       });
     }
+
   };
 
   if (isLoading) {
