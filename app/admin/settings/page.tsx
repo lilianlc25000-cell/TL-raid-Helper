@@ -30,7 +30,7 @@ export default async function AdminSettingsPage({
     redirectUri,
   )}&response_type=code&scope=webhook.incoming`;
   const discordBotInviteUrl = discordClientId
-    ? `https://discord.com/api/oauth2/authorize?client_id=${discordClientId}&permissions=536874000&scope=bot%20applications.commands`
+    ? `https://discord.com/api/oauth2/authorize?client_id=${discordClientId}&permissions=536874000&integration_type=0&scope=bot%20applications.commands`
     : "";
   const isDiscordReady = Boolean(discordClientId);
   const isWebhookReady = Boolean(discordClientId && appUrl);
