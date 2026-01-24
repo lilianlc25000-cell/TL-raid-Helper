@@ -72,16 +72,14 @@ serve(async (req) => {
     return json(401, { ok: false, error: "missing_auth" });
   }
 
-  const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-  const { data: authData, error: authError } = await authClient.auth.getUser();
+  const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+  const { data: authData, error: authError } =
+    await adminClient.auth.getUser(token);
   if (authError || !authData.user) {
     return json(401, { ok: false, error: "invalid_auth" });
   }
 
   const adminId = authData.user.id;
-  const adminClient = createClient(supabaseUrl, supabaseServiceKey);
   const { data: config } = await adminClient
     .from("guild_configs")
     .select("id,owner_id,discord_guild_id")
