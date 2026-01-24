@@ -51,64 +51,42 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const supabaseServiceKey =
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ||
-    Deno.env.get("SERVICE_ROLE_KEY");
   const supabaseAnonKey =
     Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("ANON_KEY");
   const discordBotToken = Deno.env.get("DISCORD_BOT_TOKEN");
 
-  if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
+  if (!supabaseUrl || !supabaseAnonKey) {
     return json(500, { ok: false, error: "missing_supabase_env" });
   }
   if (!discordBotToken) {
     return json(500, { ok: false, error: "missing_discord_bot_token" });
   }
 
-  const payload = (await req.json().catch(() => null)) as
-    | { access_token?: string }
-    | null;
   const authHeader = req.headers.get("Authorization") ?? "";
-  let token = authHeader.startsWith("Bearer ")
-    ? authHeader.replace("Bearer ", "")
-    : "";
-  if (!token && payload?.access_token) {
-    token = payload.access_token;
-  }
-  if (!token) {
+  if (!authHeader) {
     return json(401, { ok: false, error: "missing_auth" });
   }
 
-  const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+  const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
   const { data: authData, error: authError } =
-    await adminClient.auth.getUser(token);
-  let resolvedUser = authData.user;
-  let resolvedError = authError;
-
-  if (!resolvedUser) {
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: fallbackData, error: fallbackError } =
-      await authClient.auth.getUser();
-    resolvedUser = fallbackData.user ?? null;
-    resolvedError = fallbackError ?? resolvedError;
-  }
-
+    await supabaseClient.auth.getUser();
+  const resolvedUser = authData.user;
   if (!resolvedUser) {
     return json(401, {
       ok: false,
       error: "invalid_auth",
-      detail: resolvedError?.message ?? null,
+      detail: authError?.message ?? null,
     });
   }
 
   const adminId = resolvedUser.id;
-  const { data: config } = await adminClient
+  const { data: config } = (await supabaseClient
     .from("guild_configs")
     .select("id,owner_id,discord_guild_id")
     .eq("owner_id", adminId)
-    .maybeSingle() as { data: GuildConfigRow | null };
+    .maybeSingle()) as { data: GuildConfigRow | null };
 
   if (!config?.discord_guild_id) {
     return json(404, {
@@ -195,7 +173,7 @@ serve(async (req) => {
     updatePayload.guild_name = guildName;
   }
 
-  const { error: updateError } = await adminClient
+  const { error: updateError } = await supabaseClient
     .from("guild_configs")
     .update(updatePayload)
     .eq("id", config.id);
