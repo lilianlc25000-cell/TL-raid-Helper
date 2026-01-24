@@ -79,34 +79,24 @@ export default function DiscordProvisionClient({
       return;
     }
 
-    const { data: payload, error: invokeError } = await supabase.functions
-      .invoke<{
-        created?: Record<string, string>;
-        error?: string;
-        detail?: string;
-      }>("discord-provision", {
-        body: { access_token: accessToken },
-      });
+    const response = await fetch("/api/discord/provision", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const rawText = await response.text().catch(() => "");
+    const payload = rawText
+      ? (JSON.parse(rawText) as {
+          created?: Record<string, string>;
+          error?: string;
+          detail?: string;
+        })
+      : null;
 
-    if (invokeError) {
-      const rawPayload =
-        invokeError?.context?.response?.body ||
-        invokeError?.context?.response?.data ||
-        null;
-      const rawText =
-        typeof rawPayload === "string" ? rawPayload : JSON.stringify(rawPayload);
-      setError(
-        `Impossible de créer les salons Discord. ${invokeError.message}${
-          rawText ? ` (${rawText.slice(0, 200)})` : ""
-        }`,
-      );
-      setIsProvisioning(false);
-      return;
-    }
-
-    const payloadError = payload?.error ?? null;
-    const payloadDetail = payload?.detail ?? null;
-    if (payloadError) {
+    if (!response.ok) {
+      const payloadError = payload?.error ?? `status_${response.status}`;
+      const payloadDetail =
+        payload?.detail ?? (rawText ? rawText.slice(0, 200) : null);
       setError(
         `Impossible de créer les salons Discord. ${payloadError}${
           payloadDetail ? ` (${payloadDetail})` : ""

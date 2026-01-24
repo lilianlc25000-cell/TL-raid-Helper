@@ -1,5 +1,6 @@
 import Link from "next/link";
 import DiscordProvisionClient from "@/app/admin/settings/DiscordProvisionClient";
+import DiscordRaidWebhookClient from "@/app/admin/settings/DiscordRaidWebhookClient";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -49,7 +50,7 @@ export default async function AdminSettingsPage({
     ? await supabase
         .from("guild_configs")
         .select(
-          "guild_name,discord_guild_id,raid_channel_id,polls_channel_id,loot_channel_id,groups_channel_id,dps_channel_id",
+          "guild_name,discord_guild_id,discord_webhook_url,raid_webhook_url,raid_channel_id,polls_channel_id,loot_channel_id,groups_channel_id,dps_channel_id",
         )
         .eq("owner_id", ownerId)
         .maybeSingle()
@@ -136,6 +137,17 @@ export default async function AdminSettingsPage({
           guildName={connectedGuildName}
           refreshOnLoad={Boolean(successKey)}
           refreshOnFocus={!hasDiscordGuild}
+        />
+      </section>
+      <section className="mt-8">
+        <DiscordRaidWebhookClient
+          initialGuildId={guildConfig?.discord_guild_id ?? ""}
+          initialGuildName={guildConfig?.guild_name ?? ""}
+          initialWebhookUrl={
+            guildConfig?.raid_webhook_url ??
+            guildConfig?.discord_webhook_url ??
+            ""
+          }
         />
       </section>
     </div>
