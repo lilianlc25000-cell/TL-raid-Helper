@@ -1,24 +1,12 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
 const discordClientId = process.env.DISCORD_CLIENT_ID ?? "";
 const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
-const getAppUrl = () => {
-  if (appUrlFromEnv) {
-    return appUrlFromEnv;
-  }
-  const headerList = headers();
-  const host =
-    headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "";
-  const proto = headerList.get("x-forwarded-proto") ?? "https";
-  return host ? `${proto}://${host}` : "";
-};
-
 export default function AdminSettingsPage() {
-  const appUrl = getAppUrl();
+  const appUrl = appUrlFromEnv;
   const redirectUri = `${appUrl}/api/auth/discord/callback`;
   const discordOauthUrl = `https://discord.com/api/oauth2/authorize?client_id=${discordClientId}&redirect_uri=${encodeURIComponent(
     redirectUri,
