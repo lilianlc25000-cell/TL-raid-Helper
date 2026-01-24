@@ -21,6 +21,8 @@ const TARGET_TABS = [
   "Zairos",
   "Calanthia",
   "Umbrakan",
+  "Verence",
+  "Martha",
   "Tête de lion",
 ] as const;
 
@@ -54,6 +56,8 @@ const TARGET_ALIASES: Record<TargetTab, string[]> = {
   Zairos: ["zairos"],
   Calanthia: ["calanthia"],
   Umbrakan: ["umbrakan"],
+  Verence: ["verence"],
+  Martha: ["martha"],
   "Tête de lion": ["tete de lion", "tête de lion"],
 };
 

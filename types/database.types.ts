@@ -119,6 +119,32 @@ export type Database = {
           updated_at?: string;
         };
       };
+      guild_configs: {
+        Row: {
+          id: string;
+          owner_id: string;
+          discord_guild_id: string;
+          discord_webhook_url: string;
+          guild_name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          discord_guild_id: string;
+          discord_webhook_url: string;
+          guild_name: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          owner_id?: string;
+          discord_guild_id?: string;
+          discord_webhook_url?: string;
+          guild_name?: string;
+          created_at?: string;
+        };
+      };
       events: {
         Row: {
           id: string;
