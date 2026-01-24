@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 
+export const dynamic = "force-dynamic";
+
 const discordClientId = process.env.DISCORD_CLIENT_ID ?? "";
 const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
