@@ -89,8 +89,16 @@ export default function DiscordProvisionClient({
       });
 
     if (invokeError) {
+      const rawPayload =
+        invokeError?.context?.response?.body ||
+        invokeError?.context?.response?.data ||
+        null;
+      const rawText =
+        typeof rawPayload === "string" ? rawPayload : JSON.stringify(rawPayload);
       setError(
-        `Impossible de créer les salons Discord. ${invokeError.message}`,
+        `Impossible de créer les salons Discord. ${invokeError.message}${
+          rawText ? ` (${rawText.slice(0, 200)})` : ""
+        }`,
       );
       setIsProvisioning(false);
       return;
