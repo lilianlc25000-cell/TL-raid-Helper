@@ -32,16 +32,24 @@ export default function DiscordProvisionClient({ initialStatus }: Props) {
     setSuccess(null);
 
     const { data } = await supabase.auth.getSession();
-    if (!data.session?.access_token) {
+    const accessToken = data.session?.access_token;
+    if (!accessToken) {
       setError("Connecte-toi avant de configurer Discord.");
       setIsProvisioning(false);
       return;
     }
 
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
     const { data: payload, error: invokeError } =
       await supabase.functions.invoke<{ created?: Record<string, string> }>(
         "discord-provision",
-        { body: {} },
+        {
+          body: {},
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...(anonKey ? { apikey: anonKey } : {}),
+          },
+        },
       );
 
     if (invokeError) {
