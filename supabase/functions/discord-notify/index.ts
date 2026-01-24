@@ -29,8 +29,11 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const supabaseServiceKey =
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ||
+    Deno.env.get("SERVICE_ROLE_KEY");
+  const supabaseAnonKey =
+    Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("ANON_KEY");
   if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
     return json(500, { ok: false, error: "missing_supabase_env" });
   }
