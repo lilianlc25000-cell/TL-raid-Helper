@@ -32,47 +32,23 @@ export default function DiscordProvisionClient({ initialStatus }: Props) {
     setSuccess(null);
 
     const { data } = await supabase.auth.getSession();
-    const accessToken = data.session?.access_token;
-    if (!accessToken) {
+    if (!data.session?.access_token) {
       setError("Connecte-toi avant de configurer Discord.");
       setIsProvisioning(false);
       return;
     }
 
-    const functionsUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/discord-provision`
-      : null;
-    if (!functionsUrl) {
-      setError("NEXT_PUBLIC_SUPABASE_URL manquant.");
-      setIsProvisioning(false);
-      return;
-    }
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-    if (!anonKey) {
-      setError("NEXT_PUBLIC_SUPABASE_ANON_KEY manquant.");
-      setIsProvisioning(false);
-      return;
-    }
+    const { data: payload, error: invokeError } =
+      await supabase.functions.invoke<{ created?: Record<string, string> }>(
+        "discord-provision",
+        { body: {} },
+      );
 
-    const response = await fetch(functionsUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        apikey: anonKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({}),
-    });
-
-    if (!response.ok) {
+    if (invokeError) {
       setError("Impossible de créer les salons Discord.");
       setIsProvisioning(false);
       return;
     }
-
-    const payload = (await response.json().catch(() => null)) as
-      | { created?: Record<string, string> }
-      | null;
     if (payload?.created) {
       setStatus((prev) => ({
         ...prev,

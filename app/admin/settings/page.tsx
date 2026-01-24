@@ -29,7 +29,11 @@ export default async function AdminSettingsPage({
   const discordOauthUrl = `https://discord.com/oauth2/authorize?client_id=${discordClientId}&redirect_uri=${encodeURIComponent(
     redirectUri,
   )}&response_type=code&scope=webhook.incoming`;
-  const isDiscordReady = Boolean(discordClientId && appUrl);
+  const discordBotInviteUrl = discordClientId
+    ? `https://discord.com/api/oauth2/authorize?client_id=${discordClientId}&permissions=536874000&scope=bot%20applications.commands`
+    : "";
+  const isDiscordReady = Boolean(discordClientId);
+  const isWebhookReady = Boolean(discordClientId && appUrl);
 
   const successMessage =
     searchParams?.success && successMessages[searchParams.success];
@@ -79,24 +83,37 @@ export default async function AdminSettingsPage({
             Discord
           </p>
           <h2 className="mt-2 text-xl font-semibold text-text">
-            Connecter un webhook
+            Installer le bot Discord
           </h2>
           <p className="mt-2 text-sm text-text/70">
-            Le scope webhook.incoming permet de choisir un salon et générer
-            l&apos;URL automatiquement.
+            Le bot doit être installé sur le serveur avant de créer les salons.
           </p>
           {isDiscordReady ? (
             <Link
-              href={discordOauthUrl}
+              href={discordBotInviteUrl}
               className="mt-5 inline-flex items-center rounded-full border border-sky-400/60 bg-sky-500/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-sky-200 transition hover:border-sky-300"
             >
-              Connecter Discord
+              Installer le bot
             </Link>
           ) : (
             <div className="mt-5 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-xs text-amber-200">
-              Configure DISCORD_CLIENT_ID et NEXT_PUBLIC_APP_URL pour activer la
-              connexion Discord.
+              Configure DISCORD_CLIENT_ID pour activer l'installation du bot.
             </div>
+          )}
+          <p className="mt-4 text-xs text-text/50">
+            Ensuite, connecte un webhook pour lier la guilde.
+          </p>
+          {isWebhookReady ? (
+            <Link
+              href={discordOauthUrl}
+              className="mt-2 inline-flex items-center text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:text-emerald-100"
+            >
+              Connecter un webhook
+            </Link>
+          ) : (
+            <p className="mt-2 text-xs text-amber-200">
+              Configure NEXT_PUBLIC_APP_URL pour activer le webhook.
+            </p>
           )}
         </div>
         <DiscordProvisionClient
