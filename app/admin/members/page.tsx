@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MoreVertical, Shield, ShieldCheck, UserMinus } from "lucide-react";
-import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { createClient } from "../../../lib/supabase/client";
 import { getWeaponImage } from "../../../lib/weapons";
 
 type MemberEntry = {
@@ -56,7 +56,7 @@ export default function GuildMembersPage() {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const loadAccess = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setIsAdmin(false);
       setIsAuthReady(true);
@@ -100,7 +100,7 @@ export default function GuildMembersPage() {
   }, []);
 
   const loadMembers = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       setIsLoading(false);
@@ -195,7 +195,7 @@ export default function GuildMembersPage() {
   }, [isAuthReady, isAdmin, loadMembers]);
 
   const updateRoleRank = async (userId: string, roleRank: string) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
@@ -292,7 +292,7 @@ export default function GuildMembersPage() {
   };
 
   const handleExclude = async (userId: string) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;

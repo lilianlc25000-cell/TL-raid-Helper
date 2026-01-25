@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Calendar, Crown, Gem, Home, Layers, User, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { createSupabaseBrowserClient } from "../lib/supabase/client";
+import { createClient } from "../lib/supabase/client";
 
 const tabs = [
   { label: "Accueil", icon: Home, href: "/" },
@@ -21,7 +21,7 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   const loadProfileAccess = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setIsAdmin(false);
       setHasGuild(false);
@@ -49,7 +49,7 @@ export default function BottomNav() {
 
   useEffect(() => {
     loadProfileAccess();
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 type DiscordProvisionButtonProps = {
   guildId: string;
@@ -18,12 +18,7 @@ export default function DiscordProvisionButton({
   const handleProvision = async () => {
     setStatus("loading");
     setMessage(null);
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      setStatus("error");
-      setMessage("Supabase n'est pas configuré.");
-      return;
-    }
+    const supabase = createClient();
     const { error } = await supabase.functions.invoke("discord-provision", {
       body: { guild_id: guildId },
     });

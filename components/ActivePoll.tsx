@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { HelpCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { createSupabaseBrowserClient } from "../lib/supabase/client";
+import { createClient } from "../lib/supabase/client";
 
 type PollRow = {
   id: string;
@@ -18,7 +18,7 @@ export default function ActivePoll() {
   const [isLoading, setIsLoading] = useState(true);
 
   const loadPoll = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setIsLoading(false);
       return;

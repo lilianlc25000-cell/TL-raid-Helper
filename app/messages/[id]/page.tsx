@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { createClient } from "../../../lib/supabase/client";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,7 @@ export default function MessagesThreadPage() {
   useEffect(() => {
     let isMounted = true;
     const loadUser = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setError("Supabase n'est pas configuré (URL / ANON KEY).");
         return;
@@ -70,7 +70,7 @@ export default function MessagesThreadPage() {
       if (!partnerId || partnerName) {
         return;
       }
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         return;
       }
@@ -93,7 +93,7 @@ export default function MessagesThreadPage() {
   }, [partnerId, partnerName]);
 
   const loadMessages = async (currentUserId: string, targetId: string) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -135,7 +135,7 @@ export default function MessagesThreadPage() {
     if (!userId || !partnerId) {
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -181,7 +181,7 @@ export default function MessagesThreadPage() {
     if (!body) {
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }

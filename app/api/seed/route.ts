@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "../../../lib/supabase/server";
+import { createClient } from "../../../lib/supabase/server";
 import type { ItemSlot } from "../../../lib/game-constants";
 
 type ItemTier = "T2" | "T3" | "Archboss";
@@ -147,7 +147,7 @@ const seedItems: GameItemSeed[] = [
 ];
 
 export async function POST() {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createClient();
   const itemNames = seedItems.map((item) => item.name);
 
   const { data: existing, error: selectError } = await supabase

@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 
 import ManageClient from "../manage/ManageClient";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { PARTICIPATION_POINTS_PER_RAID } from "@/lib/game-constants";
 
 type PageProps = {
@@ -15,7 +15,7 @@ type ActionState = {
 
 export default async function CloseEventPage({ params }: PageProps) {
   const resolvedParams = await params;
-  const supabase = await createSupabaseServerClient();
+  const supabase = createClient();
   if (!supabase) {
     return (
       <div className="min-h-screen text-zinc-100">
@@ -71,7 +71,7 @@ export default async function CloseEventPage({ params }: PageProps) {
     const absentIdsRaw = String(formData.get("absentIds") ?? "[]");
     const absentIds = new Set<string>(JSON.parse(absentIdsRaw));
 
-    const supabaseServer = await createSupabaseServerClient();
+    const supabaseServer = createClient();
     if (!supabaseServer) {
       return {
         ok: false,

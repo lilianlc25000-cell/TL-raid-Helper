@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { getWeaponImage } from "@/lib/weapons";
 
 type Role = "Tank" | "Heal" | "DPS";
@@ -45,7 +45,7 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
   } | null>(null);
 
   const loadTeams = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré.");
       return;
@@ -98,7 +98,7 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
   }, [mode]);
 
   const loadTeamNames = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -116,7 +116,7 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
   }, [mode]);
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré.");
       return;
@@ -165,7 +165,7 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
 
   useEffect(() => {
     const loadProfile = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setError("Supabase n'est pas configuré.");
         setLoadingProfile(false);
@@ -233,7 +233,7 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
       return;
     }
 
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré.");
       return;
@@ -269,7 +269,7 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
       return;
     }
     setError(null);
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré.");
       return;
@@ -297,7 +297,7 @@ export default function StaticsTeams({ mode }: { mode: "pvp" | "pve" }) {
       setEditingTeam(null);
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré.");
       return;

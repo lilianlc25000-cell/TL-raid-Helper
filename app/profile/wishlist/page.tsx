@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import ItemSelector, { ItemOption } from "../../components/ItemSelector";
 import { getItemImage, getSlotPlaceholder } from "../../../lib/items";
-import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { createClient } from "../../../lib/supabase/client";
 
 type Slot = {
   id: string;
@@ -154,7 +154,7 @@ export default function WishlistPage() {
 
   useEffect(() => {
     let isMounted = true;
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setSaveError("Supabase n'est pas configuré (URL / ANON KEY).");
       return () => {
@@ -191,7 +191,7 @@ export default function WishlistPage() {
   useEffect(() => {
     let isMounted = true;
     const loadWishlist = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setSaveError("Supabase n'est pas configuré (URL / ANON KEY).");
         return;
@@ -255,7 +255,7 @@ export default function WishlistPage() {
     }
     setIsSaving(true);
     setSaveError(null);
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setSaveError("Supabase n'est pas configuré (URL / ANON KEY).");
       setIsSaving(false);

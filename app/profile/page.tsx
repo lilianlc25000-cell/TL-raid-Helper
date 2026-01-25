@@ -9,7 +9,7 @@ import {
   WandSparkles,
 } from "lucide-react";
 import DiceRoller from "../components/DiceRoller";
-import { createSupabaseBrowserClient } from "../../lib/supabase/client";
+import { createClient } from "../../lib/supabase/client";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -293,13 +293,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     let isMounted = true;
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      setProfileError("Supabase n'est pas configuré (URL / ANON KEY).");
-      return () => {
-        isMounted = false;
-      };
-    }
+    const supabase = createClient();
 
     const syncUser = async () => {
       const { data } = await supabase.auth.getSession();
@@ -330,12 +324,7 @@ export default function ProfilePage() {
   useEffect(() => {
     let isMounted = true;
     const loadProfile = async () => {
-      const supabase = createSupabaseBrowserClient();
-      if (!supabase) {
-        setProfileError("Supabase n'est pas configuré (URL / ANON KEY).");
-        setIsProfileLoaded(true);
-        return;
-      }
+      const supabase = createClient();
       if (!userId) {
         setIsProfileLoaded(true);
         return;
@@ -386,10 +375,7 @@ export default function ProfilePage() {
       if (!userId) {
         return;
       }
-      const supabase = createSupabaseBrowserClient();
-      if (!supabase) {
-        return;
-      }
+      const supabase = createClient();
       const { data, error } = await supabase
         .from("player_builds")
         .select(
@@ -438,11 +424,7 @@ export default function ProfilePage() {
       );
       return;
     }
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      setProfileError("Supabase n'est pas configuré.");
-      return;
-    }
+    const supabase = createClient();
     setIsSavingProfile(true);
     setProfileError(null);
     setProfileSuccess(null);
@@ -529,11 +511,7 @@ export default function ProfilePage() {
       return;
     }
     const computedName = getClassNameFromWeapons(buildWeapon1, buildWeapon2);
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      setBuildError("Supabase n'est pas configuré.");
-      return;
-    }
+    const supabase = createClient();
     setBuildError(null);
     setBuildSuccess(null);
     setIsSavingBuild(true);
@@ -614,11 +592,7 @@ export default function ProfilePage() {
       setProfileError("Veuillez vous connecter pour modifier votre profil.");
       return;
     }
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      setProfileError("Supabase n'est pas configuré.");
-      return;
-    }
+    const supabase = createClient();
     setProfileError(null);
     setProfileSuccess(null);
     const { error } = await supabase

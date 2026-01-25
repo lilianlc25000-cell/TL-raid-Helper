@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { MoreVertical, Shield, ShieldCheck } from "lucide-react";
-import { createSupabaseBrowserClient } from "../../lib/supabase/client";
+import { createClient } from "../../lib/supabase/client";
 import { getWeaponImage } from "../../lib/weapons";
 
 type MemberEntry = {
@@ -62,7 +62,7 @@ export default function GuildPage() {
   useEffect(() => {
     let isMounted = true;
     const loadMembers = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setError("Supabase n'est pas configuré (URL / ANON KEY).");
         setIsLoading(false);
@@ -164,7 +164,7 @@ export default function GuildPage() {
   }, []);
 
   const updateRoleRank = async (userId: string, roleRank: string) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
@@ -259,7 +259,7 @@ export default function GuildPage() {
   };
 
   const handleExclude = async (userId: string) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
@@ -292,7 +292,7 @@ export default function GuildPage() {
 
   useEffect(() => {
     let isMounted = true;
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return () => {
         isMounted = false;
@@ -396,7 +396,7 @@ export default function GuildPage() {
               <button
                 type="button"
                 onClick={async () => {
-                  const supabase = createSupabaseBrowserClient();
+                  const supabase = createClient();
                   if (!supabase || !currentGuildId) {
                     return;
                   }

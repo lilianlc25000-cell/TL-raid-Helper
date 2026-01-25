@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { createClient } from "../../../lib/supabase/client";
 
 type PollEntry = {
   id: string;
@@ -45,7 +45,7 @@ export default function AdminPollsPage() {
   const [canManage, setCanManage] = useState(false);
 
   const loadAccess = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setCanManage(false);
       return;
@@ -72,7 +72,7 @@ export default function AdminPollsPage() {
   }, [loadAccess]);
 
   const loadResults = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setLoadingResults(false);
       return;
@@ -150,7 +150,7 @@ export default function AdminPollsPage() {
       setError("Ajoute au moins deux options.");
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 type DiscordNotifyTestButtonProps = {
   channelId: string | null;
@@ -35,15 +35,7 @@ export default function DiscordNotifyTestButton({
       return;
     }
     setStatus("loading");
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      setStatus("idle");
-      setToast({
-        type: "error",
-        message: "Supabase n'est pas configuré.",
-      });
-      return;
-    }
+    const supabase = createClient();
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
     const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};

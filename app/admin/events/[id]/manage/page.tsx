@@ -1,5 +1,5 @@
 import RosterClient from "./RosterClient";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 type PageProps = {
   params: { id: string };
@@ -7,7 +7,7 @@ type PageProps = {
 
 export default async function ManageEventPage({ params }: PageProps) {
   const resolvedParams = await params;
-  const supabase = await createSupabaseServerClient();
+  const supabase = createClient();
   if (!supabase) {
     return (
       <div className="min-h-screen text-zinc-100">

@@ -11,7 +11,7 @@ import {
   Swords,
   Wand2,
 } from "lucide-react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { getWeaponImage } from "@/lib/weapons";
 
 type SignupEntry = {
@@ -100,7 +100,7 @@ export default function RosterClient({
   }, [signups]);
 
   const handlePublishGroups = async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setActionError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;

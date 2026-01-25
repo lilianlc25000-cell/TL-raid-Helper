@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CalendarPlus, Gem, Settings, ShieldCheck, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { createSupabaseBrowserClient } from "../../lib/supabase/client";
+import { createClient } from "../../lib/supabase/client";
 
 const tools = [
   {
@@ -58,7 +58,7 @@ export default function AdminDashboardPage() {
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   const loadAdminRole = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setIsAdmin(false);
       setIsAuthReady(true);
@@ -86,7 +86,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     loadAdminRole();
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }

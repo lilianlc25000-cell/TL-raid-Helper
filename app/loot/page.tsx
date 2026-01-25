@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import DiceRoller from "../components/DiceRoller";
 import { getItemImage, getSlotPlaceholder } from "../../lib/items";
-import { createSupabaseBrowserClient } from "../../lib/supabase/client";
+import { createClient } from "../../lib/supabase/client";
 import { useAdminMode } from "../contexts/AdminContext";
 import {
   DEFAULT_PARTICIPATION_THRESHOLD,
@@ -128,7 +128,7 @@ export default function PlayerLootPage() {
 
   useEffect(() => {
     let isMounted = true;
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return () => {
@@ -162,7 +162,7 @@ export default function PlayerLootPage() {
       return;
     }
     const loadGuildId = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         return;
       }
@@ -182,7 +182,7 @@ export default function PlayerLootPage() {
     const loadSessions = async () => {
       setIsLoading(true);
       setError(null);
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setError("Supabase n'est pas configuré (URL / ANON KEY).");
         setIsLoading(false);
@@ -272,7 +272,7 @@ export default function PlayerLootPage() {
       return;
     }
     const loadThreshold = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         return;
       }
@@ -304,7 +304,7 @@ export default function PlayerLootPage() {
   }, [selectedCategory, itemSearch]);
 
   const handlePublishLoot = async (itemName: string, slotName: string) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
@@ -360,7 +360,7 @@ export default function PlayerLootPage() {
       setSelectedItem(null);
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       setSelectedItem(null);
@@ -386,7 +386,7 @@ export default function PlayerLootPage() {
     if (!trait) {
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
@@ -425,7 +425,7 @@ export default function PlayerLootPage() {
     if (rollsBySession[session.id]) {
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setRollsError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;

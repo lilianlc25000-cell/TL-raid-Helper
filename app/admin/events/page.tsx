@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CalendarPlus } from "lucide-react";
-import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { createClient } from "../../../lib/supabase/client";
 import { createEvent } from "../../../lib/actions/events";
 import { PARTICIPATION_POINTS_PER_RAID } from "../../../lib/game-constants";
 
@@ -101,7 +101,7 @@ export default function AdminEventsPage() {
 
   useEffect(() => {
     const loadEvents = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setError("Supabase n'est pas configuré (URL / ANON KEY).");
         return;
@@ -226,7 +226,7 @@ export default function AdminEventsPage() {
       setEvents((prev) => prev.filter((event) => event.id !== eventId));
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;

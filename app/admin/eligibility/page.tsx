@@ -9,7 +9,7 @@ import {
   Swords,
   Trophy,
 } from "lucide-react";
-import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { createClient } from "../../../lib/supabase/client";
 import { DEFAULT_PARTICIPATION_THRESHOLD } from "../../../lib/game-constants";
 
 type MemberEntry = {
@@ -75,7 +75,7 @@ export default function AdminEligibilityPage() {
   const [isSavingThreshold, setIsSavingThreshold] = useState(false);
 
   const loadMembers = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       setIsAuthReady(true);
@@ -175,7 +175,7 @@ export default function AdminEligibilityPage() {
     }
     setThresholdError(null);
     setIsSavingThreshold(true);
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setThresholdError("Supabase n'est pas configuré (URL / ANON KEY).");
       setIsSavingThreshold(false);
@@ -204,7 +204,7 @@ export default function AdminEligibilityPage() {
     setWishlist([]);
     setWishlistError(null);
     setWishlistLoading(true);
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setWishlistError("Supabase n'est pas configuré (URL / ANON KEY).");
       setWishlistLoading(false);

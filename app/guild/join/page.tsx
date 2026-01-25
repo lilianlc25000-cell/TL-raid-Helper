@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { createClient } from "../../../lib/supabase/client";
 
 type GuildEntry = {
   id: string;
@@ -55,7 +55,7 @@ export default function GuildJoinPage() {
   useEffect(() => {
     let isMounted = true;
     const loadUser = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setError("Supabase n'est pas configuré (URL / ANON KEY).");
         setLoading(false);
@@ -105,7 +105,7 @@ export default function GuildJoinPage() {
   }, []);
 
   const loadGuilds = async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -153,7 +153,7 @@ export default function GuildJoinPage() {
   };
 
   const performJoin = async (guild: GuildEntry, roleRank: "admin" | "member") => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -191,7 +191,7 @@ export default function GuildJoinPage() {
       setError("Nom et clé obligatoires.");
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré.");
       return;
@@ -238,7 +238,7 @@ export default function GuildJoinPage() {
       setError("Clé d'accès requise.");
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }

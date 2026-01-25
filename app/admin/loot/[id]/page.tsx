@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createSupabaseServerClient } from "../../../../lib/supabase/server";
+import { createClient } from "../../../../lib/supabase/server";
 import RollManagerClient from "./RollManagerClient";
 
 type PageProps = {
@@ -23,7 +23,7 @@ export default async function LootRollManagerPage({ params }: PageProps) {
     );
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createClient();
   const { data: session } = await supabase
     .from("active_loot_sessions")
     .select("id,item_name,is_active")

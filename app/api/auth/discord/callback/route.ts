@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 const DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token";
 const DISCORD_GUILDS_URL = "https://discord.com/api/users/@me/guilds";
@@ -88,7 +88,7 @@ export async function GET(request: Request) {
       return NextResponse.redirect(failRedirect);
     }
 
-    const supabase = await createSupabaseServerClient();
+  const supabase = createClient();
     const { data: authData, error: authError } = await supabase.auth.getUser();
     const userId = authData.user?.id ?? null;
     if (authError || !userId) {

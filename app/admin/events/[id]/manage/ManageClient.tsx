@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { PARTICIPATION_POINTS_PER_RAID } from "@/lib/game-constants";
 
 type SignupStatus = "present" | "tentative" | "bench";
@@ -65,7 +65,7 @@ export default function ManageClient({
 
   useEffect(() => {
     const loadSignups = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setLoadError("Supabase n'est pas configuré (URL / ANON KEY).");
         return;

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trophy } from "lucide-react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { parseDPSLog } from "@/lib/dps-parser";
 
 type ParsedLogEntry = {
@@ -169,7 +169,7 @@ export default function DPSMeterPage() {
   useEffect(() => {
     let isMounted = true;
     const loadGuild = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setError("Supabase n'est pas configuré (URL / ANON KEY).");
         setIsLoadingGuild(false);
@@ -228,7 +228,7 @@ export default function DPSMeterPage() {
       setError("Aucune guilde active.");
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
@@ -366,7 +366,7 @@ export default function DPSMeterPage() {
       if (!guildId) {
         return;
       }
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         return;
       }

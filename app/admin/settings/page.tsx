@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import DiscordProvisionButton from "@/app/admin/settings/DiscordProvisionButton";
 import DiscordNotifyTestButton from "@/app/admin/settings/DiscordNotifyTestButton";
 
@@ -8,7 +8,7 @@ const discordClientId = process.env.DISCORD_CLIENT_ID ?? "";
 const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
 export default async function AdminSettingsPage() {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createClient();
   const { data: authData } = await supabase.auth.getUser();
   const ownerId = authData.user?.id ?? null;
 

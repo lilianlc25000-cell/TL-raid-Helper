@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, Check, TrendingUp, Volume2, VolumeX } from "lucide-react";
-import { createSupabaseBrowserClient } from "../lib/supabase/client";
+import { createClient } from "../lib/supabase/client";
 
 type Notification = {
   id: string;
@@ -85,7 +85,7 @@ export default function NotificationCenter() {
   );
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -110,7 +110,7 @@ export default function NotificationCenter() {
       setNotifications([]);
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -128,7 +128,7 @@ export default function NotificationCenter() {
       setNotifications([]);
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -205,7 +205,7 @@ export default function NotificationCenter() {
   }, []);
 
   const markAllAsRead = async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -223,7 +223,7 @@ export default function NotificationCenter() {
   };
 
   const markAsRead = async (id: string) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }

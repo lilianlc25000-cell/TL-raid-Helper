@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { parseDPSLog } from "@/lib/dps-parser";
 
 type ParsedLogEntry = {
@@ -79,7 +79,7 @@ export default function DPSImportPage() {
       setError("Aucun log parsé.");
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;

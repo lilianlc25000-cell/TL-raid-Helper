@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createSupabaseBrowserClient } from "../../lib/supabase/client";
+import { createClient } from "../../lib/supabase/client";
 
 type PollRow = {
   id: string;
@@ -40,7 +40,7 @@ export default function PollsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const loadPolls = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setIsLoading(false);
       return;
@@ -113,7 +113,7 @@ export default function PollsPage() {
     if (!optionId || !userId) {
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }

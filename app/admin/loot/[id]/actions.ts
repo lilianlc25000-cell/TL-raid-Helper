@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseServerClient } from "../../../../lib/supabase/server";
+import { createClient } from "../../../../lib/supabase/server";
 
 export async function distributeLoot(winnerId: string, itemId: string) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createClient();
   const { data: auth } = await supabase.auth.getUser();
   const userId = auth.user?.id;
   if (!userId) {

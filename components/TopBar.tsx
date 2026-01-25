@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, Mail, Settings } from "lucide-react";
-import { createSupabaseBrowserClient } from "../lib/supabase/client";
+import { createClient } from "../lib/supabase/client";
 import NotificationCenter from "./NotificationCenter";
 
 export default function TopBar() {
@@ -24,7 +24,7 @@ export default function TopBar() {
         setUnreadMessagesCount(0);
         return;
       }
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         return;
       }
@@ -39,7 +39,7 @@ export default function TopBar() {
   );
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -62,7 +62,7 @@ export default function TopBar() {
     if (!userId) {
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -102,7 +102,7 @@ export default function TopBar() {
   }, [menuOpen]);
 
   const handleLogout = async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }

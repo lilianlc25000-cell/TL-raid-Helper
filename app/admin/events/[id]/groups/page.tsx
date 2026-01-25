@@ -12,7 +12,7 @@ import {
   Swords,
   Wand2,
 } from "lucide-react";
-import { createSupabaseBrowserClient } from "../../../../../lib/supabase/client";
+import { createClient } from "../../../../../lib/supabase/client";
 import { getWeaponImage } from "../../../../../lib/weapons";
 
 type PlayerCard = {
@@ -122,7 +122,7 @@ export default function RaidGroupsPage() {
 
   useEffect(() => {
     const loadData = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setLoadError("Supabase n'est pas configuré (URL / ANON KEY).");
         setIsLoading(false);
@@ -385,7 +385,7 @@ export default function RaidGroupsPage() {
   };
 
   const handleSave = async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setActionError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
@@ -421,7 +421,7 @@ export default function RaidGroupsPage() {
   };
 
   const handlePublish = async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setActionError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;

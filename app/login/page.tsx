@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createSupabaseBrowserClient } from "../../lib/supabase/client";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "../../lib/supabase/client";
 
 type Tab = "login" | "signup";
 
@@ -38,13 +37,7 @@ export default function LoginPage() {
   useEffect(() => {
     let isMounted = true;
     const checkSession = async () => {
-      const supabase = createSupabaseBrowserClient();
-      if (!supabase) {
-        if (isMounted) {
-          setCheckingSession(false);
-        }
-        return;
-      }
+      const supabase = createClient();
       const { data } = await supabase.auth.getUser();
       const userId = data.user?.id;
       if (!userId) {
@@ -87,10 +80,7 @@ export default function LoginPage() {
   }, [router]);
 
   const resolvePostLoginRoute = async () => {
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      return "/guild/join";
-    }
+    const supabase = createClient();
     const { data } = await supabase.auth.getUser();
     const userId = data.user?.id;
     if (!userId) {
@@ -127,11 +117,7 @@ export default function LoginPage() {
       setError("Veuillez renseigner l'email et le mot de passe.");
       return;
     }
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      setError("Supabase n'est pas configuré.");
-      return;
-    }
+    const supabase = createClient();
     setLoading(true);
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
@@ -163,11 +149,7 @@ export default function LoginPage() {
       setError("Veuillez renseigner l'email et le mot de passe.");
       return;
     }
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      setError("Supabase n'est pas configuré.");
-      return;
-    }
+    const supabase = createClient();
     setLoading(true);
     const { error: signUpError } = await supabase.auth.signUp({
       email,
@@ -196,7 +178,7 @@ export default function LoginPage() {
   };
 
   const handleDiscordLogin = async () => {
-    const supabase = createClientComponentClient();
+    const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider: "discord",
       options: {

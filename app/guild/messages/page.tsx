@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { createClient } from "../../../lib/supabase/client";
 
 type GuildMessage = {
   id: string;
@@ -35,7 +35,7 @@ export default function GuildMessagesPage() {
   useEffect(() => {
     let isMounted = true;
     const loadUser = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setError("Supabase n'est pas configuré (URL / ANON KEY).");
         setLoading(false);
@@ -74,7 +74,7 @@ export default function GuildMessagesPage() {
   }, []);
 
   const loadMessages = async (currentGuildId: string) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -118,7 +118,7 @@ export default function GuildMessagesPage() {
   }, [userId, guildId]);
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -164,7 +164,7 @@ export default function GuildMessagesPage() {
     if (!body) {
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }

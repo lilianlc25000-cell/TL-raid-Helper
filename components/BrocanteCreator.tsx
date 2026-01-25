@@ -2,7 +2,7 @@
 
 import type { ChangeEvent, ClipboardEvent, DragEvent } from "react";
 import { useCallback, useEffect, useState } from "react";
-import { createSupabaseBrowserClient } from "../lib/supabase/client";
+import { createClient } from "../lib/supabase/client";
 
 type BrocanteCreatorProps = {
   isAdmin: boolean;
@@ -117,7 +117,7 @@ export default function BrocanteCreator({
   );
 
   const loadGuildId = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -218,7 +218,7 @@ export default function BrocanteCreator({
     setIsSubmitting(true);
     setError(null);
     setSuccess(null);
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       setIsSubmitting(false);

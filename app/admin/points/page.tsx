@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { createClient } from "../../../lib/supabase/client";
 import { PARTICIPATION_POINTS_PER_RAID } from "../../../lib/game-constants";
 
 type EventRow = {
@@ -23,7 +23,7 @@ export default function AdminPointsPage() {
 
   useEffect(() => {
     const loadEvents = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setError("Supabase n'est pas configuré (URL / ANON KEY).");
         return;

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { createSupabaseBrowserClient } from "../../lib/supabase/client";
+import { createClient } from "../../lib/supabase/client";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +46,7 @@ export default function MessagesListPage() {
   useEffect(() => {
     let isMounted = true;
     const loadUser = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         setError("Supabase n'est pas configuré (URL / ANON KEY).");
         setLoading(false);
@@ -71,7 +71,7 @@ export default function MessagesListPage() {
   }, []);
 
   const loadThreads = async (currentUserId: string) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -140,7 +140,7 @@ export default function MessagesListPage() {
     if (!userId) {
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }

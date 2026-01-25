@@ -1,6 +1,6 @@
 "use server";
 
-import { createSupabaseServerClient } from "../supabase/server";
+import { createClient } from "../supabase/server";
 import { PARTICIPATION_POINTS_PER_RAID } from "../game-constants";
 import { notifyDiscordWithResilience } from "../discord/resilience";
 
@@ -39,7 +39,7 @@ export async function createEvent({
   description,
   baseUrl,
 }: CreateEventInput) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createClient();
 
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) {

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Swords } from "lucide-react";
-import { createSupabaseBrowserClient } from "../../lib/supabase/client";
+import { createClient } from "../../lib/supabase/client";
 import { PARTICIPATION_POINTS_PER_RAID } from "../../lib/game-constants";
 import { getWeaponImage } from "../../lib/weapons";
 
@@ -101,7 +101,7 @@ export default function CalendarPage() {
   }, []);
 
   const loadEvents = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
@@ -259,7 +259,7 @@ export default function CalendarPage() {
     }
     setStatusByEvent((prev) => ({ ...prev, [eventId]: status }));
     setSelectedBuildByEvent((prev) => ({ ...prev, [eventId]: buildId }));
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CloudRain, Skull, Users } from "lucide-react";
-import { createSupabaseBrowserClient } from "../lib/supabase/client";
+import { createClient } from "../lib/supabase/client";
 import ActivePoll from "../components/ActivePoll";
 
 export default function Home() {
@@ -33,7 +33,7 @@ export default function Home() {
   useEffect(() => {
     let isMounted = true;
     const checkSession = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         if (isMounted) {
           setCheckingSession(false);

@@ -10,7 +10,7 @@ import {
   Swords,
   Wand2,
 } from "lucide-react";
-import { createSupabaseBrowserClient } from "../../lib/supabase/client";
+import { createClient } from "../../lib/supabase/client";
 import { getWeaponImage } from "../../lib/weapons";
 
 type GroupMember = {
@@ -104,7 +104,7 @@ export default function PlayerGroupsPage() {
   useEffect(() => {
     let isMounted = true;
     const loadEvents = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createClient();
       if (!supabase) {
         if (isMounted) {
           setError("Supabase n'est pas configuré (URL / ANON KEY).");
@@ -138,7 +138,7 @@ export default function PlayerGroupsPage() {
   }, []);
 
   const loadGroups = async (event: PublishedEvent) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;

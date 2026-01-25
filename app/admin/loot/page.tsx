@@ -10,7 +10,7 @@ import {
   gameItemsByCategory,
   type GameItemCategory,
 } from "../../../lib/game-items";
-import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { createClient } from "../../../lib/supabase/client";
 
 type LootQueueItem = {
   id: string;
@@ -80,7 +80,7 @@ export default function LootDistributionPage() {
   >({});
 
   const loadAdminRole = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setAuthError("Supabase n'est pas configuré (URL / ANON KEY).");
       setIsAuthReady(true);
@@ -109,7 +109,7 @@ export default function LootDistributionPage() {
   }, []);
 
   const loadQueue = useCallback(async () => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setQueueError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
@@ -181,7 +181,7 @@ export default function LootDistributionPage() {
     if (!selectedItem) {
       return;
     }
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setQueueError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
@@ -209,7 +209,7 @@ export default function LootDistributionPage() {
   };
 
   const handleOpenRolls = async (lootId: string) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -223,7 +223,7 @@ export default function LootDistributionPage() {
   };
 
   const handleDeleteLoot = async (lootId: string) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -241,7 +241,7 @@ export default function LootDistributionPage() {
   };
 
   const loadCandidates = useCallback(async (loot: LootQueueItem) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       setAssignment((prev) => ({
         ...prev,
@@ -342,7 +342,7 @@ export default function LootDistributionPage() {
   }, []);
 
   const handleAssign = async (candidate: WishlistCandidate) => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -366,7 +366,7 @@ export default function LootDistributionPage() {
   }, [loadAdminRole, loadQueue]);
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
@@ -386,7 +386,7 @@ export default function LootDistributionPage() {
   }, [loadQueue]);
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createClient();
     if (!supabase) {
       return;
     }
