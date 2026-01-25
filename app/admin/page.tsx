@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarPlus, Gem, Settings, ShieldCheck, Users } from "lucide-react";
+import { CalendarPlus, Gem, ShieldCheck, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 
@@ -41,15 +41,6 @@ const tools = [
     accent: "from-amber-500/20 via-amber-500/10 to-red-500/10",
     border: "border-amber-400/40",
     text: "text-amber-200",
-  },
-  {
-    title: "Réglages Discord",
-    description: "Lier un webhook pour les annonces",
-    href: "/admin/settings",
-    icon: Settings,
-    accent: "from-indigo-500/20 via-indigo-500/10 to-sky-500/10",
-    border: "border-indigo-400/40",
-    text: "text-indigo-200",
   },
 ];
 

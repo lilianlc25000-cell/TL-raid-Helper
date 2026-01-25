@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Trophy } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { parseDPSLog } from "@/lib/dps-parser";
-import { notifyDiscordViaFunction } from "@/lib/discord";
 
 type ParsedLogEntry = {
   rank: number;
@@ -341,14 +340,6 @@ export default function DPSMeterPage() {
     setSuccess(`${totalSaved} scores importés !`);
     setIsSaving(false);
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-    if (accessToken && totalSaved > 0) {
-      await notifyDiscordViaFunction(accessToken, {
-        type: "dps",
-        content: `🏹 DPS publié: ${totalSaved} score(s) sur ${targetsToSave.join(", ")}.`,
-      });
-    }
 
   };
 

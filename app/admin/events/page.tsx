@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CalendarPlus } from "lucide-react";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { createEvent } from "../../../lib/actions/events";
 import { PARTICIPATION_POINTS_PER_RAID } from "../../../lib/game-constants";
-import { notifyDiscordViaFunction } from "../../../lib/discord";
 
 type EventType =
   | "Raid de Guilde"
@@ -173,11 +173,6 @@ export default function AdminEventsPage() {
       return;
     }
     setIsModalOpen(false);
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      setError("Supabase n'est pas configuré (URL / ANON KEY).");
-      return;
-    }
 
     const finalTitle = needsTitle ? title.trim() : getDefaultTitle(eventType);
     const combinedNote = [needsAlliance ? `Alliance: ${alliance.trim()}` : null, note.trim() || null]
@@ -186,53 +181,37 @@ export default function AdminEventsPage() {
 
     const startTime = parseParisDateTime(dateTime).toISOString();
 
-    const { data, error: insertError } = await supabase
-      .from("events")
-      .insert({
-        title: finalTitle,
-        event_type: eventType,
-        difficulty: needsDifficulty ? difficulty : null,
-        start_time: startTime,
-        description: combinedNote || null,
-        cohesion_reward: PARTICIPATION_POINTS_PER_RAID,
-        status: "planned",
-        is_points_distributed: false,
-      })
-      .select("id,title,event_type,difficulty,start_time,description,cohesion_reward")
-      .single();
+    const baseUrl =
+      typeof window !== "undefined" ? window.location.origin : "";
+    const result = await createEvent({
+      title: finalTitle,
+      eventType,
+      difficulty: needsDifficulty ? difficulty : null,
+      startTime,
+      description: combinedNote || null,
+      baseUrl,
+    });
 
-    if (insertError || !data) {
-      setError("Impossible de créer l'événement.");
+    if (!result.ok || !result.event) {
+      setError(result.error ?? "Impossible de créer l'événement.");
       return;
     }
 
     const newEvent: EventEntry = {
-      id: data.id,
-      title: data.title,
-      eventType: data.event_type as EventType,
-      difficulty: data.difficulty as Difficulty | null,
-      dateTime: data.start_time,
+      id: result.event.id,
+      title: result.event.title,
+      eventType: result.event.event_type as EventType,
+      difficulty: result.event.difficulty as Difficulty | null,
+      dateTime: result.event.start_time,
       participationReward:
-        data.cohesion_reward ?? PARTICIPATION_POINTS_PER_RAID,
-      note: data.description ?? undefined,
+        result.event.cohesion_reward ?? PARTICIPATION_POINTS_PER_RAID,
+      note: result.event.description ?? undefined,
     };
     setEvents((prev) => [newEvent, ...prev]);
     setTitle("");
     setDateTime("");
     setAlliance("");
     setNote("");
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-    if (accessToken) {
-      const displayDate = new Date(newEvent.dateTime).toLocaleString("fr-FR", {
-        timeZone: "Europe/Paris",
-      });
-      await notifyDiscordViaFunction(accessToken, {
-        type: "raid",
-        content: `🗓️ Nouveau raid: ${newEvent.title} (${newEvent.eventType}) — ${displayDate}`,
-      });
-    }
 
   };
 

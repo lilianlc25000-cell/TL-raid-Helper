@@ -11,7 +11,6 @@ import {
   type GameItemCategory,
 } from "../../../lib/game-items";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
-import { notifyDiscordViaFunction } from "../../../lib/discord";
 
 type LootQueueItem = {
   id: string;
@@ -220,15 +219,6 @@ export default function LootDistributionPage() {
       .eq("id", lootId);
     await loadQueue();
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-    const openedLoot = queue.find((loot) => loot.id === lootId);
-    if (accessToken && openedLoot) {
-      await notifyDiscordViaFunction(accessToken, {
-        type: "loot",
-        content: `🎁 Loot ouvert: ${openedLoot.itemName}`,
-      });
-    }
 
   };
 
