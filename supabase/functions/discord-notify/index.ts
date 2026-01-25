@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
+export const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
+
 type DiscordEmbedField = {
   name: string;
   value: string;
@@ -57,8 +63,15 @@ const postDiscordMessage = async (
 };
 
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: { ...corsHeaders },
+    });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -69,14 +82,17 @@ serve(async (req) => {
   if (!supabaseUrl || !supabaseAnonKey || !botToken) {
     return new Response(
       JSON.stringify({ error: "Missing server configuration." }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      },
     );
   }
 
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "Missing authorization." }), {
       status: 401,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   }
 
@@ -86,14 +102,14 @@ serve(async (req) => {
   } catch {
     return new Response(JSON.stringify({ error: "Invalid payload." }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   }
 
   if (!payload?.channel_id) {
     return new Response(JSON.stringify({ error: "Missing channel_id." }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   }
 
@@ -105,7 +121,7 @@ serve(async (req) => {
   if (authError || !authData.user) {
     return new Response(JSON.stringify({ error: "Unauthorized." }), {
       status: 401,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   }
 
@@ -115,7 +131,10 @@ serve(async (req) => {
   if (!content && !embed) {
     return new Response(
       JSON.stringify({ error: "Missing content or embed." }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
+      {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      },
     );
   }
 
@@ -140,7 +159,10 @@ serve(async (req) => {
         status: result.status,
         details: result.errorBody,
       }),
-      { status: 502, headers: { "Content-Type": "application/json" } },
+      {
+        status: 502,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      },
     );
   }
 
@@ -148,7 +170,7 @@ serve(async (req) => {
     JSON.stringify({ success: true, discord: result.responseBody }),
     {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     },
   );
 });
