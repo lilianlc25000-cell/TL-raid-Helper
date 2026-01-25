@@ -22,7 +22,7 @@ export default async function ActiveLootRollManagerPage({ params }: PageProps) {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: session, error: sessionError } = await supabase
     .from("active_loot_sessions")
     .select("id,item_name,is_active")

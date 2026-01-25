@@ -7,7 +7,7 @@ type PageProps = {
 
 export default async function ManageEventPage({ params }: PageProps) {
   const resolvedParams = await params;
-  const supabase = createClient();
+  const supabase = await createClient();
   if (!supabase) {
     return (
       <div className="min-h-screen text-zinc-100">

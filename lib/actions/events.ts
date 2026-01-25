@@ -39,7 +39,7 @@ export async function createEvent({
   description,
   baseUrl,
 }: CreateEventInput) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) {

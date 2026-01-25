@@ -8,7 +8,7 @@ const discordClientId = process.env.DISCORD_CLIENT_ID ?? "";
 const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
 export default async function AdminSettingsPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: authData } = await supabase.auth.getUser();
   const ownerId = authData.user?.id ?? null;
 

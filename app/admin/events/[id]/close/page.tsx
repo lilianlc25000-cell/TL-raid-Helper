@@ -15,7 +15,7 @@ type ActionState = {
 
 export default async function CloseEventPage({ params }: PageProps) {
   const resolvedParams = await params;
-  const supabase = createClient();
+  const supabase = await createClient();
   if (!supabase) {
     return (
       <div className="min-h-screen text-zinc-100">
@@ -71,7 +71,7 @@ export default async function CloseEventPage({ params }: PageProps) {
     const absentIdsRaw = String(formData.get("absentIds") ?? "[]");
     const absentIds = new Set<string>(JSON.parse(absentIdsRaw));
 
-    const supabaseServer = createClient();
+    const supabaseServer = await createClient();
     if (!supabaseServer) {
       return {
         ok: false,

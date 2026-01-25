@@ -88,7 +88,7 @@ export async function GET(request: Request) {
       return NextResponse.redirect(failRedirect);
     }
 
-  const supabase = createClient();
+  const supabase = await createClient();
     const { data: authData, error: authError } = await supabase.auth.getUser();
     const userId = authData.user?.id ?? null;
     if (authError || !userId) {

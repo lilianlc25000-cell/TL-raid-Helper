@@ -147,7 +147,7 @@ const seedItems: GameItemSeed[] = [
 ];
 
 export async function POST() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const itemNames = seedItems.map((item) => item.name);
 
   const { data: existing, error: selectError } = await supabase

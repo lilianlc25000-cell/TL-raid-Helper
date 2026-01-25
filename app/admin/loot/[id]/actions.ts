@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "../../../../lib/supabase/server";
 
 export async function distributeLoot(winnerId: string, itemId: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   const userId = auth.user?.id;
   if (!userId) {
