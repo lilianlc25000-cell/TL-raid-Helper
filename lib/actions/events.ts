@@ -71,7 +71,7 @@ export async function createEvent({
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
   const appUrl = baseUrl || process.env.NEXT_PUBLIC_APP_URL || "";
-  const signupUrl = appUrl ? `${appUrl}/raid/${data.id}` : "";
+  const calendarUrl = appUrl ? `${appUrl}/calendar` : "";
 
   try {
     const { data: guildConfig } = await supabase
@@ -81,14 +81,8 @@ export async function createEvent({
       .maybeSingle();
 
     if (guildConfig?.raid_channel_id) {
-      const fields = [
-        { name: "Date", value: buildDateLabel(data.start_time), inline: true },
-        { name: "Heure", value: buildTimeLabel(data.start_time), inline: true },
-      ];
-
-      if (signupUrl) {
-        fields.push({ name: "Inscription", value: signupUrl });
-      }
+      const dateLabel = buildDateLabel(data.start_time);
+      const timeLabel = buildTimeLabel(data.start_time);
 
       await notifyDiscordWithResilience({
         supabase,
@@ -97,10 +91,9 @@ export async function createEvent({
         payload: {
           channel_id: guildConfig.raid_channel_id,
           embed: {
-            title: data.title,
-            description: "Inscription ouverte sur le raid.",
-            url: signupUrl || undefined,
-            fields,
+            title: `⚔️ Nouveau Raid : ${data.title}`,
+            description: `Date : ${dateLabel} à ${timeLabel}\nRéservez votre place dès maintenant !`,
+            url: calendarUrl || undefined,
             color: 0x00ff00,
           },
         },
