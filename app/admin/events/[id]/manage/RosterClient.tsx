@@ -27,6 +27,7 @@ type SignupEntry = {
 type RosterClientProps = {
   eventId: string;
   eventTitle: string;
+  eventStartTime: string;
   signups: SignupEntry[];
 };
 
@@ -89,6 +90,7 @@ const getClassName = (mainWeapon: string | null, offWeapon: string | null) => {
 export default function RosterClient({
   eventId,
   eventTitle,
+  eventStartTime,
   signups,
 }: RosterClientProps) {
   const [isPublishing, setIsPublishing] = useState(false);
@@ -98,6 +100,14 @@ export default function RosterClient({
   const sortedSignups = useMemo(() => {
     return [...signups].sort((a, b) => a.ingameName.localeCompare(b.ingameName));
   }, [signups]);
+
+  const formattedEventDate = useMemo(() => {
+    const date = new Date(eventStartTime);
+    if (Number.isNaN(date.getTime())) {
+      return "Date inconnue";
+    }
+    return date.toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
+  }, [eventStartTime]);
 
   const handlePublishGroups = async () => {
     const supabase = createClient();
@@ -205,7 +215,7 @@ export default function RosterClient({
               channel_id: targetChannelId,
             embed: {
               title: `📋 Groupes - ${eventTitle}`,
-              description: "Les groupes sont publiés. Préparez-vous !",
+              description: `Événement : ${formattedEventDate}\nLes groupes sont publiés. Préparez-vous !`,
               fields,
               color: 0x00ff00,
             },

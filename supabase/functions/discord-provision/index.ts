@@ -168,7 +168,7 @@ serve(async (req) => {
     const ensureChannel = async (
       name: string,
       overwrites?: typeof privateOverwrites,
-    ) => {
+    ): Promise<{ channel: DiscordChannel; created: boolean }> => {
       const existing = channelsByName.get(name);
       if (existing) {
         if (overwrites) {
@@ -185,7 +185,7 @@ serve(async (req) => {
             throw new Error("Impossible de mettre à jour les permissions.");
           }
         }
-        return existing;
+        return { channel: existing, created: false };
       }
 
       const createResult = await fetchDiscord<DiscordChannel>(
@@ -207,7 +207,7 @@ serve(async (req) => {
       }
 
       channelsByName.set(name, createResult.data);
-      return createResult.data;
+      return { channel: createResult.data, created: true };
     };
 
     const postWelcomeMessage = async (channelId: string) => {
@@ -245,18 +245,20 @@ serve(async (req) => {
       }
     };
 
-    const inscriptionChannel = await ensureChannel("🔓-inscription");
-    await postWelcomeMessage(inscriptionChannel.id);
+    const inscriptionResult = await ensureChannel("🔓-inscription");
+    if (inscriptionResult.created) {
+      await postWelcomeMessage(inscriptionResult.channel.id);
+    }
 
-    const planningChannel = await ensureChannel("📅-tl-planning", privateOverwrites);
-    const lootsChannel = await ensureChannel("🎁-tl-loots", privateOverwrites);
-    const groupsChannel = await ensureChannel("groupe", privateOverwrites);
+    const planningResult = await ensureChannel("📅-tl-planning", privateOverwrites);
+    const lootsResult = await ensureChannel("🎁-tl-loots", privateOverwrites);
+    const groupsResult = await ensureChannel("groupe", privateOverwrites);
 
     const { error: updateError } = await supabase
       .from("guild_configs")
       .update({
-        raid_channel_id: planningChannel.id,
-        group_channel_id: groupsChannel.id,
+        raid_channel_id: planningResult.channel.id,
+        group_channel_id: groupsResult.channel.id,
         discord_member_role_id: memberRole.id,
       })
       .eq("owner_id", authData.user.id);
@@ -269,7 +271,12 @@ serve(async (req) => {
     return respondJson(200, {
       success: true,
       role_id: memberRole.id,
-      channels: [inscriptionChannel, planningChannel, lootsChannel, groupsChannel],
+      channels: [
+        inscriptionResult.channel,
+        planningResult.channel,
+        lootsResult.channel,
+        groupsResult.channel,
+      ],
     });
   } catch (error) {
     console.error("discord-provision: unexpected error", error);

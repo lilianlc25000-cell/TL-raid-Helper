@@ -20,7 +20,7 @@ export default async function ManageEventPage({ params }: PageProps) {
 
   const { data: event } = await supabase
     .from("events")
-    .select("id,title")
+    .select("id,title,start_time")
     .eq("id", resolvedParams.id)
     .single();
 
@@ -64,6 +64,7 @@ export default async function ManageEventPage({ params }: PageProps) {
     <RosterClient
       eventId={resolvedParams.id}
       eventTitle={event.title}
+      eventStartTime={event.start_time}
       signups={mappedSignups}
     />
   );
