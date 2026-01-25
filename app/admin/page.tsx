@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarPlus, Gem, ShieldCheck, Users } from "lucide-react";
+import { CalendarPlus, Gem, Settings, ShieldCheck, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 
@@ -41,6 +41,15 @@ const tools = [
     accent: "from-amber-500/20 via-amber-500/10 to-red-500/10",
     border: "border-amber-400/40",
     text: "text-amber-200",
+  },
+  {
+    title: "Configuration Discord",
+    description: "Connecter, tester et réinitialiser l'intégration Discord",
+    href: "/admin/settings",
+    icon: Settings,
+    accent: "from-sky-500/20 via-sky-500/10 to-indigo-500/10",
+    border: "border-sky-400/40",
+    text: "text-sky-200",
   },
 ];
 
