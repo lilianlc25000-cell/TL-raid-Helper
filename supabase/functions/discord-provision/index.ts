@@ -250,11 +250,13 @@ serve(async (req) => {
 
     const planningChannel = await ensureChannel("📅-tl-planning", privateOverwrites);
     const lootsChannel = await ensureChannel("🎁-tl-loots", privateOverwrites);
+    const groupsChannel = await ensureChannel("groupe", privateOverwrites);
 
     const { error: updateError } = await supabase
       .from("guild_configs")
       .update({
         raid_channel_id: planningChannel.id,
+        group_channel_id: groupsChannel.id,
         discord_member_role_id: memberRole.id,
       })
       .eq("owner_id", authData.user.id);
@@ -267,7 +269,7 @@ serve(async (req) => {
     return respondJson(200, {
       success: true,
       role_id: memberRole.id,
-      channels: [inscriptionChannel, planningChannel, lootsChannel],
+      channels: [inscriptionChannel, planningChannel, lootsChannel, groupsChannel],
     });
   } catch (error) {
     console.error("discord-provision: unexpected error", error);

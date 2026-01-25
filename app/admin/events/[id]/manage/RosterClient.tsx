@@ -159,11 +159,13 @@ export default function RosterClient({
       const accessToken = sessionData.session?.access_token;
       const { data: guildConfig } = await supabase
         .from("guild_configs")
-        .select("raid_channel_id")
+        .select("raid_channel_id,group_channel_id")
         .eq("owner_id", ownerId)
         .maybeSingle();
 
-      if (guildConfig?.raid_channel_id) {
+      const targetChannelId =
+        guildConfig?.group_channel_id ?? guildConfig?.raid_channel_id;
+      if (targetChannelId) {
         const groupIndexByUser = new Map(
           (groupedPlayers ?? [])
             .filter((player) => player.group_index !== null)
@@ -200,7 +202,7 @@ export default function RosterClient({
           "discord-notify",
           {
           body: {
-            channel_id: guildConfig.raid_channel_id,
+              channel_id: targetChannelId,
             embed: {
               title: `📋 Groupes - ${eventTitle}`,
               description: "Les groupes sont publiés. Préparez-vous !",
@@ -208,7 +210,7 @@ export default function RosterClient({
               color: 0x00ff00,
             },
             replace: {
-              match_title_prefix: "⚔️ Nouveau Raid :",
+                match_title_prefix: "📋 Groupes -",
               limit: 25,
             },
           },

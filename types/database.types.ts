@@ -126,6 +126,7 @@ export type Database = {
           discord_guild_id: string;
           discord_guild_name: string | null;
           discord_member_role_id: string | null;
+          group_channel_id: string | null;
           raid_channel_id: string | null;
           created_at: string | null;
         };
@@ -135,6 +136,7 @@ export type Database = {
           discord_guild_id: string;
           discord_guild_name?: string | null;
           discord_member_role_id?: string | null;
+          group_channel_id?: string | null;
           raid_channel_id?: string | null;
           created_at?: string | null;
         };
@@ -144,6 +146,7 @@ export type Database = {
           discord_guild_id?: string;
           discord_guild_name?: string | null;
           discord_member_role_id?: string | null;
+          group_channel_id?: string | null;
           raid_channel_id?: string | null;
           created_at?: string | null;
         };
