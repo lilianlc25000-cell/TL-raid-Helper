@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "../../lib/supabase/client";
 
+export const dynamic = "force-dynamic";
+
 type Tab = "login" | "signup";
 
 export default function LoginPage() {
