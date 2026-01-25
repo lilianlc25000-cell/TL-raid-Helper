@@ -6,6 +6,8 @@ export const dynamic = "force-dynamic";
 
 const discordClientId = process.env.DISCORD_CLIENT_ID ?? "";
 const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL ?? "";
+const discordBotToken = process.env.DISCORD_BOT_TOKEN ?? "";
+const DISCORD_API_BASE = "https://discord.com/api/v10";
 
 export default async function AdminSettingsPage() {
   const supabase = await createClient();
@@ -19,6 +21,18 @@ export default async function AdminSettingsPage() {
         .eq("owner_id", ownerId)
         .maybeSingle()
     : { data: null };
+
+  let effectiveGuildConfig = guildConfig;
+  if (guildConfig?.discord_guild_id && discordBotToken) {
+    const checkResponse = await fetch(
+      `${DISCORD_API_BASE}/guilds/${guildConfig.discord_guild_id}`,
+      { headers: { Authorization: `Bot ${discordBotToken}` } },
+    );
+    if (!checkResponse.ok) {
+      await supabase.from("guild_configs").delete().eq("owner_id", ownerId);
+      effectiveGuildConfig = null;
+    }
+  }
 
   const appUrl = appUrlFromEnv.trim().replace(/\/+$/, "");
   const redirectUri = `${appUrl}/api/auth/discord/callback`;
@@ -51,18 +65,20 @@ export default async function AdminSettingsPage() {
             Autorise le bot à rejoindre votre Discord pour créer les salons.
           </p>
 
-          {guildConfig?.discord_guild_id ? (
+          {effectiveGuildConfig?.discord_guild_id ? (
             <div className="mt-6 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span>
                   ✅ Connecté au serveur :{" "}
-                  {guildConfig.discord_guild_name ?? "Serveur Discord"}
+                  {effectiveGuildConfig.discord_guild_name ?? "Serveur Discord"}
                 </span>
                 <DiscordNotifyTestButton
-                  channelId={guildConfig.raid_channel_id ?? null}
+                  channelId={effectiveGuildConfig.raid_channel_id ?? null}
                 />
               </div>
-              <DiscordProvisionButton guildId={guildConfig.discord_guild_id} />
+              <DiscordProvisionButton
+                guildId={effectiveGuildConfig.discord_guild_id}
+              />
             </div>
           ) : oauthUrl ? (
             <a
