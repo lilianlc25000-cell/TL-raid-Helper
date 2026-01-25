@@ -88,6 +88,7 @@ export default function RaidGroupsPage() {
   const eventId = String(params?.id ?? "");
 
   const [eventTitle, setEventTitle] = useState<string>("Événement");
+  const [eventStartTime, setEventStartTime] = useState<string | null>(null);
   const [reserve, setReserve] = useState<PlayerCard[]>([]);
   const [groups, setGroups] = useState<GroupState[]>(
     Array.from({ length: 6 }, (_, index) => ({
@@ -117,6 +118,17 @@ export default function RaidGroupsPage() {
     [reserve, groups],
   );
 
+  const formattedEventDate = useMemo(() => {
+    if (!eventStartTime) {
+      return "Date inconnue";
+    }
+    const date = new Date(eventStartTime);
+    if (Number.isNaN(date.getTime())) {
+      return "Date inconnue";
+    }
+    return date.toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
+  }, [eventStartTime]);
+
   const getPlayerById = (playerId: string) =>
     allPlayers.find((player) => player.userId === playerId) ?? null;
 
@@ -133,10 +145,11 @@ export default function RaidGroupsPage() {
 
       const { data: event } = await supabase
         .from("events")
-        .select("title,are_groups_published,event_type")
+        .select("title,are_groups_published,event_type,start_time")
         .eq("id", eventId)
         .maybeSingle();
       setEventTitle(event?.title ?? "Événement");
+      setEventStartTime(event?.start_time ?? null);
       const published = Boolean(event?.are_groups_published);
       setIsPublished(published);
       setIsDirty(false);
@@ -471,6 +484,68 @@ export default function RaidGroupsPage() {
       if (notifyError) {
         setActionError(
           notifyError.message || "Impossible d'envoyer les notifications.",
+        );
+        setIsPublishing(false);
+        return;
+      }
+    }
+
+    const { data: authData } = await supabase.auth.getUser();
+    const ownerId = authData.user?.id ?? null;
+    if (ownerId) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const { data: guildConfig } = await supabase
+        .from("guild_configs")
+        .select("raid_channel_id,group_channel_id")
+        .eq("owner_id", ownerId)
+        .maybeSingle();
+
+      const targetChannelId =
+        guildConfig?.group_channel_id ?? guildConfig?.raid_channel_id;
+      if (!targetChannelId) {
+        setActionError("Aucun salon Discord configuré pour publier les groupes.");
+        setIsPublishing(false);
+        return;
+      }
+
+      const fields = groups.map((group) => ({
+        name: `Groupe ${group.id}`,
+        value:
+          group.players.length === 0
+            ? "—"
+            : group.players
+                .map(
+                  (player) =>
+                    `${player.ingameName} (${getRoleLabel(player.role)})`,
+                )
+                .join("\n"),
+        inline: false,
+      }));
+
+      const { error: discordError } = await supabase.functions.invoke(
+        "discord-notify",
+        {
+          body: {
+            channel_id: targetChannelId,
+            embed: {
+              title: `📋 Groupes - ${eventTitle}`,
+              description: `Événement : ${formattedEventDate}\nLes groupes sont publiés. Préparez-vous !`,
+              fields,
+              color: 0x00ff00,
+            },
+            replace: {
+              match_title_prefix: "📋 Groupes -",
+              limit: 25,
+            },
+          },
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        },
+      );
+      if (discordError) {
+        setActionError(
+          discordError.message ||
+            "Impossible d'annoncer les groupes sur Discord.",
         );
         setIsPublishing(false);
         return;
