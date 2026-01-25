@@ -123,6 +123,8 @@ export default async function AdminSettingsPage({
           ) : isWebhookReady ? (
             <Link
               href={discordOauthUrl}
+              target="_blank"
+              rel="noreferrer"
               className="mt-5 inline-flex items-center rounded-full border border-emerald-400/60 bg-emerald-500/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300"
             >
               Connecter un webhook
