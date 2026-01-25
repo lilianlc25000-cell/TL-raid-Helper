@@ -85,9 +85,7 @@ export default function DiscordNotifyTestButton({
         disabled={status === "loading"}
         className="inline-flex items-center rounded-full border border-emerald-400/60 bg-emerald-400/10 px-3 py-1.5 text-[10px] uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {status === "loading"
-          ? "Envoi..."
-          : "🔔 Envoyer un message de test"}
+        {status === "loading" ? "Test..." : "Tester la connexion"}
       </button>
 
       {toast ? (

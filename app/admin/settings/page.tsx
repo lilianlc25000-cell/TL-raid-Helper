@@ -42,7 +42,7 @@ export default async function AdminSettingsPage() {
 
         <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
           <p className="text-xs uppercase tracking-[0.25em] text-text/50">
-            Intégration Discord
+            Configuration Discord
           </p>
           <h2 className="mt-2 text-xl font-semibold text-text">
             Connecter votre serveur
@@ -50,19 +50,6 @@ export default async function AdminSettingsPage() {
           <p className="mt-2 text-sm text-text/70">
             Autorise le bot à rejoindre votre Discord pour créer les salons.
           </p>
-
-          {oauthUrl ? (
-            <a
-              href={oauthUrl}
-              className="mt-5 inline-flex items-center rounded-full border border-sky-400/60 bg-sky-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-sky-200 transition hover:border-sky-300"
-            >
-              Connecter mon Serveur
-            </a>
-          ) : (
-            <p className="mt-5 text-xs text-amber-200">
-              Configure DISCORD_CLIENT_ID et NEXT_PUBLIC_APP_URL.
-            </p>
-          )}
 
           {guildConfig?.discord_guild_id ? (
             <div className="mt-6 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
@@ -77,7 +64,18 @@ export default async function AdminSettingsPage() {
               </div>
               <DiscordProvisionButton guildId={guildConfig.discord_guild_id} />
             </div>
-          ) : null}
+          ) : oauthUrl ? (
+            <a
+              href={oauthUrl}
+              className="mt-5 inline-flex items-center rounded-full border border-sky-400/60 bg-sky-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-sky-200 transition hover:border-sky-300"
+            >
+              Connecter mon Serveur Discord
+            </a>
+          ) : (
+            <p className="mt-5 text-xs text-amber-200">
+              Configure DISCORD_CLIENT_ID et NEXT_PUBLIC_APP_URL.
+            </p>
+          )}
         </div>
       </section>
     </div>

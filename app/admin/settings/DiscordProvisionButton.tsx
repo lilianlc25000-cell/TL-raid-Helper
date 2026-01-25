@@ -44,7 +44,9 @@ export default function DiscordProvisionButton({
         disabled={status === "loading"}
         className="inline-flex items-center rounded-full border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {status === "loading" ? "Recréation..." : "Recréer les salons"}
+        {status === "loading"
+          ? "Réinitialisation..."
+          : "Réinitialiser les salons"}
       </button>
       {message ? (
         <p
