@@ -21,10 +21,17 @@ type DiscordEmbed = {
   fields?: DiscordEmbedField[];
 };
 
+type ReplaceOptions = {
+  match_title_prefix?: string;
+  match_content_prefix?: string;
+  limit?: number;
+};
+
 type NotifyPayload = {
   channel_id: string;
   content?: string;
   embed?: DiscordEmbed;
+  replace?: ReplaceOptions;
 };
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
@@ -60,6 +67,18 @@ const postDiscordMessage = async (
     status: response.status,
     responseBody: responseText,
   };
+};
+
+const fetchDiscord = async (
+  url: string,
+  options: RequestInit,
+): Promise<{ ok: true; status: number; body: string } | { ok: false; status: number; body: string }> => {
+  const response = await fetch(url, options);
+  const responseText = await response.text().catch(() => "");
+  if (!response.ok) {
+    return { ok: false, status: response.status, body: responseText };
+  }
+  return { ok: true, status: response.status, body: responseText };
 };
 
 serve(async (req) => {
@@ -127,6 +146,7 @@ serve(async (req) => {
 
   const content = payload.content?.trim();
   const embed = payload.embed;
+  const replace = payload.replace;
 
   if (!content && !embed) {
     return new Response(
@@ -136,6 +156,56 @@ serve(async (req) => {
         headers: { "Content-Type": "application/json", ...corsHeaders },
       },
     );
+  }
+
+  if (replace?.match_title_prefix || replace?.match_content_prefix) {
+    const limit = Math.min(Math.max(replace.limit ?? 30, 1), 100);
+    const messagesResult = await fetchDiscord(
+      `${DISCORD_API_BASE}/channels/${payload.channel_id}/messages?limit=${limit}`,
+      { headers: { Authorization: `Bot ${botToken}` } },
+    );
+    if (messagesResult.ok && messagesResult.body) {
+      const matchTitlePrefix = replace.match_title_prefix?.toLowerCase() ?? "";
+      const matchContentPrefix =
+        replace.match_content_prefix?.toLowerCase() ?? "";
+      try {
+        const messages = JSON.parse(messagesResult.body) as Array<{
+          id: string;
+          content?: string;
+          author?: { bot?: boolean };
+          embeds?: Array<{ title?: string }>;
+        }>;
+        const target = messages.find((message) => {
+          if (!message.author?.bot) {
+            return false;
+          }
+          if (matchTitlePrefix) {
+            const title = message.embeds?.[0]?.title?.toLowerCase() ?? "";
+            if (title.startsWith(matchTitlePrefix)) {
+              return true;
+            }
+          }
+          if (matchContentPrefix) {
+            const contentValue = (message.content ?? "").toLowerCase();
+            if (contentValue.startsWith(matchContentPrefix)) {
+              return true;
+            }
+          }
+          return false;
+        });
+        if (target?.id) {
+          const deleteResult = await fetchDiscord(
+            `${DISCORD_API_BASE}/channels/${payload.channel_id}/messages/${target.id}`,
+            { method: "DELETE", headers: { Authorization: `Bot ${botToken}` } },
+          );
+          if (!deleteResult.ok) {
+            console.error("discord-notify: delete failed", deleteResult);
+          }
+        }
+      } catch (error) {
+        console.error("discord-notify: message parse failed", error);
+      }
+    }
   }
 
   const discordBody: { content?: string; embeds?: DiscordEmbed[] } = {};

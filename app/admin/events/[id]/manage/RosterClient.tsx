@@ -152,6 +152,77 @@ export default function RosterClient({
       }
     }
 
+    const { data: authData } = await supabase.auth.getUser();
+    const ownerId = authData.user?.id ?? null;
+    if (ownerId) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const { data: guildConfig } = await supabase
+        .from("guild_configs")
+        .select("raid_channel_id")
+        .eq("owner_id", ownerId)
+        .maybeSingle();
+
+      if (guildConfig?.raid_channel_id) {
+        const groupIndexByUser = new Map(
+          (groupedPlayers ?? [])
+            .filter((player) => player.group_index !== null)
+            .map((player) => [player.user_id, player.group_index as number]),
+        );
+        const grouped = new Map<number, SignupEntry[]>();
+        signups.forEach((player) => {
+          const index = groupIndexByUser.get(player.userId);
+          if (!index) {
+            return;
+          }
+          const list = grouped.get(index) ?? [];
+          list.push(player);
+          grouped.set(index, list);
+        });
+
+        const fields = Array.from(grouped.entries())
+          .sort(([a], [b]) => a - b)
+          .map(([index, players]) => ({
+            name: `Groupe ${index}`,
+            value:
+              players.length === 0
+                ? "—"
+                : players
+                    .map(
+                      (player) =>
+                        `${player.ingameName} (${getRoleLabel(player.role)})`,
+                    )
+                    .join("\n"),
+            inline: false,
+          }));
+
+        const { error: discordError } = await supabase.functions.invoke(
+          "discord-notify",
+          {
+          body: {
+            channel_id: guildConfig.raid_channel_id,
+            embed: {
+              title: `📋 Groupes - ${eventTitle}`,
+              description: "Les groupes sont publiés. Préparez-vous !",
+              fields,
+              color: 0x00ff00,
+            },
+            replace: {
+              match_title_prefix: "⚔️ Nouveau Raid :",
+              limit: 25,
+            },
+          },
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+          },
+        );
+        if (discordError) {
+          setActionError(
+            discordError.message || "Impossible d'annoncer les groupes sur Discord.",
+          );
+        }
+      }
+    }
+
     setIsPublishing(false);
   };
 
