@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 type Tab = "login" | "signup";
 
@@ -194,6 +195,17 @@ export default function LoginPage() {
     router.refresh();
   };
 
+  const handleDiscordLogin = async () => {
+    const supabase = createClientComponentClient();
+    await supabase.auth.signInWithOAuth({
+      provider: "discord",
+      options: {
+        redirectTo: `${location.origin}/auth/callback`,
+        scopes: "guilds",
+      },
+    });
+  };
+
 
   if (checkingSession) {
     return (
@@ -303,6 +315,16 @@ export default function LoginPage() {
                   : "Rejoindre TL Raid Manager"}
             </button>
           </form>
+
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={handleDiscordLogin}
+              className="w-full rounded-2xl border border-indigo-400/50 bg-indigo-400/10 px-5 py-3 text-xs uppercase tracking-[0.3em] text-indigo-200 transition hover:border-indigo-300"
+            >
+              Se connecter avec Discord
+            </button>
+          </div>
 
         </div>
       </div>

@@ -12,7 +12,14 @@ type DiscordChannel = {
   name: string;
 };
 
+type DiscordRole = {
+  id: string;
+  name: string;
+};
+
 const DISCORD_API_BASE = "https://discord.com/api/v10";
+const VIEW_CHANNEL_PERMISSION = 1024;
+const MEMBER_ROLE_NAME = "Joueur TL-App";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -77,56 +84,147 @@ serve(async (req) => {
   }
 
   const guildId = guildConfig.discord_guild_id;
-
-  const existingChannelsResponse = await fetch(
-    `${DISCORD_API_BASE}/guilds/${guildId}/channels`,
-    { headers: { Authorization: `Bot ${botToken}` } },
-  );
-
-  if (!existingChannelsResponse.ok) {
+  const appUrlRaw = Deno.env.get("NEXT_PUBLIC_APP_URL") ?? "";
+  const appUrl = appUrlRaw.trim().replace(/\/+$/, "");
+  if (!appUrl) {
     return new Response(
-      JSON.stringify({ error: "Impossible de lire les salons." }),
+      JSON.stringify({ error: "NEXT_PUBLIC_APP_URL manquant." }),
       {
-        status: 502,
+        status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       },
     );
   }
 
-  const existingChannels =
-    (await existingChannelsResponse.json()) as DiscordChannel[];
+  const discordHeaders = {
+    Authorization: `Bot ${botToken}`,
+    "Content-Type": "application/json",
+  };
 
-  const ensureChannel = async (name: string) => {
+  const fetchDiscordJson = async <T>(
+    url: string,
+    options: RequestInit,
+  ): Promise<T> => {
+    const response = await fetch(url, options);
+    const responseText = await response.text().catch(() => "");
+    if (!response.ok) {
+      throw new Error(
+        `Discord request failed: ${response.status} ${responseText}`,
+      );
+    }
+    return (responseText ? JSON.parse(responseText) : null) as T;
+  };
+
+  const getOrCreateMemberRole = async () => {
+    const roles = await fetchDiscordJson<DiscordRole[]>(
+      `${DISCORD_API_BASE}/guilds/${guildId}/roles`,
+      { headers: { Authorization: `Bot ${botToken}` } },
+    );
+    const existingRole = roles.find((role) => role.name === MEMBER_ROLE_NAME);
+    if (existingRole) {
+      return existingRole;
+    }
+    return await fetchDiscordJson<DiscordRole>(
+      `${DISCORD_API_BASE}/guilds/${guildId}/roles`,
+      {
+        method: "POST",
+        headers: discordHeaders,
+        body: JSON.stringify({ name: MEMBER_ROLE_NAME }),
+      },
+    );
+  };
+
+  const privateOverwrites = (memberRoleId: string) => [
+    {
+      id: guildId,
+      type: 0,
+      deny: VIEW_CHANNEL_PERMISSION.toString(),
+    },
+    {
+      id: memberRoleId,
+      type: 0,
+      allow: VIEW_CHANNEL_PERMISSION.toString(),
+    },
+  ];
+
+  const ensureChannel = async (
+    name: string,
+    overwrites?: ReturnType<typeof privateOverwrites>,
+  ) => {
+    const existingChannels = await fetchDiscordJson<DiscordChannel[]>(
+      `${DISCORD_API_BASE}/guilds/${guildId}/channels`,
+      { headers: { Authorization: `Bot ${botToken}` } },
+    );
     const found = existingChannels.find((channel) => channel.name === name);
     if (found) {
+      if (overwrites) {
+        await fetchDiscordJson(
+          `${DISCORD_API_BASE}/channels/${found.id}`,
+          {
+            method: "PATCH",
+            headers: discordHeaders,
+            body: JSON.stringify({ permission_overwrites: overwrites }),
+          },
+        );
+      }
       return found;
     }
 
-    const createResponse = await fetch(
+    return await fetchDiscordJson<DiscordChannel>(
       `${DISCORD_API_BASE}/guilds/${guildId}/channels`,
       {
         method: "POST",
-        headers: {
-          Authorization: `Bot ${botToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name, type: 0 }),
+        headers: discordHeaders,
+        body: JSON.stringify({
+          name,
+          type: 0,
+          permission_overwrites: overwrites,
+        }),
       },
     );
+  };
 
-    if (!createResponse.ok) {
-      const errorBody = await createResponse.text().catch(() => "");
-      throw new Error(
-        `Discord channel creation failed: ${createResponse.status} ${errorBody}`,
-      );
-    }
-
-    return (await createResponse.json()) as DiscordChannel;
+  const postWelcomeMessage = async (channelId: string) => {
+    await fetchDiscordJson(
+      `${DISCORD_API_BASE}/channels/${channelId}/messages`,
+      {
+        method: "POST",
+        headers: discordHeaders,
+        body: JSON.stringify({
+          embeds: [
+            {
+              title: "Bienvenue ! Connectez-vous pour accéder aux raids",
+              description:
+                "Pour voir le planning et les loots, vous devez lier votre compte Discord à l'application.",
+            },
+          ],
+          components: [
+            {
+              type: 1,
+              components: [
+                {
+                  type: 2,
+                  style: 5,
+                  label: "Se Connecter / S'inscrire",
+                  url: `${appUrl}/login`,
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    );
   };
 
   try {
-    const planningChannel = await ensureChannel("📅-tl-planning");
-    const lootsChannel = await ensureChannel("🎁-tl-loots");
+    const memberRole = await getOrCreateMemberRole();
+    const overwrites = privateOverwrites(memberRole.id);
+
+    const inscriptionChannel = await ensureChannel("🔓-inscription");
+    await postWelcomeMessage(inscriptionChannel.id);
+
+    const planningChannel = await ensureChannel("📅-tl-planning", overwrites);
+    const lootsChannel = await ensureChannel("🎁-tl-loots", overwrites);
 
     const { error: updateError } = await supabase
       .from("guild_configs")
@@ -143,12 +241,31 @@ serve(async (req) => {
       );
     }
 
+    const { error: roleUpdateError } = await supabase
+      .from("guild_configs")
+      .update({ discord_member_role_id: memberRole.id })
+      .eq("owner_id", authData.user.id);
+
+    if (roleUpdateError) {
+      return new Response(
+        JSON.stringify({ error: "Impossible de sauvegarder le rôle Discord." }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        },
+      );
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
-        channels: [planningChannel, lootsChannel],
+        role_id: memberRole.id,
+        channels: [inscriptionChannel, planningChannel, lootsChannel],
       }),
-      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } },
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      },
     );
   } catch (error) {
     return new Response(

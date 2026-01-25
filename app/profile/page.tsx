@@ -266,6 +266,7 @@ export default function ProfilePage() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [builds, setBuilds] = useState<BuildEntry[]>([]);
   const [buildWeapon1, setBuildWeapon1] = useState("");
   const [buildWeapon2, setBuildWeapon2] = useState("");
@@ -372,6 +373,14 @@ export default function ProfilePage() {
   }, [userId]);
 
   useEffect(() => {
+    if (!toastMessage) {
+      return;
+    }
+    const timer = window.setTimeout(() => setToastMessage(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [toastMessage]);
+
+  useEffect(() => {
     let isMounted = true;
     const loadBuilds = async () => {
       if (!userId) {
@@ -471,8 +480,23 @@ export default function ProfilePage() {
     }
     setProfileSuccess("Profil sauvegardé.");
     setIsSavingProfile(false);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    const { error: grantError } = await supabase.functions.invoke(
+      "discord-grant-role",
+      {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      },
+    );
+    if (!grantError) {
+      setToastMessage(
+        "Compte lié ! Vous avez maintenant accès aux salons Discord.",
+      );
+    }
     const targetRoute = existingProfile?.guild_id ? "/" : "/guild/join";
-    router.replace(targetRoute);
+    window.setTimeout(() => {
+      router.replace(targetRoute);
+    }, 900);
   };
 
   const resetBuildForm = () => {
@@ -1086,6 +1110,11 @@ export default function ProfilePage() {
           }).catch(() => null);
         }}
       />
+      {toastMessage ? (
+        <div className="fixed left-1/2 top-6 z-[60] w-full max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border border-emerald-400/60 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-200 shadow-[0_0_25px_rgba(16,185,129,0.4)] sm:max-w-md">
+          {toastMessage}
+        </div>
+      ) : null}
     </div>
   );
 }
