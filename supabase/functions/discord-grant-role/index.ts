@@ -16,9 +16,10 @@ serve(async (req) => {
     // 1. Vérification des secrets
     const botToken = Deno.env.get('DISCORD_BOT_TOKEN')
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    if (!botToken || !supabaseUrl || !supabaseKey) {
+    if (!botToken || !supabaseUrl || !supabaseAnonKey) {
       throw new Error("Variables d'environnement manquantes")
     }
 
@@ -26,12 +27,17 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) throw new Error("Non connecté")
     
-    const supabase = createClient(supabaseUrl, supabaseKey, {
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     })
 
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) throw new Error("Utilisateur introuvable")
+
+    const adminClient = createClient(
+      supabaseUrl,
+      supabaseServiceKey ?? supabaseAnonKey,
+    )
 
     // 3. Trouver l'ID Discord lié au compte
     const discordIdentity = user.identities?.find(id => id.provider === 'discord')
@@ -42,15 +48,41 @@ serve(async (req) => {
     }
     const discordUserId = discordIdentity.id
 
-    // 4. Récupérer la config (Rôle et Serveur)
-    const { data: config } = await supabase
+    // 4. Récupérer la config (Rôle et Serveur) via la guilde du profil
+    const { data: profile, error: profileError } = await adminClient
+      .from('profiles')
+      .select('guild_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (profileError) {
+      throw new Error("Impossible de charger le profil")
+    }
+
+    if (!profile?.guild_id) {
+      throw new Error("Aucune guilde associée au profil")
+    }
+
+    const { data: guild, error: guildError } = await adminClient
+      .from('guilds')
+      .select('owner_id')
+      .eq('id', profile.guild_id)
+      .maybeSingle()
+
+    if (guildError || !guild?.owner_id) {
+      throw new Error("Guilde introuvable")
+    }
+
+    const { data: config } = await adminClient
       .from('guild_configs')
       .select('discord_guild_id, discord_member_role_id')
+      .eq('owner_id', guild.owner_id)
       .not('discord_member_role_id', 'is', null)
-      .limit(1)
-      .single()
+      .maybeSingle()
 
-    if (!config) throw new Error("Configuration serveur ou rôle introuvable")
+    if (!config?.discord_guild_id || !config?.discord_member_role_id) {
+      throw new Error("Configuration serveur ou rôle introuvable")
+    }
 
     // 5. Donner le rôle sur Discord
     const discordUrl = `https://discord.com/api/v10/guilds/${config.discord_guild_id}/members/${discordUserId}/roles/${config.discord_member_role_id}`
