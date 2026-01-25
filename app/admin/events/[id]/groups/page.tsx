@@ -384,13 +384,12 @@ export default function RaidGroupsPage() {
     setDraggedPlayerId(null);
   };
 
-  const handleSave = async () => {
+  const persistGroups = async () => {
     const supabase = createClient();
     if (!supabase) {
       setActionError("Supabase n'est pas configuré (URL / ANON KEY).");
-      return;
+      return false;
     }
-    setIsSaving(true);
     setActionError(null);
 
     const updates = [
@@ -406,7 +405,7 @@ export default function RaidGroupsPage() {
       ),
     ];
 
-    await Promise.all(
+    const results = await Promise.all(
       updates.map((entry) =>
         supabase
           .from("event_signups")
@@ -416,8 +415,24 @@ export default function RaidGroupsPage() {
       ),
     );
 
+    const failed = results.find((result) => result.error);
+    if (failed?.error) {
+      setActionError(
+        failed.error.message || "Impossible de sauvegarder les groupes.",
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    const saved = await persistGroups();
     setIsSaving(false);
-    setIsDirty(false);
+    if (saved) {
+      setIsDirty(false);
+    }
   };
 
   const handlePublish = async () => {
@@ -428,6 +443,12 @@ export default function RaidGroupsPage() {
     }
     setIsPublishing(true);
     setActionError(null);
+
+    const saved = await persistGroups();
+    if (!saved) {
+      setIsPublishing(false);
+      return;
+    }
 
     await supabase
       .from("events")

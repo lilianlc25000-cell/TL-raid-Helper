@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "../../lib/supabase/client";
 
 type Tab = "login" | "signup";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,6 +39,21 @@ export default function LoginPage() {
     let isMounted = true;
     const checkSession = async () => {
       const supabase = createClient();
+      const forceLogin = searchParams.get("force") === "1";
+      if (forceLogin) {
+        await supabase.auth.signOut();
+        await supabase.auth.signInWithOAuth({
+          provider: "discord",
+          options: {
+            redirectTo: `${location.origin}/auth/callback`,
+            scopes: "guilds",
+          },
+        });
+        if (isMounted) {
+          setCheckingSession(false);
+        }
+        return;
+      }
       const { data } = await supabase.auth.getUser();
       const userId = data.user?.id;
       if (!userId) {
@@ -77,7 +93,7 @@ export default function LoginPage() {
     return () => {
       isMounted = false;
     };
-  }, [router]);
+  }, [router, searchParams]);
 
   const resolvePostLoginRoute = async () => {
     const supabase = createClient();

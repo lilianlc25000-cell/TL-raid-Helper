@@ -232,7 +232,7 @@ serve(async (req) => {
                     type: 2,
                     style: 5,
                     label: "Se Connecter / S'inscrire",
-                    url: `${appUrl}/login`,
+                  url: `${appUrl}/login?force=1`,
                   },
                 ],
               },
