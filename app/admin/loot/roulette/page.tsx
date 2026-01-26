@@ -330,7 +330,7 @@ export default function LootRoulettePage() {
     setIsSaving(false);
   };
 
-  const winner = useMemo(
+  const computedWinner = useMemo(
     () => eligiblePlayers.find((player) => player.userId === winnerId) ?? null,
     [eligiblePlayers, winnerId],
   );
@@ -480,9 +480,9 @@ export default function LootRoulettePage() {
             >
               Lancer la roulette
             </button>
-            {winner ? (
+            {computedWinner ? (
               <div className="rounded-2xl border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">
-                Gagnant : <span className="font-semibold">{winner.ingameName}</span>
+                Gagnant : <span className="font-semibold">{computedWinner.ingameName}</span>
               </div>
             ) : (
               <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-text/60">
@@ -572,7 +572,7 @@ export default function LootRoulettePage() {
             <button
               type="button"
               onClick={handleSaveWinner}
-              disabled={!winner || isSaving || isSpinning}
+              disabled={!computedWinner || isSaving || isSpinning}
               className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSaving ? "Sauvegarde..." : "Valider & Sauvegarder"}
