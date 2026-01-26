@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ItemSelector, { ItemOption } from "../../components/ItemSelector";
 import BrocanteCreator from "../../../components/BrocanteCreator";
@@ -584,13 +585,21 @@ export default function LootDistributionPage() {
                     Ajoutez un loot, ouvrez la distribution ou attribuez-le.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={openAddModal}
-                  className="rounded-md border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
-                >
-                  Ajouter un loot à distribuer
-                </button>
+                <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                  <Link
+                    href="/admin/loot/roulette"
+                    className="w-full rounded-md border border-sky-400/60 bg-sky-500/10 px-4 py-2 text-center text-xs uppercase tracking-[0.25em] text-sky-200 transition hover:border-sky-300 sm:w-auto"
+                  >
+                    🎲 Roulette de loot
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={openAddModal}
+                    className="w-full rounded-md border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 sm:w-auto"
+                  >
+                    Ajouter un loot à distribuer
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
