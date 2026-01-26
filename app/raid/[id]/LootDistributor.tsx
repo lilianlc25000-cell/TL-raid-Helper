@@ -4,12 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { gameItemsByCategory } from "@/lib/game-items";
+import { motion } from "framer-motion";
 
 type EligiblePlayer = {
   userId: string;
   ingameName: string;
   role: string | null;
-  score: number;
   checked: boolean;
 };
 
@@ -34,11 +34,8 @@ type ParticipantRow = {
 const getEffectiveRole = (assignedRole: string | null, role: string | null) =>
   assignedRole ?? role;
 
-const scoreBadgeStyle = (score: number) => {
-  if (score === 0) return "border-emerald-400/60 bg-emerald-500/10 text-emerald-200";
-  if (score === 1) return "border-amber-400/60 bg-amber-500/10 text-amber-200";
-  return "border-red-400/60 bg-red-500/10 text-red-200";
-};
+const CARD_WIDTH = 140;
+const CONTAINER_WIDTH = 480;
 
 export default function LootDistributor() {
   const params = useParams();
@@ -48,7 +45,13 @@ export default function LootDistributor() {
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [winnerId, setWinnerId] = useState<string | null>(null);
+  const [winner, setWinner] = useState<EligiblePlayer | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [stripItems, setStripItems] = useState<EligiblePlayer[]>([]);
+  const [animationX, setAnimationX] = useState(0);
+  const [animationSeed, setAnimationSeed] = useState(0);
+  const [targetIndex, setTargetIndex] = useState<number | null>(null);
 
   const itemOptions = useMemo(
     () =>
@@ -63,6 +66,10 @@ export default function LootDistributor() {
     if (!eventId || !itemName.trim()) {
       setEligiblePlayers([]);
       setWinnerId(null);
+      setWinner(null);
+      setStripItems([]);
+      setIsSpinning(false);
+      setTargetIndex(null);
       return;
     }
 
@@ -75,6 +82,10 @@ export default function LootDistributor() {
       setIsLoading(true);
       setStatus(null);
       setWinnerId(null);
+      setWinner(null);
+      setStripItems([]);
+      setIsSpinning(false);
+      setTargetIndex(null);
 
       const { data: participantsData, error: participantsError } =
         (await supabase
@@ -138,20 +149,6 @@ export default function LootDistributor() {
         return;
       }
 
-      const { data: historyRows } = guildId
-        ? await supabase
-            .from("loot_history")
-            .select("user_id")
-            .eq("guild_id", guildId)
-            .in("user_id", Array.from(eligibleIds))
-        : { data: [] };
-
-      const scoreByUser = new Map<string, number>();
-      (historyRows ?? []).forEach((row) => {
-        const current = scoreByUser.get(row.user_id) ?? 0;
-        scoreByUser.set(row.user_id, current + 1);
-      });
-
       const mapped = Array.from(eligibleIds)
         .map((userId) => {
           const details = participantByUser.get(userId);
@@ -161,11 +158,10 @@ export default function LootDistributor() {
             userId,
             ingameName: profile?.ingame_name ?? "Inconnu",
             role,
-            score: scoreByUser.get(userId) ?? 0,
             checked: true,
           };
         })
-        .sort((a, b) => a.score - b.score);
+        .sort((a, b) => a.ingameName.localeCompare(b.ingameName, "fr"));
 
       setEligiblePlayers(mapped);
       setIsLoading(false);
@@ -190,10 +186,26 @@ export default function LootDistributor() {
       setStatus("Aucun joueur sélectionné pour la roulette.");
       return;
     }
-    const winner =
+    const selectedWinner =
       candidates[Math.floor(Math.random() * candidates.length)];
-    setWinnerId(winner.userId);
-    setStatus(`Gagnant sélectionné : ${winner.ingameName}.`);
+    const repeatCount = 32;
+    const baseStrip = Array.from({ length: repeatCount }).flatMap(
+      () => candidates,
+    );
+    const targetIndex = Math.max(baseStrip.length - 5, 0);
+    const strip = baseStrip.map((item, index) =>
+      index === targetIndex ? selectedWinner : item,
+    );
+    const distance =
+      targetIndex * CARD_WIDTH - (CONTAINER_WIDTH / 2 - CARD_WIDTH / 2);
+    setStripItems(strip);
+    setWinner(selectedWinner);
+    setWinnerId(selectedWinner.userId);
+    setAnimationX(-distance);
+    setAnimationSeed((prev) => prev + 1);
+    setIsSpinning(true);
+    setTargetIndex(targetIndex);
+    setStatus(null);
   };
 
   const handleValidate = async () => {
@@ -235,13 +247,6 @@ export default function LootDistributor() {
       return;
     }
 
-    setEligiblePlayers((prev) =>
-      prev.map((player) =>
-        player.userId === winner.userId
-          ? { ...player, score: player.score + 1 }
-          : player,
-      ),
-    );
     setIsSaving(false);
     setStatus("Loot enregistré avec succès.");
   };
@@ -318,13 +323,6 @@ export default function LootDistributor() {
                       </div>
                     </div>
                   </label>
-                  <span
-                    className={`rounded-full border px-3 py-1 text-xs ${scoreBadgeStyle(
-                      player.score,
-                    )}`}
-                  >
-                    Score {player.score}
-                  </span>
                 </div>
               ))}
             </div>
@@ -332,18 +330,85 @@ export default function LootDistributor() {
         </div>
       </div>
 
+      {stripItems.length > 0 ? (
+        <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4">
+          <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+            Animation de roulette
+          </p>
+          <div className="mt-4 flex items-center justify-center">
+            <div
+              className="relative overflow-hidden rounded-xl border border-white/10 bg-black/40"
+              style={{ width: `${CONTAINER_WIDTH}px` }}
+            >
+              <div className="pointer-events-none absolute left-1/2 top-0 h-full w-px bg-amber-400/70" />
+              <motion.div
+                key={animationSeed}
+                className="flex"
+                initial={{ x: 0 }}
+                animate={{ x: animationX }}
+                transition={{
+                  duration: 4,
+                  ease: [0.1, 0.9, 0.2, 1.0],
+                }}
+                onAnimationComplete={() => {
+                  if (!isSpinning) {
+                    return;
+                  }
+                  setIsSpinning(false);
+                  if (winner) {
+                    setStatus(`Gagnant sélectionné : ${winner.ingameName}.`);
+                  }
+                }}
+              >
+                {stripItems.map((player, index) => {
+                  const isWinner =
+                    !isSpinning &&
+                    winnerId === player.userId &&
+                    index === targetIndex;
+                  return (
+                    <div
+                      key={`${player.userId}-${index}`}
+                      style={{ width: `${CARD_WIDTH}px` }}
+                      className="flex h-24 items-center justify-center"
+                    >
+                      <div
+                        className={[
+                          "w-[120px] rounded-xl border px-3 py-2 text-center text-sm transition",
+                          isWinner
+                            ? "scale-105 border-amber-400/80 bg-amber-400/10 text-amber-100"
+                            : "border-white/10 bg-black/30 text-text/60",
+                        ].join(" ")}
+                      >
+                        <div className="font-semibold">{player.ingameName}</div>
+                        <div className="text-xs text-text/40">
+                          {player.role ?? "Rôle inconnu"}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </motion.div>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-text/50">
+            La ligne centrale indique l&apos;arrêt de la roulette.
+          </p>
+        </div>
+      ) : null}
+
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={handleRoulette}
+          disabled={isSpinning}
           className="rounded-full border border-amber-400/60 bg-amber-400/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
         >
-          🎲 Lancer la Roulette
+          {isSpinning ? "Roulette en cours..." : "🎲 Lancer la Roulette"}
         </button>
         <button
           type="button"
           onClick={handleValidate}
-          disabled={isSaving}
+          disabled={!winnerId || isSaving || isSpinning}
           className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSaving ? "Sauvegarde..." : "Valider & Sauvegarder"}
