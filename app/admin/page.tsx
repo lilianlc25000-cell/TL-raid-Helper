@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarPlus, Gem, Settings, ShieldCheck, Users } from "lucide-react";
+import {
+  CalendarPlus,
+  Gem,
+  Settings,
+  ShieldCheck,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 
@@ -59,6 +66,15 @@ const tools = [
     accent: "from-sky-500/20 via-sky-500/10 to-indigo-500/10",
     border: "border-sky-400/40",
     text: "text-sky-200",
+  },
+  {
+    title: "👮 Permissions Conseiller",
+    description: "Activer les droits par conseiller",
+    href: "/admin/permissions",
+    icon: UserRound,
+    accent: "from-amber-500/20 via-amber-500/10 to-rose-500/10",
+    border: "border-amber-400/40",
+    text: "text-amber-200",
   },
 ];
 

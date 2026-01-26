@@ -85,18 +85,30 @@ export type Database = {
           user_id: string;
           role_rank: string;
           joined_at: string;
+          perm_manage_pve: boolean;
+          perm_manage_pvp: boolean;
+          perm_manage_loot: boolean;
+          perm_distribute_loot: boolean;
         };
         Insert: {
           guild_id: string;
           user_id: string;
           role_rank?: string;
           joined_at?: string;
+          perm_manage_pve?: boolean;
+          perm_manage_pvp?: boolean;
+          perm_manage_loot?: boolean;
+          perm_distribute_loot?: boolean;
         };
         Update: {
           guild_id?: string;
           user_id?: string;
           role_rank?: string;
           joined_at?: string;
+          perm_manage_pve?: boolean;
+          perm_manage_pvp?: boolean;
+          perm_manage_loot?: boolean;
+          perm_distribute_loot?: boolean;
         };
       };
       guild_settings: {
