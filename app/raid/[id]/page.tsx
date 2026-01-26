@@ -10,6 +10,7 @@ import {
   WandSparkles,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import LootDistributor from "./LootDistributor";
 
 type Role = "Tank" | "DPS" | "Heal";
 
@@ -393,6 +394,8 @@ export default function RaidDetailPage() {
               ))}
             </div>
           </div>
+
+          <LootDistributor />
         </section>
       )}
     </div>
