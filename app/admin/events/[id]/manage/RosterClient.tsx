@@ -49,7 +49,7 @@ const WEAPON_ICONS: Record<string, string> = {
   'Longbow': '<:arc_long:1465385252628201636>',
   'Spear': '<:lance:1465385368701374635>',
   'Orb': '<:orbe:1465385386661646542>', // Au cas où
-  
+
   // Fallback
   'Unknown': '❓'
 };
@@ -78,9 +78,21 @@ const getRoleEmoji = (role: string | null) => {
   return "❔";
 };
 
+const normalizeWeaponKey = (value?: string | null) => {
+  if (!value) return "Unknown";
+  const trimmed = value.trim();
+  if (!trimmed) return "Unknown";
+  if (WEAPON_ICONS[trimmed]) return trimmed;
+  const lowered = trimmed.toLowerCase();
+  const match = Object.keys(WEAPON_ICONS).find(
+    (key) => key.toLowerCase() === lowered,
+  );
+  return match ?? "Unknown";
+};
+
 const getWeaponEmoji = (weaponName?: string | null) => {
-  if (!weaponName) return WEAPON_ICONS.Unknown;
-  return WEAPON_ICONS[weaponName] ?? WEAPON_ICONS.Unknown;
+  const normalized = normalizeWeaponKey(weaponName);
+  return WEAPON_ICONS[normalized] ?? WEAPON_ICONS.Unknown;
 };
 
 const getRoleEmojiLabel = (role: string | null) => {
@@ -181,17 +193,39 @@ export default function RosterClient({
       return;
     }
 
-    const { data: groupedPlayers } = (await supabase
+    const { data: participants } = (await supabase
       .from("event_signups")
-      .select("user_id,group_index")
+      .select(
+        "user_id,group_index,profiles(username,main_hand,off_hand,main_weapon,off_weapon)",
+      )
       .eq("event_id", eventId)) as {
       data:
         | Array<{
             user_id: string;
             group_index: number | null;
+            profiles?:
+              | {
+                  username?: string | null;
+                  main_hand?: string | null;
+                  off_hand?: string | null;
+                  main_weapon?: string | null;
+                  off_weapon?: string | null;
+                }
+              | Array<{
+                  username?: string | null;
+                  main_hand?: string | null;
+                  off_hand?: string | null;
+                  main_weapon?: string | null;
+                  off_weapon?: string | null;
+                }>;
           }>
         | null;
     };
+    console.log(
+      "Données participant reçues :",
+      JSON.stringify(participants ?? [], null, 2),
+    );
+    const groupedPlayers = participants ?? [];
     const notifyIds =
       groupedPlayers?.filter((player) => player.group_index !== null) ?? [];
     if (notifyIds.length > 0) {
@@ -242,26 +276,12 @@ export default function RosterClient({
           grouped.set(index, list);
         });
 
-        const playerIds = Array.from(grouped.values())
-          .flat()
-          .map((player) => player.userId);
-        const uniquePlayerIds = Array.from(new Set(playerIds));
-        const profileWeaponsByUser = new Map<
-          string,
-          { main_weapon: string | null; off_weapon: string | null }
-        >();
-        if (uniquePlayerIds.length > 0) {
-          const { data: profileWeapons } = await supabase
-            .from("profiles")
-            .select("user_id,main_weapon,off_weapon")
-            .in("user_id", uniquePlayerIds);
-          (profileWeapons ?? []).forEach((profile) => {
-            profileWeaponsByUser.set(profile.user_id, {
-              main_weapon: profile.main_weapon,
-              off_weapon: profile.off_weapon,
-            });
-          });
-        }
+        const participantByUserId = new Map(
+          groupedPlayers.map((participant) => [
+            participant.user_id,
+            participant,
+          ]),
+        );
 
         const fields = Array.from(grouped.entries())
           .sort(([a], [b]) => a - b)
@@ -273,15 +293,27 @@ export default function RosterClient({
                 : players
                     .map(
                       (player) => {
-                        const profileWeapons = profileWeaponsByUser.get(
+                        const participant = participantByUserId.get(
                           player.userId,
                         );
-                        const mainWeapon =
-                          profileWeapons?.main_weapon ?? player.mainWeapon;
-                        const offWeapon =
-                          profileWeapons?.off_weapon ?? player.offWeapon;
-                        const mainEmoji = getWeaponEmoji(mainWeapon);
-                        const offEmoji = getWeaponEmoji(offWeapon);
+                        const profile = Array.isArray(participant?.profiles)
+                          ? participant?.profiles[0]
+                          : participant?.profiles;
+                        const rawMain =
+                          profile?.main_hand ??
+                          profile?.main_weapon ??
+                          player.mainWeapon ??
+                          "Unknown";
+                        const rawOff =
+                          profile?.off_hand ??
+                          profile?.off_weapon ??
+                          player.offWeapon ??
+                          "Unknown";
+                        console.log(
+                          `Joueur: ${profile?.username} - Armes DB: ${rawMain} / ${rawOff}`,
+                        );
+                        const mainEmoji = getWeaponEmoji(rawMain);
+                        const offEmoji = getWeaponEmoji(rawOff);
                         return `> ${getRoleEmojiLabel(player.role)} **${player.ingameName}** (${mainEmoji} ${offEmoji})`;
                       },
                     )
