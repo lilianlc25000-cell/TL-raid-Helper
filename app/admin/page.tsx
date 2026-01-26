@@ -43,8 +43,8 @@ const tools = [
     text: "text-amber-200",
   },
   {
-    title: "Configuration Discord",
-    description: "Connecter, tester et réinitialiser l'intégration Discord",
+    title: "Paramètres",
+    description: "Configurer Discord et le système de loot",
     href: "/admin/settings",
     icon: Settings,
     accent: "from-sky-500/20 via-sky-500/10 to-indigo-500/10",

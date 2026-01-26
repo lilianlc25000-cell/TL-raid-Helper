@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import DiscordProvisionButton from "@/app/admin/settings/DiscordProvisionButton";
 import DiscordNotifyTestButton from "@/app/admin/settings/DiscordNotifyTestButton";
+import LootSystemSettingsClient from "@/app/admin/settings/LootSystemSettingsClient";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export default async function AdminSettingsPage() {
   const { data: guildConfig } = ownerId
     ? await supabase
         .from("guild_configs")
-        .select("discord_guild_id,discord_guild_name,raid_channel_id")
+        .select("discord_guild_id,discord_guild_name,raid_channel_id,loot_system")
         .eq("owner_id", ownerId)
         .maybeSingle()
     : { data: null };
@@ -53,6 +54,12 @@ export default async function AdminSettingsPage() {
             Paramètres Admin
           </h1>
         </header>
+
+        <LootSystemSettingsClient
+          ownerId={ownerId}
+          initialLootSystem={effectiveGuildConfig?.loot_system ?? null}
+          hasGuildConfig={Boolean(effectiveGuildConfig?.discord_guild_id)}
+        />
 
         <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
           <p className="text-xs uppercase tracking-[0.25em] text-text/50">
