@@ -16,6 +16,15 @@ const tools = [
     text: "text-amber-200",
   },
   {
+    title: "Roulette de loot",
+    description: "Tirage rapide pour un item de wishlist",
+    href: "/admin/loot/roulette",
+    icon: Gem,
+    accent: "from-sky-500/20 via-indigo-500/10 to-purple-500/10",
+    border: "border-sky-400/40",
+    text: "text-sky-200",
+  },
+  {
     title: "Création d'Événement",
     description: "Planifier le prochain Siege ou Archboss",
     href: "/admin/events",

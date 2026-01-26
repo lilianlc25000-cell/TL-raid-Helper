@@ -1,9 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { gameItemsByCategory } from "@/lib/game-items";
 
 type EligiblePlayer = {
   userId: string;
@@ -11,9 +11,61 @@ type EligiblePlayer = {
   checked: boolean;
 };
 
-const weaponOptions = gameItemsByCategory.armes
-  .map((item) => item.name)
-  .sort((a, b) => a.localeCompare(b, "fr"));
+type WeaponOption = {
+  name: string;
+  file: string;
+  imageSrc: string;
+};
+
+const weaponFiles = [
+  "arbalètes_aux_carreaux_enflammés_de_malakar.png",
+  "arbalètes_de_l'éclipse_de_kowazan.png",
+  "arc_long_du_fléau_du_grand_aélon.png",
+  "bâton_incandescent_de_talus.png",
+  "bâton_noueux_immolé_d'aridus.png",
+  "bouclier_de_azhreil.png",
+  "dagues_d'écorchure_de_minezerok.png",
+  "dagues_de_la_lune_rouge_de_kowazan.png",
+  "épée_des_cendres_tombées_de_nirma.png",
+  "espadon_de_la_flamme_spirituelle_de_morokai.png",
+  "espadon_du_cendre_héant_d'adentus.png",
+  "lame_de_cautérisation_de_tchernobog.png",
+  "lame_de_la_flamme_dansante_de_cornélius.png",
+  "lame_du_colosse_rouge_de_junobote.png",
+  "noyau_transcendant_de_talus.png",
+  "ranseur_super_brûlant_de_junobote.png",
+  "spectre_radieux_de_l'excavateur.png",
+];
+
+const toDisplayName = (filename: string) => {
+  const base = filename.replace(/\.png$/i, "").replace(/_/g, " ");
+  const words = base.split(" ");
+  return words
+    .map((word, index) => {
+      if (index === 0 || index === words.length - 1) {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      }
+      return word;
+    })
+    .join(" ");
+};
+
+const normalizeName = (value: string) =>
+  value
+    .trim()
+    .toLocaleLowerCase("fr")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/['’]/g, "")
+    .replace(/\s+/g, " ");
+
+const weaponOptions: WeaponOption[] = weaponFiles
+  .map((file) => ({
+    file,
+    name: toDisplayName(file),
+    imageSrc: `/items/armes/${file}`,
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 
 export default function LootRoulettePage() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -106,11 +158,11 @@ export default function LootRoulettePage() {
       setWinnerId(null);
       setSpinIndex(null);
 
+      const targetName = normalizeName(itemName);
       const { data: wishlistRows, error: wishlistError } = await supabase
         .from("gear_wishlist")
-        .select("user_id")
-        .eq("guild_id", guildId)
-        .eq("item_name", itemName);
+        .select("user_id,item_name")
+        .eq("guild_id", guildId);
 
       if (wishlistError) {
         setError(
@@ -122,7 +174,12 @@ export default function LootRoulettePage() {
       }
 
       const userIds = Array.from(
-        new Set((wishlistRows ?? []).map((row) => row.user_id).filter(Boolean)),
+        new Set(
+          (wishlistRows ?? [])
+            .filter((row) => normalizeName(row.item_name ?? "") === targetName)
+            .map((row) => row.user_id)
+            .filter(Boolean),
+        ),
       );
       if (userIds.length === 0) {
         setEligiblePlayers([]);
@@ -224,6 +281,15 @@ export default function LootRoulettePage() {
     () => eligiblePlayers.find((player) => player.userId === winnerId) ?? null,
     [eligiblePlayers, winnerId],
   );
+  const filteredWeaponOptions = useMemo(() => {
+    const search = normalizeName(itemName);
+    if (!search) {
+      return weaponOptions;
+    }
+    return weaponOptions.filter((option) =>
+      normalizeName(option.name).includes(search),
+    );
+  }, [itemName]);
 
   if (!isAuthReady) {
     return (
@@ -270,17 +336,38 @@ export default function LootRoulettePage() {
             Sélection de l'arme
           </label>
           <input
-            list="loot-items"
             value={itemName}
             onChange={(event) => setItemName(event.target.value)}
             placeholder="Ex: Espadon d'Adentus"
             className="mt-3 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/80"
           />
-          <datalist id="loot-items">
-            {weaponOptions.map((item) => (
-              <option key={item} value={item} />
+          <div className="mt-4 max-h-64 space-y-2 overflow-y-auto pr-2">
+            {filteredWeaponOptions.map((option) => (
+              <button
+                key={option.file}
+                type="button"
+                onClick={() => setItemName(option.name)}
+                className={[
+                  "flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-sm transition",
+                  normalizeName(option.name) === normalizeName(itemName)
+                    ? "border-amber-400/60 bg-amber-400/10 text-amber-200"
+                    : "border-white/10 bg-black/40 text-text/70 hover:border-amber-400/40 hover:text-amber-100",
+                ].join(" ")}
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-black/30">
+                  <Image
+                    src={option.imageSrc}
+                    alt={option.name}
+                    width={36}
+                    height={36}
+                    className="h-9 w-9 rounded-md object-contain"
+                    unoptimized
+                  />
+                </div>
+                <span className="font-medium">{option.name}</span>
+              </button>
             ))}
-          </datalist>
+          </div>
           <p className="mt-3 text-xs text-text/50">
             Les armes correspondent à celles disponibles dans les wishlists.
           </p>
