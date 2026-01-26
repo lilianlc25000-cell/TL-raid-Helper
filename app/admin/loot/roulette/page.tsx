@@ -1,9 +1,9 @@
-\"use client\";
+"use client";
 
-import { useEffect, useMemo, useState } from \"react\";
-import Link from \"next/link\";
-import { createClient } from \"@/lib/supabase/client\";
-import { gameItemsByCategory } from \"@/lib/game-items\";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { gameItemsByCategory } from "@/lib/game-items";
 
 type EligiblePlayer = {
   userId: string;
@@ -13,14 +13,14 @@ type EligiblePlayer = {
 
 const weaponOptions = gameItemsByCategory.armes
   .map((item) => item.name)
-  .sort((a, b) => a.localeCompare(b, \"fr\"));
+  .sort((a, b) => a.localeCompare(b, "fr"));
 
 export default function LootRoulettePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [guildId, setGuildId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [itemName, setItemName] = useState(\"\");
+  const [itemName, setItemName] = useState("");
   const [eligiblePlayers, setEligiblePlayers] = useState<EligiblePlayer[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export default function LootRoulettePage() {
     let isMounted = true;
     const supabase = createClient();
     if (!supabase) {
-      setError(\"Supabase n'est pas configuré (URL / ANON KEY).\");
+      setError("Supabase n'est pas configuré (URL / ANON KEY).");
       setIsAuthReady(true);
       return () => {
         isMounted = false;
@@ -47,7 +47,7 @@ export default function LootRoulettePage() {
       }
       const sessionUser = data.session?.user;
       if (!sessionUser?.id) {
-        setError(\"Veuillez vous connecter pour accéder à la roulette.\");
+        setError("Veuillez vous connecter pour accéder à la roulette.");
         setIsAuthReady(true);
         return;
       }
@@ -73,15 +73,15 @@ export default function LootRoulettePage() {
         return;
       }
       const { data: profile } = (await supabase
-        .from(\"profiles\")
-        .select(\"role_rank,guild_id\")
-        .eq(\"user_id\", userId)
+        .from("profiles")
+        .select("role_rank,guild_id")
+        .eq("user_id", userId)
         .maybeSingle()) as {
         data: { role_rank?: string | null; guild_id?: string | null } | null;
       };
       setGuildId(profile?.guild_id ?? null);
       setIsAdmin(
-        profile?.role_rank === \"admin\" || profile?.role_rank === \"conseiller\",
+        profile?.role_rank === "admin" || profile?.role_rank === "conseiller",
       );
       setIsAuthReady(true);
     };
@@ -98,7 +98,7 @@ export default function LootRoulettePage() {
     const loadEligible = async () => {
       const supabase = createClient();
       if (!supabase) {
-        setError(\"Supabase n'est pas configuré (URL / ANON KEY).\");
+        setError("Supabase n'est pas configuré (URL / ANON KEY).");
         return;
       }
       setIsLoading(true);
@@ -107,15 +107,15 @@ export default function LootRoulettePage() {
       setSpinIndex(null);
 
       const { data: wishlistRows, error: wishlistError } = await supabase
-        .from(\"gear_wishlist\")
-        .select(\"user_id\")
-        .eq(\"guild_id\", guildId)
-        .eq(\"item_name\", itemName);
+        .from("gear_wishlist")
+        .select("user_id")
+        .eq("guild_id", guildId)
+        .eq("item_name", itemName);
 
       if (wishlistError) {
         setError(
           wishlistError.message ||
-            \"Impossible de charger les wishlists pour cet item.\",
+            "Impossible de charger les wishlists pour cet item.",
         );
         setIsLoading(false);
         return;
@@ -131,17 +131,17 @@ export default function LootRoulettePage() {
       }
 
       const { data: profilesData } = await supabase
-        .from(\"profiles\")
-        .select(\"user_id,ingame_name\")
-        .in(\"user_id\", userIds);
+        .from("profiles")
+        .select("user_id,ingame_name")
+        .in("user_id", userIds);
 
       const mapped = (profilesData ?? [])
         .map((profile) => ({
           userId: profile.user_id,
-          ingameName: profile.ingame_name ?? \"Inconnu\",
+          ingameName: profile.ingame_name ?? "Inconnu",
           checked: true,
         }))
-        .sort((a, b) => a.ingameName.localeCompare(b.ingameName, \"fr\"));
+        .sort((a, b) => a.ingameName.localeCompare(b.ingameName, "fr"));
 
       setEligiblePlayers(mapped);
       setIsLoading(false);
@@ -163,7 +163,7 @@ export default function LootRoulettePage() {
   const handleSpin = () => {
     const candidates = eligiblePlayers.filter((player) => player.checked);
     if (candidates.length === 0) {
-      setError(\"Aucun joueur sélectionné pour la roulette.\");
+      setError("Aucun joueur sélectionné pour la roulette.");
       return;
     }
     setError(null);
@@ -227,8 +227,8 @@ export default function LootRoulettePage() {
 
   if (!isAuthReady) {
     return (
-      <div className=\"min-h-screen px-6 py-10 text-zinc-100\">
-        <div className=\"rounded-2xl border border-white/10 bg-surface/70 px-6 py-6 text-sm text-text/60\">
+      <div className="min-h-screen px-6 py-10 text-zinc-100">
+        <div className="rounded-2xl border border-white/10 bg-surface/70 px-6 py-6 text-sm text-text/60">
           Chargement...
         </div>
       </div>
@@ -237,8 +237,8 @@ export default function LootRoulettePage() {
 
   if (!isAdmin) {
     return (
-      <div className=\"min-h-screen px-6 py-10 text-zinc-100\">
-        <div className=\"rounded-2xl border border-red-500/40 bg-red-950/30 px-6 py-6 text-sm text-red-200\">
+      <div className="min-h-screen px-6 py-10 text-zinc-100">
+        <div className="rounded-2xl border border-red-500/40 bg-red-950/30 px-6 py-6 text-sm text-red-200">
           Accès réservé aux officiers.
         </div>
       </div>
@@ -246,78 +246,78 @@ export default function LootRoulettePage() {
   }
 
   return (
-    <div className=\"min-h-screen px-6 py-10 text-zinc-100\">
-      <section className=\"mx-auto w-full max-w-4xl space-y-6\">
-        <header className=\"rounded-3xl border border-white/10 bg-surface/70 px-6 py-6 shadow-[0_0_35px_rgba(0,0,0,0.35)] backdrop-blur\">
-          <p className=\"text-xs uppercase tracking-[0.35em] text-text/50\">
+    <div className="min-h-screen px-6 py-10 text-zinc-100">
+      <section className="mx-auto w-full max-w-4xl space-y-6">
+        <header className="rounded-3xl border border-white/10 bg-surface/70 px-6 py-6 shadow-[0_0_35px_rgba(0,0,0,0.35)] backdrop-blur">
+          <p className="text-xs uppercase tracking-[0.35em] text-text/50">
             Roulette de loot
           </p>
-          <h1 className=\"mt-2 font-display text-3xl tracking-[0.15em] text-text\">
+          <h1 className="mt-2 font-display text-3xl tracking-[0.15em] text-text">
             Quel loot voulez-vous tirer au sort ?
           </h1>
-          <div className=\"mt-4 flex flex-wrap items-center gap-3\">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link
-              href=\"/admin/loot\"
-              className=\"rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:text-text\"
+              href="/admin/loot"
+              className="rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:text-text"
             >
               Retour à la gestion
             </Link>
           </div>
         </header>
 
-        <div className=\"rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur\">
-          <label className=\"text-xs uppercase tracking-[0.25em] text-text/50\">
+        <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
+          <label className="text-xs uppercase tracking-[0.25em] text-text/50">
             Sélection de l'arme
           </label>
           <input
-            list=\"loot-items\"
+            list="loot-items"
             value={itemName}
             onChange={(event) => setItemName(event.target.value)}
-            placeholder=\"Ex: Espadon d'Adentus\"
-            className=\"mt-3 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/80\"
+            placeholder="Ex: Espadon d'Adentus"
+            className="mt-3 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/80"
           />
-          <datalist id=\"loot-items\">
+          <datalist id="loot-items">
             {weaponOptions.map((item) => (
               <option key={item} value={item} />
             ))}
           </datalist>
-          <p className=\"mt-3 text-xs text-text/50\">
+          <p className="mt-3 text-xs text-text/50">
             Les armes correspondent à celles disponibles dans les wishlists.
           </p>
         </div>
 
-        <div className=\"rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur\">
-          <p className=\"text-xs uppercase tracking-[0.25em] text-text/50\">
+        <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
+          <p className="text-xs uppercase tracking-[0.25em] text-text/50">
             Joueurs éligibles
           </p>
           {isLoading ? (
-            <div className=\"mt-4 rounded-xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/60\">
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/60">
               Chargement des joueurs...
             </div>
           ) : eligiblePlayers.length === 0 ? (
-            <div className=\"mt-4 rounded-xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/60\">
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/60">
               Aucun joueur éligible pour cet item.
             </div>
           ) : (
-            <div className=\"mt-4 space-y-2\">
+            <div className="mt-4 space-y-2">
               {eligiblePlayers.map((player) => (
                 <label
                   key={player.userId}
-                  className=\"flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-text/70\"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-text/70"
                 >
-                  <div className=\"flex items-center gap-3\">
+                  <div className="flex items-center gap-3">
                     <input
-                      type=\"checkbox\"
+                      type="checkbox"
                       checked={player.checked}
                       onChange={() => handleToggle(player.userId)}
-                      className=\"h-4 w-4 rounded border-white/20 bg-black/40\"
+                      className="h-4 w-4 rounded border-white/20 bg-black/40"
                     />
-                    <span className=\"font-semibold text-text\">
+                    <span className="font-semibold text-text">
                       {player.ingameName}
                     </span>
                   </div>
                   {winnerId === player.userId ? (
-                    <span className=\"rounded-full border border-emerald-400/60 bg-emerald-500/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200\">
+                    <span className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200">
                       Gagnant
                     </span>
                   ) : null}
@@ -327,36 +327,36 @@ export default function LootRoulettePage() {
           )}
         </div>
 
-        <div className=\"rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur\">
-          <p className=\"text-xs uppercase tracking-[0.25em] text-text/50\">
+        <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
+          <p className="text-xs uppercase tracking-[0.25em] text-text/50">
             Roulette
           </p>
-          <div className=\"mt-4 grid gap-3 sm:grid-cols-2\">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <button
-              type=\"button\"
+              type="button"
               onClick={handleSpin}
               disabled={isSpinning || eligiblePlayers.length === 0}
-              className=\"rounded-full border border-amber-400/60 bg-amber-400/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60\"
+              className="rounded-full border border-amber-400/60 bg-amber-400/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Lancer la roulette
             </button>
             {winner ? (
-              <div className=\"rounded-2xl border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200\">
-                Gagnant : <span className=\"font-semibold\">{winner.ingameName}</span>
+              <div className="rounded-2xl border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">
+                Gagnant : <span className="font-semibold">{winner.ingameName}</span>
               </div>
             ) : (
-              <div className=\"rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-text/60\">
+              <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-text/60">
                 {isSpinning
-                  ? \"La roulette tourne...\"
-                  : \"Choisissez l'arme pour lancer.\"}
+                  ? "La roulette tourne..."
+                  : "Choisissez l'arme pour lancer."}
               </div>
             )}
           </div>
-          <div className=\"mt-4 rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/70\">
-            <p className=\"text-xs uppercase tracking-[0.2em] text-text/50\">
+          <div className="mt-4 rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/70">
+            <p className="text-xs uppercase tracking-[0.2em] text-text/50">
               Animation
             </p>
-            <div className=\"mt-3 grid gap-2 sm:grid-cols-2\">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {eligiblePlayers
                 .filter((player) => player.checked)
                 .map((player, index) => {
@@ -366,8 +366,8 @@ export default function LootRoulettePage() {
                       key={player.userId}
                       className={`rounded-xl border px-3 py-2 text-sm transition ${
                         isActive
-                          ? \"border-amber-400/70 bg-amber-400/10 text-amber-100 animate-pulse\"
-                          : \"border-white/10 bg-black/30 text-text/60\"
+                          ? "border-amber-400/70 bg-amber-400/10 text-amber-100 animate-pulse"
+                          : "border-white/10 bg-black/30 text-text/60"
                       }`}
                     >
                       {player.ingameName}
@@ -376,27 +376,27 @@ export default function LootRoulettePage() {
                 })}
             </div>
           </div>
-          <div className=\"mt-4 flex flex-wrap items-center gap-3\">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
-              type=\"button\"
+              type="button"
               onClick={handleSaveWinner}
               disabled={!winner || isSaving}
-              className=\"rounded-full border border-emerald-400/60 bg-emerald-500/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60\"
+              className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSaving ? \"Sauvegarde...\" : \"Valider & Sauvegarder\"}
+              {isSaving ? "Sauvegarde..." : "Valider & Sauvegarder"}
             </button>
             {saveStatus ? (
-              <span className=\"text-xs text-emerald-200\">{saveStatus}</span>
+              <span className="text-xs text-emerald-200">{saveStatus}</span>
             ) : null}
           </div>
           {spinIndex !== null ? (
-            <div className=\"mt-4 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-200\">
+            <div className="mt-4 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
               {eligiblePlayers.filter((player) => player.checked)[spinIndex]
-                ?.ingameName ?? \"\"}
+                ?.ingameName ?? ""}
             </div>
           ) : null}
           {error ? (
-            <div className=\"mt-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200\">
+            <div className="mt-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
               {error}
             </div>
           ) : null}
