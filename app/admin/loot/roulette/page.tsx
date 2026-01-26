@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { motion } from "framer-motion";
 
 type EligiblePlayer = {
   userId: string;
@@ -67,6 +68,9 @@ const weaponOptions: WeaponOption[] = weaponFiles
   }))
   .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 
+const CARD_WIDTH = 140;
+const CONTAINER_WIDTH = 480;
+
 export default function LootRoulettePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [guildId, setGuildId] = useState<string | null>(null);
@@ -78,7 +82,12 @@ export default function LootRoulettePage() {
   const [error, setError] = useState<string | null>(null);
   const [spinIndex, setSpinIndex] = useState<number | null>(null);
   const [winnerId, setWinnerId] = useState<string | null>(null);
+  const [winner, setWinner] = useState<EligiblePlayer | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
+  const [stripItems, setStripItems] = useState<EligiblePlayer[]>([]);
+  const [animationX, setAnimationX] = useState(0);
+  const [animationSeed, setAnimationSeed] = useState(0);
+  const [targetIndex, setTargetIndex] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
@@ -145,6 +154,10 @@ export default function LootRoulettePage() {
       setEligiblePlayers([]);
       setWinnerId(null);
       setSpinIndex(null);
+      setWinner(null);
+      setStripItems([]);
+      setIsSpinning(false);
+      setTargetIndex(null);
       return;
     }
     const loadEligible = async () => {
@@ -157,6 +170,10 @@ export default function LootRoulettePage() {
       setError(null);
       setWinnerId(null);
       setSpinIndex(null);
+      setWinner(null);
+      setStripItems([]);
+      setIsSpinning(false);
+      setTargetIndex(null);
 
       const targetName = normalizeName(itemName);
       const { data: guildMembers, error: membersError } = await supabase
@@ -209,6 +226,10 @@ export default function LootRoulettePage() {
       );
       if (userIds.length === 0) {
         setEligiblePlayers([]);
+        setWinner(null);
+        setStripItems([]);
+        setIsSpinning(false);
+        setTargetIndex(null);
         setIsLoading(false);
         return;
       }
@@ -227,6 +248,10 @@ export default function LootRoulettePage() {
         .sort((a, b) => a.ingameName.localeCompare(b.ingameName, "fr"));
 
       setEligiblePlayers(mapped);
+      setWinner(null);
+      setStripItems([]);
+      setIsSpinning(false);
+      setTargetIndex(null);
       setIsLoading(false);
     };
 
@@ -250,25 +275,27 @@ export default function LootRoulettePage() {
       return;
     }
     setError(null);
+    const selectedWinner =
+      candidates[Math.floor(Math.random() * candidates.length)];
+    const repeatCount = 32;
+    const baseStrip = Array.from({ length: repeatCount }).flatMap(
+      () => candidates,
+    );
+    const target = Math.max(baseStrip.length - 5, 0);
+    const strip = baseStrip.map((item, index) =>
+      index === target ? selectedWinner : item,
+    );
+    const distance =
+      target * CARD_WIDTH - (CONTAINER_WIDTH / 2 - CARD_WIDTH / 2);
+    setStripItems(strip);
+    setWinner(selectedWinner);
+    setWinnerId(selectedWinner.userId);
+    setAnimationX(-distance);
+    setAnimationSeed((prev) => prev + 1);
     setIsSpinning(true);
-    setWinnerId(null);
+    setTargetIndex(target);
+    setSpinIndex(null);
     setSaveStatus(null);
-    const durationMs = 2000;
-    const intervalMs = 80;
-    const start = Date.now();
-    const timer = window.setInterval(() => {
-      const elapsed = Date.now() - start;
-      const index = Math.floor(elapsed / intervalMs) % candidates.length;
-      setSpinIndex(index);
-      if (elapsed >= durationMs) {
-        window.clearInterval(timer);
-        const winner =
-          candidates[Math.floor(Math.random() * candidates.length)];
-        setWinnerId(winner.userId);
-        setSpinIndex(null);
-        setIsSpinning(false);
-      }
-    }, intervalMs);
   };
 
   const handleSaveWinner = async () => {
@@ -465,35 +492,87 @@ export default function LootRoulettePage() {
               </div>
             )}
           </div>
+          {stripItems.length > 0 ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/70">
+              <p className="text-xs uppercase tracking-[0.2em] text-text/50">
+                Animation premium
+              </p>
+              <div className="mt-3 flex items-center justify-center">
+                <div
+                  className="relative overflow-hidden rounded-xl border border-white/10 bg-black/30"
+                  style={{ width: `${CONTAINER_WIDTH}px` }}
+                >
+                  <div className="pointer-events-none absolute left-1/2 top-0 h-full w-px bg-amber-400/70" />
+                  <motion.div
+                    key={animationSeed}
+                    className="flex"
+                    initial={{ x: 0 }}
+                    animate={{ x: animationX }}
+                    transition={{ duration: 4, ease: [0.1, 0.9, 0.2, 1.0] }}
+                    onAnimationComplete={() => {
+                      if (!isSpinning) {
+                        return;
+                      }
+                      setIsSpinning(false);
+                      if (winner) {
+                        setSaveStatus(null);
+                      }
+                    }}
+                  >
+                    {stripItems.map((player, index) => {
+                      const isWinner =
+                        !isSpinning &&
+                        winnerId === player.userId &&
+                        index === targetIndex;
+                      return (
+                        <div
+                          key={`${player.userId}-${index}`}
+                          style={{ width: `${CARD_WIDTH}px` }}
+                          className="flex h-24 items-center justify-center"
+                        >
+                          <div
+                            className={[
+                              "w-[120px] rounded-xl border px-3 py-2 text-center text-sm transition",
+                              isWinner
+                                ? "scale-105 border-amber-400/80 bg-amber-400/10 text-amber-100"
+                                : "border-white/10 bg-black/30 text-text/60",
+                            ].join(" ")}
+                          >
+                            <div className="font-semibold">{player.ingameName}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </motion.div>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-text/50">
+                La ligne centrale indique l&apos;arrêt.
+              </p>
+            </div>
+          ) : null}
           <div className="mt-4 rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/70">
             <p className="text-xs uppercase tracking-[0.2em] text-text/50">
-              Animation
+              Liste rapide
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {eligiblePlayers
                 .filter((player) => player.checked)
-                .map((player, index) => {
-                  const isActive = spinIndex === index;
-                  return (
-                    <div
-                      key={player.userId}
-                      className={`rounded-xl border px-3 py-2 text-sm transition ${
-                        isActive
-                          ? "border-amber-400/70 bg-amber-400/10 text-amber-100 animate-pulse"
-                          : "border-white/10 bg-black/30 text-text/60"
-                      }`}
-                    >
-                      {player.ingameName}
-                    </div>
-                  );
-                })}
+                .map((player) => (
+                  <div
+                    key={player.userId}
+                    className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-text/60"
+                  >
+                    {player.ingameName}
+                  </div>
+                ))}
             </div>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={handleSaveWinner}
-              disabled={!winner || isSaving}
+              disabled={!winner || isSaving || isSpinning}
               className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSaving ? "Sauvegarde..." : "Valider & Sauvegarder"}
