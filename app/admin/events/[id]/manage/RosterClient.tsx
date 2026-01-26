@@ -37,6 +37,29 @@ const roleStyles: Record<string, string> = {
   dps: "border-red-500/50 bg-red-500/10 text-red-200",
 };
 
+const WEAPON_ICONS: Record<string, string> = {
+  // Clés standards (anglais) -> IDs Discord
+  'Greatsword': '<:espadon:1465385351915770031>',
+  'Sword': '<:epee_bouclier:1465385331414274272>',
+  'SnS': '<:epee_bouclier:1465385331414274272>', // Alias de sécurité
+  'Dagger': '<:dagues:1465385307850408108>',
+  'Wand': '<:baguette:1465385271481729074>',
+  'Staff': '<:baton:1465385290225946832>',
+  'Crossbow': '<:arbalete:1465385200354590720>',
+  'Longbow': '<:arc_long:1465385252628201636>',
+  'Spear': '<:lance:1465385368701374635>',
+  'Orb': '<:orbe:1465385386661646542>', // Au cas où
+  
+  // Fallback
+  'Unknown': '❓'
+};
+
+const ROLE_ICONS: Record<string, string> = {
+  'Tank': '🛡️',
+  'Heal': '🌿',
+  'DPS': '⚔️'
+};
+
 const getRoleLabel = (role: string | null) => {
   if (!role) return "Inconnu";
   const normalized = role.toLowerCase();
@@ -53,6 +76,16 @@ const getRoleEmoji = (role: string | null) => {
   if (normalized.includes("heal") || normalized.includes("soin")) return "💚";
   if (normalized.includes("dps")) return "⚔️";
   return "❔";
+};
+
+const getWeaponEmoji = (weaponName?: string | null) => {
+  if (!weaponName) return WEAPON_ICONS.Unknown;
+  return WEAPON_ICONS[weaponName] ?? WEAPON_ICONS.Unknown;
+};
+
+const getRoleEmojiLabel = (role: string | null) => {
+  const label = getRoleLabel(role);
+  return ROLE_ICONS[label] ?? "❔";
 };
 
 const getRoleStyle = (role: string | null) => {
@@ -209,6 +242,27 @@ export default function RosterClient({
           grouped.set(index, list);
         });
 
+        const playerIds = Array.from(grouped.values())
+          .flat()
+          .map((player) => player.userId);
+        const uniquePlayerIds = Array.from(new Set(playerIds));
+        const profileWeaponsByUser = new Map<
+          string,
+          { main_weapon: string | null; off_weapon: string | null }
+        >();
+        if (uniquePlayerIds.length > 0) {
+          const { data: profileWeapons } = await supabase
+            .from("profiles")
+            .select("user_id,main_weapon,off_weapon")
+            .in("user_id", uniquePlayerIds);
+          (profileWeapons ?? []).forEach((profile) => {
+            profileWeaponsByUser.set(profile.user_id, {
+              main_weapon: profile.main_weapon,
+              off_weapon: profile.off_weapon,
+            });
+          });
+        }
+
         const fields = Array.from(grouped.entries())
           .sort(([a], [b]) => a - b)
           .map(([index, players]) => ({
@@ -218,8 +272,18 @@ export default function RosterClient({
                 ? "—"
                 : players
                     .map(
-                      (player) =>
-                        `> ${getRoleEmoji(player.role)} **${player.ingameName}**`,
+                      (player) => {
+                        const profileWeapons = profileWeaponsByUser.get(
+                          player.userId,
+                        );
+                        const mainWeapon =
+                          profileWeapons?.main_weapon ?? player.mainWeapon;
+                        const offWeapon =
+                          profileWeapons?.off_weapon ?? player.offWeapon;
+                        const mainEmoji = getWeaponEmoji(mainWeapon);
+                        const offEmoji = getWeaponEmoji(offWeapon);
+                        return `> ${getRoleEmojiLabel(player.role)} **${player.ingameName}** (${mainEmoji} ${offEmoji})`;
+                      },
                     )
                     .join("\n"),
             inline: true,
