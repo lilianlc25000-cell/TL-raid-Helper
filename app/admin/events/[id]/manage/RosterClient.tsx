@@ -12,6 +12,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { usePermission } from "@/lib/hooks/usePermission";
 import { getWeaponImage } from "@/lib/weapons";
 
 type SignupEntry = {
@@ -29,6 +30,7 @@ type RosterClientProps = {
   eventId: string;
   eventTitle: string;
   eventStartTime: string;
+  eventType: string | null;
   signups: SignupEntry[];
 };
 
@@ -155,6 +157,7 @@ export default function RosterClient({
   eventId,
   eventTitle,
   eventStartTime,
+  eventType,
   signups,
 }: RosterClientProps) {
   const [isPublishing, setIsPublishing] = useState(false);
@@ -165,6 +168,20 @@ export default function RosterClient({
   const [roleUpdatingUserId, setRoleUpdatingUserId] = useState<string | null>(
     null,
   );
+  const managePve = usePermission("manage_pve");
+  const managePvp = usePermission("manage_pvp");
+  const isPveEvent = eventType
+    ? ["Raid de Guilde", "Calanthia"].includes(eventType)
+    : false;
+  const isPvpEvent = eventType
+    ? ["Pierre de Faille", "Château", "War Game", "Taxe"].includes(eventType)
+    : false;
+  const permissionsReady = !managePve.loading && !managePvp.loading;
+  const canManageEvent =
+    permissionsReady &&
+    ((isPveEvent && managePve.allowed) ||
+      (isPvpEvent && managePvp.allowed) ||
+      (!isPveEvent && !isPvpEvent));
 
   useEffect(() => {
     setLocalSignups(signups);
@@ -576,26 +593,38 @@ export default function RosterClient({
               {actionError}
             </div>
           ) : null}
-          <Link
-            href={`/admin/events/${eventId}/groups`}
-            className="block rounded-full border border-amber-400/60 bg-amber-400/10 px-5 py-3 text-center text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
-          >
-            Créer les groupes
-          </Link>
-          <Link
-            href={`/admin/events/${eventId}/close`}
-            className="block rounded-full border border-emerald-400/60 bg-emerald-500/10 px-5 py-3 text-center text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300"
-          >
-            Clôturer l&apos;event
-          </Link>
-          <button
-            type="button"
-            onClick={handlePublishGroups}
-            disabled={isPublishing}
-            className="w-full rounded-full border border-sky-400/60 bg-sky-500/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-sky-200 transition hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPublishing ? "Publication..." : "Publier les groupes"}
-          </button>
+          {!permissionsReady ? (
+            <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-text/60">
+              Chargement des permissions...
+            </div>
+          ) : canManageEvent ? (
+            <>
+              <Link
+                href={`/admin/events/${eventId}/groups`}
+                className="block rounded-full border border-amber-400/60 bg-amber-400/10 px-5 py-3 text-center text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+              >
+                Créer les groupes
+              </Link>
+              <Link
+                href={`/admin/events/${eventId}/close`}
+                className="block rounded-full border border-emerald-400/60 bg-emerald-500/10 px-5 py-3 text-center text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300"
+              >
+                Clôturer l&apos;event
+              </Link>
+              <button
+                type="button"
+                onClick={handlePublishGroups}
+                disabled={isPublishing}
+                className="w-full rounded-full border border-sky-400/60 bg-sky-500/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-sky-200 transition hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isPublishing ? "Publication..." : "Publier les groupes"}
+              </button>
+            </>
+          ) : (
+            <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
+              Accès restreint pour ce type d&apos;événement.
+            </div>
+          )}
         </div>
       </section>
     </div>

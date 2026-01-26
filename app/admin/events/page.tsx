@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CalendarPlus } from "lucide-react";
 import { createClient } from "../../../lib/supabase/client";
+import { usePermission } from "../../../lib/hooks/usePermission";
 import { createEvent } from "../../../lib/actions/events";
 import { PARTICIPATION_POINTS_PER_RAID } from "../../../lib/game-constants";
 
@@ -90,6 +91,10 @@ export default function AdminEventsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const managePve = usePermission("manage_pve");
+  const managePvp = usePermission("manage_pvp");
+  const canManagePve = managePve.allowed;
+  const canManagePvp = managePvp.allowed;
 
   const [contentType, setContentType] = useState<ContentType | null>(null);
   const [eventType, setEventType] = useState<EventType>("Raid de Guilde");
@@ -255,6 +260,10 @@ export default function AdminEventsPage() {
   const needsTitle = requiresTitle(eventType);
   const needsAlliance = requiresAlliance(eventType);
   const needsDifficulty = requiresDifficulty(eventType);
+  const isPveEvent = EVENT_TYPES_BY_CONTENT.PVE.includes(eventType);
+  const isPvpEvent = EVENT_TYPES_BY_CONTENT.PVP.includes(eventType);
+  const canManageSelected =
+    (isPveEvent && canManagePve) || (isPvpEvent && canManagePvp);
   const isCreateDisabled =
     !contentType ||
     !dateTime ||
@@ -299,7 +308,12 @@ export default function AdminEventsPage() {
               Aucun événement planifié.
             </div>
           ) : (
-            events.map((event) => (
+            events.map((event) => {
+              const isPve = EVENT_TYPES_BY_CONTENT.PVE.includes(event.eventType);
+              const isPvp = EVENT_TYPES_BY_CONTENT.PVP.includes(event.eventType);
+              const canManage =
+                (isPve && canManagePve) || (isPvp && canManagePvp);
+              return (
               <div
                 key={event.id}
                 className="rounded-2xl border border-white/10 bg-surface/70 px-6 py-5 shadow-[0_0_25px_rgba(0,0,0,0.35)] backdrop-blur"
@@ -320,19 +334,23 @@ export default function AdminEventsPage() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Link
-                      href={`/admin/events/${event.id}/manage`}
-                      className="rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:text-text"
-                    >
-                      Gérer
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteEvent(event.id)}
-                      className="rounded-full border border-red-500/50 bg-red-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-red-200 transition hover:border-red-400"
-                    >
-                      Supprimer
-                    </button>
+                    {canManage ? (
+                      <>
+                        <Link
+                          href={`/admin/events/${event.id}/manage`}
+                          className="rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:text-text"
+                        >
+                          Gérer
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEvent(event.id)}
+                          className="rounded-full border border-red-500/50 bg-red-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-red-200 transition hover:border-red-400"
+                        >
+                          Supprimer
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.25em] text-text/60">
@@ -345,7 +363,8 @@ export default function AdminEventsPage() {
                   ) : null}
                 </div>
               </div>
-            ))
+            );
+            })
           )}
         </div>
 
@@ -378,21 +397,28 @@ export default function AdminEventsPage() {
                   Quel contenu voulez-vous créer ?
                 </p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {(["PVE", "PVP"] as ContentType[]).map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setContentType(type)}
-                      className={[
-                        "rounded-2xl border px-4 py-4 text-left text-sm uppercase tracking-[0.25em] transition",
-                        contentType === type
-                          ? "border-amber-400/70 bg-amber-400/10 text-amber-100"
-                          : "border-white/10 bg-black/40 text-text/70 hover:border-white/20",
-                      ].join(" ")}
-                    >
-                      {type}
-                    </button>
-                  ))}
+                  {(["PVE", "PVP"] as ContentType[]).map((type) => {
+                    const isDisabled =
+                      (type === "PVE" && !canManagePve) ||
+                      (type === "PVP" && !canManagePvp);
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        disabled={isDisabled}
+                        onClick={() => setContentType(type)}
+                        className={[
+                          "rounded-2xl border px-4 py-4 text-left text-sm uppercase tracking-[0.25em] transition",
+                          contentType === type
+                            ? "border-amber-400/70 bg-amber-400/10 text-amber-100"
+                            : "border-white/10 bg-black/40 text-text/70 hover:border-white/20",
+                          isDisabled ? "cursor-not-allowed opacity-50" : "",
+                        ].join(" ")}
+                      >
+                        {type}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -522,7 +548,7 @@ export default function AdminEventsPage() {
               <button
                 type="button"
                 onClick={handleCreateEvent}
-                disabled={isCreateDisabled}
+                disabled={isCreateDisabled || !canManageSelected}
                 className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Créer

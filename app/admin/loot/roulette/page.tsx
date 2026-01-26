@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { usePermission } from "@/lib/hooks/usePermission";
 
 type EligiblePlayer = {
   userId: string;
@@ -74,8 +75,10 @@ const SPIN_MAX_DELAY = 220;
 export default function LootRoulettePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [guildId, setGuildId] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const manageLoot = usePermission("manage_loot");
+  const distributeLoot = usePermission("distribute_loot");
+  const canAccess = manageLoot.allowed || distributeLoot.allowed;
   const [itemName, setItemName] = useState("");
   const [eligiblePlayers, setEligiblePlayers] = useState<EligiblePlayer[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -136,9 +139,6 @@ export default function LootRoulettePage() {
         data: { role_rank?: string | null; guild_id?: string | null } | null;
       };
       setGuildId(profile?.guild_id ?? null);
-      setIsAdmin(
-        profile?.role_rank === "admin" || profile?.role_rank === "conseiller",
-      );
       setIsAuthReady(true);
     };
     void loadProfile();
@@ -349,7 +349,7 @@ export default function LootRoulettePage() {
     );
   }, [itemName]);
 
-  if (!isAuthReady) {
+  if (!isAuthReady || manageLoot.loading || distributeLoot.loading) {
     return (
       <div className="min-h-screen px-6 py-10 text-zinc-100">
         <div className="rounded-2xl border border-white/10 bg-surface/70 px-6 py-6 text-sm text-text/60">
@@ -359,7 +359,7 @@ export default function LootRoulettePage() {
     );
   }
 
-  if (!isAdmin) {
+  if (!canAccess) {
     return (
       <div className="min-h-screen px-6 py-10 text-zinc-100">
         <div className="rounded-2xl border border-red-500/40 bg-red-950/30 px-6 py-6 text-sm text-red-200">

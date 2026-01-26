@@ -13,6 +13,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { createClient } from "../../../../../lib/supabase/client";
+import { usePermission } from "../../../../../lib/hooks/usePermission";
 import { getWeaponImage } from "../../../../../lib/weapons";
 
 type PlayerCard = {
@@ -102,6 +103,7 @@ export default function RaidGroupsPage() {
 
   const [eventTitle, setEventTitle] = useState<string>("Événement");
   const [eventStartTime, setEventStartTime] = useState<string | null>(null);
+  const [eventType, setEventType] = useState<string | null>(null);
   const [reserve, setReserve] = useState<PlayerCard[]>([]);
   const [groups, setGroups] = useState<GroupState[]>(
     Array.from({ length: 6 }, (_, index) => ({
@@ -130,6 +132,16 @@ export default function RaidGroupsPage() {
   const [draggedPlayerId, setDraggedPlayerId] = useState<string | null>(null);
   const [dragOverReserve, setDragOverReserve] = useState(false);
   const [dragOverGroupId, setDragOverGroupId] = useState<number | null>(null);
+  const managePve = usePermission("manage_pve");
+  const managePvp = usePermission("manage_pvp");
+  const permissionsReady = !managePve.loading && !managePvp.loading;
+  const isPveEvent = eventType ? PVE_EVENT_TYPES.includes(eventType) : false;
+  const isPvpEvent = eventType ? PVP_EVENT_TYPES.includes(eventType) : false;
+  const canManageEvent =
+    permissionsReady &&
+    ((isPveEvent && managePve.allowed) ||
+      (isPvpEvent && managePvp.allowed) ||
+      (!isPveEvent && !isPvpEvent));
 
   const allPlayers = useMemo(
     () => [
@@ -171,6 +183,7 @@ export default function RaidGroupsPage() {
         .maybeSingle();
       setEventTitle(event?.title ?? "Événement");
       setEventStartTime(event?.start_time ?? null);
+      setEventType(event?.event_type ?? null);
       const published = Boolean(event?.are_groups_published);
       setIsPublished(published);
       setIsDirty(false);
@@ -813,26 +826,38 @@ export default function RaidGroupsPage() {
 
         {isDirty || !isPublished ? (
           <div className="flex flex-wrap items-center justify-end gap-3">
-            {isDirty ? (
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={isSaving}
-                className="rounded-full border border-amber-400/60 bg-amber-400/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSaving ? "Sauvegarde..." : "Sauvegarder les groupes"}
-              </button>
-            ) : null}
-            {!isPublished ? (
-              <button
-                type="button"
-                onClick={handlePublish}
-                disabled={isPublishing}
-                className="rounded-full border border-emerald-500/60 bg-emerald-500/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isPublishing ? "Publication..." : "Publier les groupes"}
-              </button>
-            ) : null}
+            {!permissionsReady ? (
+              <div className="rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.25em] text-text/60">
+                Chargement des permissions...
+              </div>
+            ) : canManageEvent ? (
+              <>
+                {isDirty ? (
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="rounded-full border border-amber-400/60 bg-amber-400/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSaving ? "Sauvegarde..." : "Sauvegarder les groupes"}
+                  </button>
+                ) : null}
+                {!isPublished ? (
+                  <button
+                    type="button"
+                    onClick={handlePublish}
+                    disabled={isPublishing}
+                    className="rounded-full border border-emerald-500/60 bg-emerald-500/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isPublishing ? "Publication..." : "Publier les groupes"}
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <div className="rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200">
+                Accès restreint pour ce type d&apos;événement.
+              </div>
+            )}
           </div>
         ) : null}
       </section>

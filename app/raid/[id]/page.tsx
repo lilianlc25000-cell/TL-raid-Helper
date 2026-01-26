@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import LootDistributor from "./LootDistributor";
+import { usePermission } from "@/lib/hooks/usePermission";
 
 type Role = "Tank" | "DPS" | "Heal";
 
@@ -117,6 +118,8 @@ export default function RaidDetailPage() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [pool, setPool] = useState<Player[]>(initialPool);
   const [parties, setParties] = useState<PartySlot[]>(initialParties);
+  const distributeLoot = usePermission("distribute_loot");
+  const canDistributeLoot = distributeLoot.allowed;
 
   const groupedRoster = useMemo(() => {
     const base = {
@@ -289,7 +292,8 @@ export default function RaidDetailPage() {
             <button
               type="button"
               onClick={() => setAdminMode((prev) => !prev)}
-              className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.2em] text-text/70 transition hover:text-text"
+              disabled={!canDistributeLoot}
+              className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.2em] text-text/70 transition hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
             >
               <UserCog className="h-4 w-4" />
               Mode Admin
@@ -301,7 +305,7 @@ export default function RaidDetailPage() {
         </div>
       </section>
 
-      {adminMode && (
+      {adminMode && canDistributeLoot && (
         <section className="rounded-3xl border border-white/10 bg-surface/50 px-6 py-8 backdrop-blur">
           <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
             <div>

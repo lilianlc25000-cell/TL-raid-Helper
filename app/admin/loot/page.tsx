@@ -12,6 +12,7 @@ import {
   type GameItemCategory,
 } from "../../../lib/game-items";
 import { createClient } from "../../../lib/supabase/client";
+import { usePermission } from "../../../lib/hooks/usePermission";
 
 type LootQueueItem = {
   id: string;
@@ -60,7 +61,6 @@ const mapGameItemsToOptions = (
   );
 
 export default function LootDistributionPage() {
-  const [isAdmin, setIsAdmin] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"catalogue" | "brocante">(
@@ -84,6 +84,12 @@ export default function LootDistributionPage() {
     "fcfs" | "roll" | "council"
   >("council");
 
+  const manageLoot = usePermission("manage_loot");
+  const distributeLoot = usePermission("distribute_loot");
+  const canManageStock = manageLoot.allowed;
+  const canDistribute = distributeLoot.allowed || manageLoot.allowed;
+  const canAccess = canManageStock || distributeLoot.allowed;
+
   const loadAdminRole = useCallback(async () => {
     const supabase = createClient();
     if (!supabase) {
@@ -95,7 +101,6 @@ export default function LootDistributionPage() {
     const { data } = await supabase.auth.getUser();
     const userId = data.user?.id;
     if (!userId) {
-      setIsAdmin(false);
       setIsAuthReady(true);
       return;
     }
@@ -107,9 +112,6 @@ export default function LootDistributionPage() {
       data: { role_rank?: string | null; guild_id?: string | null } | null;
     };
     setCurrentGuildId(profile?.guild_id ?? null);
-    setIsAdmin(
-      profile?.role_rank === "admin" || profile?.role_rank === "conseiller",
-    );
     setIsAuthReady(true);
   }, []);
 
@@ -522,7 +524,7 @@ export default function LootDistributionPage() {
     });
   }, [assignment.candidates, assignment.loot.category, lootSystem]);
 
-  if (!isAuthReady) {
+  if (!isAuthReady || manageLoot.loading || distributeLoot.loading) {
     return (
       <div className="min-h-screen bg-zinc-950 px-6 py-10 text-zinc-100">
         <div className="mx-auto max-w-4xl rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-6 text-sm text-zinc-400">
@@ -571,10 +573,10 @@ export default function LootDistributionPage() {
         </div>
 
         {activeTab === "brocante" ? (
-          <BrocanteCreator isAdmin={isAdmin} onCreated={loadQueue} />
+          <BrocanteCreator isAdmin={canManageStock} onCreated={loadQueue} />
         ) : null}
         {activeTab === "catalogue" ? (
-          isAdmin ? (
+          canAccess ? (
             <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
@@ -592,13 +594,15 @@ export default function LootDistributionPage() {
                   >
                     🎲 Roulette de loot
                   </Link>
-                  <button
-                    type="button"
-                    onClick={openAddModal}
-                    className="w-full rounded-md border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 sm:w-auto"
-                  >
-                    Ajouter un loot à distribuer
-                  </button>
+                  {canManageStock ? (
+                    <button
+                      type="button"
+                      onClick={openAddModal}
+                      className="w-full rounded-md border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 sm:w-auto"
+                    >
+                      Ajouter un loot à distribuer
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -666,22 +670,26 @@ export default function LootDistributionPage() {
                           </div>
                       </div>
                     </div>
-                    {isAdmin ? (
+                    {canDistribute || canManageStock ? (
                       <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-                        <button
-                          type="button"
-                          onClick={() => loadCandidates(loot)}
-                          className="w-full rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500 sm:w-auto"
-                        >
-                          Attribuer
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteLoot(loot.id)}
-                          className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
-                        >
-                          Supprimer
-                        </button>
+                        {canDistribute ? (
+                          <button
+                            type="button"
+                            onClick={() => loadCandidates(loot)}
+                            className="w-full rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500 sm:w-auto"
+                          >
+                            Attribuer
+                          </button>
+                        ) : null}
+                        {canManageStock ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteLoot(loot.id)}
+                            className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
+                          >
+                            Supprimer
+                          </button>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -691,7 +699,7 @@ export default function LootDistributionPage() {
           </div>
         </div>
 
-        {isAdmin ? (
+        {canAccess ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
             <div className="mb-4 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-zinc-500">
               <span>Loots en attente</span>
@@ -749,29 +757,35 @@ export default function LootDistributionPage() {
                         </div>
                       </div>
                       <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenRolls(loot.id)}
-                          className="w-full rounded-md border border-sky-500/60 bg-sky-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-200 transition hover:border-sky-400 sm:w-auto"
-                        >
-                          {lootSystem === "roll"
-                            ? "Ouvrir les rolls"
-                            : "Ouvrir la distribution"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => loadCandidates(loot)}
-                          className="w-full rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500 sm:w-auto"
-                        >
-                          Attribuer
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteLoot(loot.id)}
-                          className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
-                        >
-                          Supprimer
-                        </button>
+                        {canManageStock ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRolls(loot.id)}
+                            className="w-full rounded-md border border-sky-500/60 bg-sky-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-200 transition hover:border-sky-400 sm:w-auto"
+                          >
+                            {lootSystem === "roll"
+                              ? "Ouvrir les rolls"
+                              : "Ouvrir la distribution"}
+                          </button>
+                        ) : null}
+                        {canDistribute ? (
+                          <button
+                            type="button"
+                            onClick={() => loadCandidates(loot)}
+                            className="w-full rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500 sm:w-auto"
+                          >
+                            Attribuer
+                          </button>
+                        ) : null}
+                        {canManageStock ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteLoot(loot.id)}
+                            className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
+                          >
+                            Supprimer
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -782,7 +796,7 @@ export default function LootDistributionPage() {
         ) : null}
       </section>
 
-      {isAddModalOpen ? (
+      {isAddModalOpen && canManageStock ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
           <div className="w-full max-w-2xl rounded-lg border border-zinc-800 bg-zinc-950 p-6 shadow-[0_0_40px_rgba(0,0,0,0.6)]">
             <div className="flex items-start justify-between">
