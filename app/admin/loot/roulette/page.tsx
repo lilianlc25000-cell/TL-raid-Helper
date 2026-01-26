@@ -4,7 +4,6 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { motion } from "framer-motion";
 
 type EligiblePlayer = {
   userId: string;
@@ -68,8 +67,9 @@ const weaponOptions: WeaponOption[] = weaponFiles
   }))
   .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 
-const CARD_WIDTH = 140;
-const CONTAINER_WIDTH = 480;
+const SPIN_STEPS = 36;
+const SPIN_MIN_DELAY = 50;
+const SPIN_MAX_DELAY = 220;
 
 export default function LootRoulettePage() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -82,12 +82,7 @@ export default function LootRoulettePage() {
   const [error, setError] = useState<string | null>(null);
   const [spinIndex, setSpinIndex] = useState<number | null>(null);
   const [winnerId, setWinnerId] = useState<string | null>(null);
-  const [winner, setWinner] = useState<EligiblePlayer | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [stripItems, setStripItems] = useState<EligiblePlayer[]>([]);
-  const [animationX, setAnimationX] = useState(0);
-  const [animationSeed, setAnimationSeed] = useState(0);
-  const [targetIndex, setTargetIndex] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
@@ -154,10 +149,7 @@ export default function LootRoulettePage() {
       setEligiblePlayers([]);
       setWinnerId(null);
       setSpinIndex(null);
-      setWinner(null);
-      setStripItems([]);
       setIsSpinning(false);
-      setTargetIndex(null);
       return;
     }
     const loadEligible = async () => {
@@ -170,10 +162,7 @@ export default function LootRoulettePage() {
       setError(null);
       setWinnerId(null);
       setSpinIndex(null);
-      setWinner(null);
-      setStripItems([]);
       setIsSpinning(false);
-      setTargetIndex(null);
 
       const targetName = normalizeName(itemName);
       const { data: guildMembers, error: membersError } = await supabase
@@ -226,10 +215,7 @@ export default function LootRoulettePage() {
       );
       if (userIds.length === 0) {
         setEligiblePlayers([]);
-        setWinner(null);
-        setStripItems([]);
         setIsSpinning(false);
-        setTargetIndex(null);
         setIsLoading(false);
         return;
       }
@@ -248,10 +234,7 @@ export default function LootRoulettePage() {
         .sort((a, b) => a.ingameName.localeCompare(b.ingameName, "fr"));
 
       setEligiblePlayers(mapped);
-      setWinner(null);
-      setStripItems([]);
       setIsSpinning(false);
-      setTargetIndex(null);
       setIsLoading(false);
     };
 
@@ -277,25 +260,36 @@ export default function LootRoulettePage() {
     setError(null);
     const selectedWinner =
       candidates[Math.floor(Math.random() * candidates.length)];
-    const repeatCount = 32;
-    const baseStrip = Array.from({ length: repeatCount }).flatMap(
-      () => candidates,
+    const winnerIndex = candidates.findIndex(
+      (player) => player.userId === selectedWinner.userId,
     );
-    const target = Math.max(baseStrip.length - 5, 0);
-    const strip = baseStrip.map((item, index) =>
-      index === target ? selectedWinner : item,
-    );
-    const distance =
-      target * CARD_WIDTH - (CONTAINER_WIDTH / 2 - CARD_WIDTH / 2);
-    setStripItems(strip);
-    setWinner(selectedWinner);
-    setWinnerId(selectedWinner.userId);
-    setAnimationX(-distance);
-    setAnimationSeed((prev) => prev + 1);
-    setIsSpinning(true);
-    setTargetIndex(target);
-    setSpinIndex(null);
+    if (winnerIndex < 0) {
+      setError("Impossible de sélectionner le gagnant.");
+      return;
+    }
+    setWinnerId(null);
     setSaveStatus(null);
+    setIsSpinning(true);
+    let step = 0;
+    const runStep = (currentIndex: number) => {
+      setSpinIndex(currentIndex);
+      const progress = step / Math.max(SPIN_STEPS - 1, 1);
+      const eased = progress * progress;
+      const delay =
+        SPIN_MIN_DELAY + (SPIN_MAX_DELAY - SPIN_MIN_DELAY) * eased;
+      if (step >= SPIN_STEPS - 1) {
+        setSpinIndex(winnerIndex);
+        setWinnerId(selectedWinner.userId);
+        setIsSpinning(false);
+        return;
+      }
+      step += 1;
+      window.setTimeout(() => {
+        const nextIndex = (currentIndex + 1) % candidates.length;
+        runStep(nextIndex);
+      }, delay);
+    };
+    runStep(0);
   };
 
   const handleSaveWinner = async () => {
@@ -334,6 +328,17 @@ export default function LootRoulettePage() {
     () => eligiblePlayers.find((player) => player.userId === winnerId) ?? null,
     [eligiblePlayers, winnerId],
   );
+  const checkedPlayers = useMemo(
+    () => eligiblePlayers.filter((player) => player.checked),
+    [eligiblePlayers],
+  );
+  const checkedIndexById = useMemo(() => {
+    const map = new Map<string, number>();
+    checkedPlayers.forEach((player, index) => {
+      map.set(player.userId, index);
+    });
+    return map;
+  }, [checkedPlayers]);
   const filteredWeaponOptions = useMemo(() => {
     const search = normalizeName(itemName);
     if (!search) {
@@ -492,80 +497,31 @@ export default function LootRoulettePage() {
               </div>
             )}
           </div>
-          {stripItems.length > 0 ? (
-            <div className="mt-4 rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/70">
-              <p className="text-xs uppercase tracking-[0.2em] text-text/50">
-                Animation premium
-              </p>
-              <div className="mt-3 flex items-center justify-center">
-                <div
-                  className="relative overflow-hidden rounded-xl border border-white/10 bg-black/30"
-                  style={{ width: `${CONTAINER_WIDTH}px` }}
-                >
-                  <div className="pointer-events-none absolute left-1/2 top-0 h-full w-px bg-amber-400/70" />
-                  <motion.div
-                    key={animationSeed}
-                    className="flex"
-                    initial={{ x: 0 }}
-                    animate={{ x: animationX }}
-                    transition={{ duration: 4, ease: [0.1, 0.9, 0.2, 1.0] }}
-                    onAnimationComplete={() => {
-                      if (!isSpinning) {
-                        return;
-                      }
-                      setIsSpinning(false);
-                      if (winner) {
-                        setSaveStatus(null);
-                      }
-                    }}
-                  >
-                    {stripItems.map((player, index) => {
-                      const isWinner =
-                        !isSpinning &&
-                        winnerId === player.userId &&
-                        index === targetIndex;
-                      return (
-                        <div
-                          key={`${player.userId}-${index}`}
-                          style={{ width: `${CARD_WIDTH}px` }}
-                          className="flex h-24 items-center justify-center"
-                        >
-                          <div
-                            className={[
-                              "w-[120px] rounded-xl border px-3 py-2 text-center text-sm transition",
-                              isWinner
-                                ? "scale-105 border-amber-400/80 bg-amber-400/10 text-amber-100"
-                                : "border-white/10 bg-black/30 text-text/60",
-                            ].join(" ")}
-                          >
-                            <div className="font-semibold">{player.ingameName}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </motion.div>
-                </div>
-              </div>
-              <p className="mt-3 text-xs text-text/50">
-                La ligne centrale indique l&apos;arrêt.
-              </p>
-            </div>
-          ) : null}
           <div className="mt-4 rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/70">
             <p className="text-xs uppercase tracking-[0.2em] text-text/50">
               Liste rapide
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {eligiblePlayers
-                .filter((player) => player.checked)
-                .map((player) => (
+              {checkedPlayers.map((player) => {
+                const index = checkedIndexById.get(player.userId) ?? -1;
+                const isActive = isSpinning && spinIndex === index;
+                const isWinner = !isSpinning && winnerId === player.userId;
+                return (
                   <div
                     key={player.userId}
-                    className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-text/60"
+                    className={[
+                      "rounded-xl border px-3 py-2 text-sm transition",
+                      isWinner
+                        ? "border-emerald-400/70 bg-emerald-500/10 text-emerald-100"
+                        : isActive
+                          ? "border-amber-400/70 bg-amber-400/10 text-amber-100 animate-pulse"
+                          : "border-white/10 bg-black/30 text-text/60",
+                    ].join(" ")}
                   >
                     {player.ingameName}
                   </div>
-                ))}
+                );
+              })}
             </div>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-3">
