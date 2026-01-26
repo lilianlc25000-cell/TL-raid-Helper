@@ -159,10 +159,36 @@ export default function LootRoulettePage() {
       setSpinIndex(null);
 
       const targetName = normalizeName(itemName);
+      const { data: guildMembers, error: membersError } = await supabase
+        .from("guild_members")
+        .select("user_id")
+        .eq("guild_id", guildId);
+
+      if (membersError) {
+        setError(
+          membersError.message ||
+            "Impossible de charger les membres de la guilde.",
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      const memberIds = Array.from(
+        new Set((guildMembers ?? []).map((row) => row.user_id).filter(Boolean)),
+      );
+
+      if (memberIds.length === 0) {
+        setEligiblePlayers([]);
+        setIsLoading(false);
+        return;
+      }
+
       const { data: wishlistRows, error: wishlistError } = await supabase
         .from("gear_wishlist")
-        .select("user_id,item_name")
-        .eq("guild_id", guildId);
+        .select("user_id,item_name,slot_name,item_priority")
+        .in("user_id", memberIds)
+        .eq("item_priority", 1)
+        .in("slot_name", ["main_hand", "off_hand"]);
 
       if (wishlistError) {
         setError(
