@@ -46,6 +46,15 @@ const getRoleLabel = (role: string | null) => {
   return role;
 };
 
+const getRoleEmoji = (role: string | null) => {
+  if (!role) return "❔";
+  const normalized = role.toLowerCase();
+  if (normalized.includes("tank")) return "🛡️";
+  if (normalized.includes("heal") || normalized.includes("soin")) return "💚";
+  if (normalized.includes("dps")) return "⚔️";
+  return "❔";
+};
+
 const getRoleStyle = (role: string | null) => {
   if (!role) return "border-zinc-700 bg-zinc-900/60 text-zinc-300";
   const normalized = role.toLowerCase();
@@ -107,6 +116,14 @@ export default function RosterClient({
       return "Date inconnue";
     }
     return date.toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
+  }, [eventStartTime]);
+
+  const eventTimestamp = useMemo(() => {
+    const date = new Date(eventStartTime);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return Math.floor(date.getTime() / 1000);
   }, [eventStartTime]);
 
   const handlePublishGroups = async () => {
@@ -195,36 +212,45 @@ export default function RosterClient({
         const fields = Array.from(grouped.entries())
           .sort(([a], [b]) => a - b)
           .map(([index, players]) => ({
-            name: `Groupe ${index}`,
+            name: `🏆 Groupe ${index}`,
             value:
               players.length === 0
                 ? "—"
                 : players
                     .map(
                       (player) =>
-                        `${player.ingameName} (${getRoleLabel(player.role)})`,
+                        `> ${getRoleEmoji(player.role)} **${player.ingameName}**`,
                     )
                     .join("\n"),
-            inline: false,
+            inline: true,
           }));
 
         const { error: discordError } = await supabase.functions.invoke(
           "discord-notify",
           {
-          body: {
+            body: {
               channel_id: targetChannelId,
-            embed: {
-              title: `📋 Groupes - ${eventTitle}`,
-              description: `Événement : ${formattedEventDate}\nLes groupes sont publiés. Préparez-vous !`,
-              fields,
-              color: 0x00ff00,
+              embed: {
+                title: `⚔️ Roster Confirmé : ${eventTitle}`,
+                description: `${
+                  eventTimestamp
+                    ? `Raid prévu le <t:${eventTimestamp}:F>`
+                    : `Raid prévu le ${formattedEventDate}`
+                }\nPréparez vos potions, voici la composition des escouades !`,
+                fields,
+                color: 0x00ff00,
+                footer: {
+                  text: "TL Raid Manager • Gérez votre présence sur l'app",
+                },
+              },
+              replace: {
+                match_title_prefix: "⚔️ Roster Confirmé :",
+                limit: 25,
+              },
             },
-            replace: {
-                match_title_prefix: "📋 Groupes -",
-              limit: 25,
-            },
-          },
-          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+            headers: accessToken
+              ? { Authorization: `Bearer ${accessToken}` }
+              : {},
           },
         );
         if (discordError) {

@@ -19,6 +19,10 @@ type DiscordEmbed = {
   url?: string;
   color?: number;
   fields?: DiscordEmbedField[];
+  footer?: {
+    text: string;
+    icon_url?: string;
+  };
 };
 
 type ReplaceOptions = {
