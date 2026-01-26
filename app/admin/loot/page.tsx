@@ -28,6 +28,7 @@ type WishlistCandidate = {
   itemPriority: number | null;
   slotName: string | null;
   rollValue?: number;
+  requestCreatedAt?: string | null;
 };
 
 type AssignmentState = {
@@ -78,6 +79,9 @@ export default function LootDistributionPage() {
   const [rollCountsByLootId, setRollCountsByLootId] = useState<
     Record<string, number>
   >({});
+  const [lootSystem, setLootSystem] = useState<
+    "fcfs" | "roll" | "council"
+  >("council");
 
   const loadAdminRole = useCallback(async () => {
     const supabase = createClient();
@@ -148,7 +152,7 @@ export default function LootDistributionPage() {
       const sessionIds = mapped.map((row) => row.id);
       const { data: rollsData } = await supabase
         .from("loot_rolls")
-        .select("loot_session_id")
+        .select("loot_session_id,roll_value")
         .in("loot_session_id", sessionIds);
       const counts: Record<string, number> = {};
       (rollsData ?? []).forEach((row) => {
@@ -156,13 +160,51 @@ export default function LootDistributionPage() {
         if (!id) {
           return;
         }
-        counts[id] = (counts[id] ?? 0) + 1;
+        const isRoll = (row as { roll_value?: number | null }).roll_value ?? 0;
+        if (lootSystem === "roll") {
+          if (isRoll > 0) {
+            counts[id] = (counts[id] ?? 0) + 1;
+          }
+        } else if (isRoll === 0) {
+          counts[id] = (counts[id] ?? 0) + 1;
+        }
       });
       setRollCountsByLootId(counts);
     } else {
       setRollCountsByLootId({});
     }
     setIsQueueLoading(false);
+  }, [currentGuildId, lootSystem]);
+
+  useEffect(() => {
+    if (!currentGuildId) {
+      return;
+    }
+    const loadLootSystem = async () => {
+      const supabase = createClient();
+      if (!supabase) {
+        return;
+      }
+      const { data: guild } = await supabase
+        .from("guilds")
+        .select("owner_id")
+        .eq("id", currentGuildId)
+        .maybeSingle();
+      if (!guild?.owner_id) {
+        setLootSystem("council");
+        return;
+      }
+      const { data: config } = await supabase
+        .from("guild_configs")
+        .select("loot_system")
+        .eq("owner_id", guild.owner_id)
+        .maybeSingle();
+      const system =
+        (config?.loot_system as "fcfs" | "roll" | "council" | null) ??
+        "council";
+      setLootSystem(system);
+    };
+    void loadLootSystem();
   }, [currentGuildId]);
 
   const openAddModal = () => {
@@ -253,12 +295,13 @@ export default function LootDistributionPage() {
     setAssignment({ loot, candidates: [], isLoading: true, error: null });
     const { data: rollsData, error: rollsError } = (await supabase
       .from("loot_rolls")
-      .select("user_id,roll_value")
+      .select("user_id,roll_value,created_at")
       .eq("loot_session_id", loot.id)) as {
       data:
         | Array<{
             user_id: string;
             roll_value: number;
+            created_at: string;
           }>
         | null;
       error: { message?: string } | null;
@@ -268,12 +311,16 @@ export default function LootDistributionPage() {
         loot,
         candidates: [],
         isLoading: false,
-        error: "Impossible de récupérer les rolls.",
+        error: "Impossible de récupérer les demandes.",
       });
       return;
     }
+    const isRollMode = lootSystem === "roll";
+    const filteredRolls = (rollsData ?? []).filter((roll) =>
+      isRollMode ? roll.roll_value > 0 : roll.roll_value === 0,
+    );
     const userIds = Array.from(
-      new Set((rollsData ?? []).map((roll) => roll.user_id).filter(Boolean)),
+      new Set(filteredRolls.map((roll) => roll.user_id).filter(Boolean)),
     );
     if (userIds.length === 0) {
       setAssignment({
@@ -320,7 +367,7 @@ export default function LootDistributionPage() {
       (wishlistData ?? []).map((row) => [row.user_id, row]),
     );
 
-    const mapped = (rollsData ?? []).map((roll) => {
+    const mapped = filteredRolls.map((roll) => {
       const profile = profileMap.get(roll.user_id);
       const wishlist = wishlistMap.get(roll.user_id);
       return {
@@ -330,7 +377,8 @@ export default function LootDistributionPage() {
         lootReceivedCount: profile?.loot_received_count ?? 0,
         itemPriority: wishlist?.item_priority ?? null,
         slotName: wishlist?.slot_name ?? null,
-        rollValue: roll.roll_value,
+        rollValue: isRollMode ? roll.roll_value : undefined,
+        requestCreatedAt: roll.created_at ?? null,
       };
     });
     setAssignment({
@@ -339,19 +387,21 @@ export default function LootDistributionPage() {
       isLoading: false,
       error: null,
     });
-  }, []);
+  }, [lootSystem]);
 
   const handleAssign = async (candidate: WishlistCandidate) => {
     const supabase = createClient();
     if (!supabase) {
       return;
     }
-    await supabase
-      .from("profiles")
-      .update({
-        loot_received_count: candidate.lootReceivedCount + 1,
-      })
-      .eq("user_id", candidate.userId);
+    if (assignment.loot.category !== "brocante") {
+      await supabase
+        .from("profiles")
+        .update({
+          loot_received_count: candidate.lootReceivedCount + 1,
+        })
+        .eq("user_id", candidate.userId);
+    }
     await supabase
       .from("active_loot_sessions")
       .delete()
@@ -432,17 +482,36 @@ export default function LootDistributionPage() {
   }, [selectedCategory]);
 
   const sortedCandidates = useMemo(() => {
+    const isRollMode = lootSystem === "roll";
+    const isBrocante = assignment.loot.category === "brocante";
     return [...assignment.candidates].sort((a, b) => {
-      const rollA = a.rollValue;
-      const rollB = b.rollValue;
-      if (rollA !== undefined && rollB !== undefined && rollA !== rollB) {
-        return rollB - rollA;
+      if (isRollMode) {
+        const rollA = a.rollValue ?? 0;
+        const rollB = b.rollValue ?? 0;
+        if (rollA !== rollB) {
+          return rollB - rollA;
+        }
+        const lootDiff = a.lootReceivedCount - b.lootReceivedCount;
+        if (lootDiff !== 0) {
+          return lootDiff;
+        }
+        return b.cohesionPoints - a.cohesionPoints;
       }
-      if (rollA !== undefined && rollB === undefined) {
-        return -1;
+
+      if (isBrocante) {
+        const dateA = a.requestCreatedAt
+          ? new Date(a.requestCreatedAt).getTime()
+          : Number.MAX_SAFE_INTEGER;
+        const dateB = b.requestCreatedAt
+          ? new Date(b.requestCreatedAt).getTime()
+          : Number.MAX_SAFE_INTEGER;
+        return dateA - dateB;
       }
-      if (rollA === undefined && rollB !== undefined) {
-        return 1;
+
+      const priorityA = a.itemPriority ?? 99;
+      const priorityB = b.itemPriority ?? 99;
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
       }
       const lootDiff = a.lootReceivedCount - b.lootReceivedCount;
       if (lootDiff !== 0) {
@@ -450,7 +519,7 @@ export default function LootDistributionPage() {
       }
       return b.cohesionPoints - a.cohesionPoints;
     });
-  }, [assignment.candidates]);
+  }, [assignment.candidates, assignment.loot.category, lootSystem]);
 
   if (!isAuthReady) {
     return (
@@ -512,7 +581,7 @@ export default function LootDistributionPage() {
                     Commandes admin
                   </p>
                   <p className="mt-1 text-sm text-zinc-400">
-                    Ajoutez un loot, ouvrez les rolls ou attribuez-le.
+                    Ajoutez un loot, ouvrez la distribution ou attribuez-le.
                   </p>
                 </div>
                 <button
@@ -576,9 +645,14 @@ export default function LootDistributionPage() {
                           {loot.itemName}
                         </div>
                           <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-300">
-                            <span>Rolls ouverts</span>
+                            <span>
+                              {lootSystem === "roll"
+                                ? "Rolls ouverts"
+                                : "Demandes ouvertes"}
+                            </span>
                             <span className="rounded-full border border-emerald-400/40 bg-emerald-950/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-emerald-200">
-                              {(rollCountsByLootId[loot.id] ?? 0).toString()} rolls
+                              {(rollCountsByLootId[loot.id] ?? 0).toString()}{" "}
+                              {lootSystem === "roll" ? "rolls" : "demandes"}
                             </span>
                           </div>
                       </div>
@@ -671,7 +745,9 @@ export default function LootDistributionPage() {
                           onClick={() => handleOpenRolls(loot.id)}
                           className="w-full rounded-md border border-sky-500/60 bg-sky-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-200 transition hover:border-sky-400 sm:w-auto"
                         >
-                          Ouvrir les rolls
+                          {lootSystem === "roll"
+                            ? "Ouvrir les rolls"
+                            : "Ouvrir la distribution"}
                         </button>
                         <button
                           type="button"
@@ -806,7 +882,9 @@ export default function LootDistributionPage() {
                 </div>
               ) : sortedCandidates.length === 0 ? (
                 <div className="rounded-md border border-zinc-900 px-4 py-6 text-sm text-zinc-500">
-                  Aucun roll pour cet item.
+                  {lootSystem === "roll"
+                    ? "Aucun roll pour cet item."
+                    : "Aucune demande pour cet item."}
                 </div>
               ) : (
                 <div className="space-y-3">

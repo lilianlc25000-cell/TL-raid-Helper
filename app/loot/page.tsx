@@ -31,6 +31,7 @@ type RollEntry = {
 };
 
 type ItemCategory = "armes" | "bagues" | "bracelets" | "ceintures" | "boucles";
+type LootSystemValue = "fcfs" | "roll" | "council";
 
 const weaponFiles = [
   "arbalètes_aux_carreaux_enflammés_de_malakar.png",
@@ -93,6 +94,9 @@ export default function PlayerLootPage() {
   const [activeTab, setActiveTab] = useState<"guild" | "brocante">("guild");
   const [eligibleItems, setEligibleItems] = useState<Set<string>>(new Set());
   const [rollsByItem, setRollsByItem] = useState<Record<string, number>>({});
+  const [requestsByItem, setRequestsByItem] = useState<Record<string, boolean>>(
+    {},
+  );
   const [selectedItem, setSelectedItem] = useState<{
     id: string;
     name: string;
@@ -125,6 +129,7 @@ export default function PlayerLootPage() {
   >({});
   const [rollsLoading, setRollsLoading] = useState(false);
   const [rollsError, setRollsError] = useState<string | null>(null);
+  const [lootSystem, setLootSystem] = useState<LootSystemValue>("council");
 
   useEffect(() => {
     let isMounted = true;
@@ -219,6 +224,7 @@ export default function PlayerLootPage() {
       if (mappedSessions.length === 0) {
         setEligibleItems(new Set());
         setRollsByItem({});
+        setRequestsByItem({});
         setIsLoading(false);
         return;
       }
@@ -254,13 +260,19 @@ export default function PlayerLootPage() {
           : { data: [] };
 
       const rollMap: Record<string, number> = {};
+      const requestMap: Record<string, boolean> = {};
       (rollsData ?? []).forEach((roll) => {
         if (!roll.loot_session_id) {
           return;
         }
-        rollMap[roll.loot_session_id] = roll.roll_value;
+        if (roll.roll_value > 0) {
+          rollMap[roll.loot_session_id] = roll.roll_value;
+        } else {
+          requestMap[roll.loot_session_id] = true;
+        }
       });
       setRollsByItem(rollMap);
+      setRequestsByItem(requestMap);
       setIsLoading(false);
     };
 
@@ -286,6 +298,36 @@ export default function PlayerLootPage() {
       );
     };
     void loadThreshold();
+  }, [guildId]);
+
+  useEffect(() => {
+    if (!guildId) {
+      return;
+    }
+    const loadLootSystem = async () => {
+      const supabase = createClient();
+      if (!supabase) {
+        return;
+      }
+      const { data: guild } = await supabase
+        .from("guilds")
+        .select("owner_id")
+        .eq("id", guildId)
+        .maybeSingle();
+      if (!guild?.owner_id) {
+        setLootSystem("council");
+        return;
+      }
+      const { data: config } = await supabase
+        .from("guild_configs")
+        .select("loot_system")
+        .eq("owner_id", guild.owner_id)
+        .maybeSingle();
+      const system =
+        (config?.loot_system as LootSystemValue | null) ?? "council";
+      setLootSystem(system);
+    };
+    void loadLootSystem();
   }, [guildId]);
 
   const filteredItems = useMemo(() => {
@@ -379,6 +421,40 @@ export default function PlayerLootPage() {
     });
     setRollsByItem((prev) => ({ ...prev, [selectedItem.id]: rollValue }));
     setSelectedItem(null);
+  };
+
+  const handleRequestLoot = async (session: ActiveLootSession) => {
+    if (!userId) {
+      return;
+    }
+    const isBrocante = session.category === "brocante";
+    const hasWishlist = eligibleItems.has(session.itemName);
+    const hasEnoughPoints = participationPoints >= participationThreshold;
+    if (!isBrocante && (!hasWishlist || !hasEnoughPoints)) {
+      setError(
+        !hasWishlist
+          ? "Non éligible : l'objet n'est pas dans votre wishlist."
+          : "Non éligible : pas assez de points de participation.",
+      );
+      return;
+    }
+    const supabase = createClient();
+    if (!supabase) {
+      setError("Supabase n'est pas configuré (URL / ANON KEY).");
+      return;
+    }
+    if (!guildId) {
+      setError("Aucune guilde active.");
+      return;
+    }
+    await supabase.from("loot_rolls").insert({
+      user_id: userId,
+      guild_id: guildId,
+      item_name: session.itemName,
+      roll_value: 0,
+      loot_session_id: session.id,
+    });
+    setRequestsByItem((prev) => ({ ...prev, [session.id]: true }));
   };
 
   const handleAddTrait = async (session: ActiveLootSession) => {
@@ -611,6 +687,7 @@ export default function PlayerLootPage() {
               ? true
               : eligibleItems.has(session.itemName) && hasEnoughPoints;
             const rollResult = rollsByItem[session.id];
+            const hasRequest = requestsByItem[session.id];
             const title = session.customName?.trim() || session.itemName;
             const rarityConfig = isBrocante ? getRarityConfig("epic") : null;
             const traits =
@@ -623,6 +700,15 @@ export default function PlayerLootPage() {
               ).values(),
             ).sort((a, b) => a.localeCompare(b, "fr"));
             const selectedTrait = selectedTraitByItem[session.id] ?? "";
+            const isRollMode = lootSystem === "roll";
+            const isFcfsMode = lootSystem === "fcfs";
+            const isCouncilMode = lootSystem === "council";
+            const actionLabel = isFcfsMode
+              ? "OBTENIR"
+              : isCouncilMode
+                ? "DEMANDER LE LOOT"
+                : "ROLL";
+            const canRequest = isEligible && !hasRequest;
             return (
               <div
                 key={session.id}
@@ -725,7 +811,7 @@ export default function PlayerLootPage() {
                     ) : null}
                   </div>
                   <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:items-end">
-                    {typeof rollResult === "number" ? (
+                    {isRollMode && typeof rollResult === "number" ? (
                       <div className="w-full rounded-2xl border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200 sm:w-auto">
                         Votre résultat :{" "}
                         <span className="font-mono text-lg">
@@ -735,7 +821,7 @@ export default function PlayerLootPage() {
                           En attente de validation
                         </div>
                       </div>
-                    ) : isEligible ? (
+                    ) : isRollMode && isEligible ? (
                       <button
                         type="button"
                         onClick={() =>
@@ -744,6 +830,20 @@ export default function PlayerLootPage() {
                         className="w-full rounded-2xl border border-amber-400/60 bg-amber-400/10 px-6 py-3 text-xs uppercase tracking-[0.2em] text-amber-200 shadow-[0_0_25px_rgba(251,191,36,0.35)] transition hover:border-amber-300 hover:text-amber-100 sm:w-auto sm:tracking-[0.3em]"
                       >
                         ROLL
+                      </button>
+                    ) : !isRollMode && hasRequest ? (
+                      <div className="w-full rounded-2xl border border-emerald-400/50 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200 sm:w-auto">
+                        {isBrocante && isFcfsMode
+                          ? "Objet en attente d'envoi"
+                          : "Demande envoyée"}
+                      </div>
+                    ) : !isRollMode && canRequest ? (
+                      <button
+                        type="button"
+                        onClick={() => handleRequestLoot(session)}
+                        className="w-full rounded-2xl border border-amber-400/60 bg-amber-400/10 px-6 py-3 text-[10px] uppercase tracking-[0.2em] text-amber-200 shadow-[0_0_25px_rgba(251,191,36,0.35)] transition hover:border-amber-300 hover:text-amber-100 sm:w-auto sm:tracking-[0.3em]"
+                      >
+                        {actionLabel}
                       </button>
                     ) : (
                       <div className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.2em] text-text/50 sm:w-auto">
@@ -754,13 +854,15 @@ export default function PlayerLootPage() {
                           : "Non éligible (pas dans votre Wishlist)"}
                       </div>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => loadRolls(session, title)}
-                      className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-text/70 transition hover:border-amber-400/40 hover:text-amber-100 sm:w-auto"
-                    >
-                      Voir les rolls
-                    </button>
+                    {isRollMode ? (
+                      <button
+                        type="button"
+                        onClick={() => loadRolls(session, title)}
+                        className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-text/70 transition hover:border-amber-400/40 hover:text-amber-100 sm:w-auto"
+                      >
+                        Voir les rolls
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -770,7 +872,7 @@ export default function PlayerLootPage() {
       </section>
 
       <DiceRoller
-        isOpen={Boolean(selectedItem)}
+        isOpen={lootSystem === "roll" && Boolean(selectedItem)}
         itemName={selectedItem?.name ?? ""}
         playerName="Vous"
         requestId={selectedItem?.id ?? undefined}
