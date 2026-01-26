@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Crosshair,
   Shield,
@@ -18,6 +18,7 @@ type SignupEntry = {
   userId: string;
   ingameName: string;
   role: string | null;
+  assignedRole: string | null;
   archetype: string | null;
   mainWeapon: string | null;
   offWeapon: string | null;
@@ -60,6 +61,12 @@ const ROLE_ICONS: Record<string, string> = {
   'DPS': '⚔️'
 };
 
+const ROLE_OPTIONS = [
+  { label: "Tank", value: "Tank" },
+  { label: "Heal", value: "Heal" },
+  { label: "DPS", value: "DPS" },
+];
+
 const getRoleLabel = (role: string | null) => {
   if (!role) return "Inconnu";
   const normalized = role.toLowerCase();
@@ -99,6 +106,9 @@ const getRoleEmojiLabel = (role: string | null) => {
   const label = getRoleLabel(role);
   return ROLE_ICONS[label] ?? "❔";
 };
+
+const getEffectiveRole = (player: SignupEntry) =>
+  player.assignedRole ?? player.role;
 
 const getRoleStyle = (role: string | null) => {
   if (!role) return "border-zinc-700 bg-zinc-900/60 text-zinc-300";
@@ -150,10 +160,21 @@ export default function RosterClient({
   const [isPublishing, setIsPublishing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+  const [localSignups, setLocalSignups] = useState(signups);
+  const [roleMenuUserId, setRoleMenuUserId] = useState<string | null>(null);
+  const [roleUpdatingUserId, setRoleUpdatingUserId] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    setLocalSignups(signups);
+  }, [signups]);
 
   const sortedSignups = useMemo(() => {
-    return [...signups].sort((a, b) => a.ingameName.localeCompare(b.ingameName));
-  }, [signups]);
+    return [...localSignups].sort((a, b) =>
+      a.ingameName.localeCompare(b.ingameName),
+    );
+  }, [localSignups]);
 
   const formattedEventDate = useMemo(() => {
     const date = new Date(eventStartTime);
@@ -170,6 +191,35 @@ export default function RosterClient({
     }
     return Math.floor(date.getTime() / 1000);
   }, [eventStartTime]);
+
+  const handleAssignRole = async (userId: string, role: string | null) => {
+    const supabase = createClient();
+    if (!supabase) {
+      setActionError("Supabase n'est pas configuré (URL / ANON KEY).");
+      return;
+    }
+    setRoleUpdatingUserId(userId);
+    setActionError(null);
+    const { error } = await supabase
+      .from("event_signups")
+      .update({ assigned_role: role })
+      .eq("event_id", eventId)
+      .eq("user_id", userId);
+    if (error) {
+      setActionError(
+        error.message || "Impossible de modifier le rôle assigné.",
+      );
+      setRoleUpdatingUserId(null);
+      return;
+    }
+    setLocalSignups((prev) =>
+      prev.map((player) =>
+        player.userId === userId ? { ...player, assignedRole: role } : player,
+      ),
+    );
+    setRoleUpdatingUserId(null);
+    setRoleMenuUserId(null);
+  };
 
   const handlePublishGroups = async () => {
     const supabase = createClient();
@@ -266,7 +316,7 @@ export default function RosterClient({
             .map((player) => [player.user_id, player.group_index as number]),
         );
         const grouped = new Map<number, SignupEntry[]>();
-        signups.forEach((player) => {
+        localSignups.forEach((player) => {
           const index = groupIndexByUser.get(player.userId);
           if (!index) {
             return;
@@ -312,9 +362,10 @@ export default function RosterClient({
                         console.log(
                           `Joueur: ${profile?.username} - Armes DB: ${rawMain} / ${rawOff}`,
                         );
+                        const effectiveRole = getEffectiveRole(player);
                         const mainEmoji = getWeaponEmoji(rawMain);
                         const offEmoji = getWeaponEmoji(rawOff);
-                        return `> ${getRoleEmojiLabel(player.role)} **${player.ingameName}** (${mainEmoji} ${offEmoji})`;
+                        return `> ${getRoleEmojiLabel(effectiveRole)} **${player.ingameName}** (${mainEmoji} ${offEmoji})`;
                       },
                     )
                     .join("\n"),
@@ -386,13 +437,18 @@ export default function RosterClient({
           ) : (
             <div className="space-y-3">
               {sortedSignups.map((player) => {
-                const roleLabel = getRoleLabel(player.role);
+                const effectiveRole = getEffectiveRole(player);
+                const roleLabel = getRoleLabel(effectiveRole);
                 const RoleIcon = getWeaponIcon(player.mainWeapon);
                 const OffIcon = getWeaponIcon(player.offWeapon);
                 const mainKey = `${player.userId}-main`;
                 const offKey = `${player.userId}-off`;
                 const mainImage = getWeaponImage(player.mainWeapon);
                 const offImage = getWeaponImage(player.offWeapon);
+                const isForcedRole = player.assignedRole !== null;
+                const roleBadgeClass = isForcedRole
+                  ? "border-amber-400/60 bg-amber-500/10 text-amber-200"
+                  : getRoleStyle(effectiveRole);
                 return (
                   <div
                     key={player.userId}
@@ -403,8 +459,15 @@ export default function RosterClient({
                         {player.ingameName}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                        <span className={`rounded-full border px-2 py-1 ${getRoleStyle(player.role)}`}>
+                        <span
+                          className={`rounded-full border px-2 py-1 ${roleBadgeClass}`}
+                        >
                           {roleLabel}
+                          {isForcedRole ? (
+                            <span className="ml-1" aria-label="Rôle forcé">
+                              👮
+                            </span>
+                          ) : null}
                         </span>
                         <span className="rounded-full border border-white/10 bg-black/30 px-2 py-1 text-text/70">
                           {getClassName(player.mainWeapon, player.offWeapon)}
@@ -415,7 +478,45 @@ export default function RosterClient({
                         <span className="rounded-full border border-white/10 bg-black/30 px-2 py-1 text-text/50">
                           {player.status}
                         </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRoleMenuUserId((current) =>
+                              current === player.userId ? null : player.userId,
+                            )
+                          }
+                          className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-text/70 transition hover:border-white/30"
+                        >
+                          Modifier le rôle
+                        </button>
                       </div>
+                      {roleMenuUserId === player.userId ? (
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                          <button
+                            type="button"
+                            disabled={roleUpdatingUserId === player.userId}
+                            onClick={() =>
+                              handleAssignRole(player.userId, null)
+                            }
+                            className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-text/70 transition hover:border-white/30 disabled:opacity-60"
+                          >
+                            Rôle par défaut
+                          </button>
+                          {ROLE_OPTIONS.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              disabled={roleUpdatingUserId === player.userId}
+                              onClick={() =>
+                                handleAssignRole(player.userId, option.value)
+                              }
+                              className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-text/70 transition hover:border-white/30 disabled:opacity-60"
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-text/70">

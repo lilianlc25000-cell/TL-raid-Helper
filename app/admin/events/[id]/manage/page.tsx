@@ -37,7 +37,7 @@ export default async function ManageEventPage({ params }: PageProps) {
   const { data: signups } = await supabase
     .from("event_signups")
     .select(
-      "user_id,status,selected_build_id,profiles(ingame_name,role,archetype,main_weapon,off_weapon),player_builds(id,build_name,role,archetype,main_weapon,off_weapon)",
+      "user_id,status,assigned_role,selected_build_id,profiles(ingame_name,role,archetype,main_weapon,off_weapon),player_builds(id,build_name,role,archetype,main_weapon,off_weapon)",
     )
     .eq("event_id", resolvedParams.id)
     .in("status", ["present", "tentative", "bench"]);
@@ -55,6 +55,7 @@ export default async function ManageEventPage({ params }: PageProps) {
         status: signup.status as "present" | "tentative" | "bench",
         ingameName: profile?.ingame_name ?? "Inconnu",
         role: build?.role ?? profile?.role ?? null,
+        assignedRole: signup.assigned_role ?? null,
         archetype: build?.archetype ?? profile?.archetype ?? null,
         mainWeapon: build?.main_weapon ?? profile?.main_weapon ?? null,
         offWeapon: build?.off_weapon ?? profile?.off_weapon ?? null,

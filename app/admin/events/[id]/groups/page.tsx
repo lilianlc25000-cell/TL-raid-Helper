@@ -19,10 +19,20 @@ type PlayerCard = {
   userId: string;
   ingameName: string;
   role: string | null;
+  assignedRole: string | null;
   mainWeapon: string | null;
   offWeapon: string | null;
   status: "present" | "tentative";
   groupIndex: number | null;
+};
+
+type PlayerBuild = {
+  id: string;
+  buildName: string;
+  role: string | null;
+  archetype: string | null;
+  mainWeapon: string | null;
+  offWeapon: string | null;
 };
 
 type GroupState = {
@@ -48,6 +58,9 @@ const getRoleLabel = (role: string | null) => {
   if (normalized.includes("dps")) return "DPS";
   return role;
 };
+
+const getEffectiveRole = (player: PlayerCard) =>
+  player.assignedRole ?? player.role;
 
 const getRoleStyle = (role: string | null) => {
   if (!role) return "border-zinc-700 bg-zinc-900/60 text-zinc-300";
@@ -102,6 +115,14 @@ export default function RaidGroupsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [roleEditMode, setRoleEditMode] = useState(false);
+  const [roleEditPlayer, setRoleEditPlayer] = useState<PlayerCard | null>(null);
+  const [roleUpdatingUserId, setRoleUpdatingUserId] = useState<string | null>(
+    null,
+  );
+  const [buildsByUser, setBuildsByUser] = useState<Map<string, PlayerBuild[]>>(
+    new Map(),
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
@@ -154,10 +175,10 @@ export default function RaidGroupsPage() {
       setIsPublished(published);
       setIsDirty(false);
 
-      const { data, error } = (await supabase
+    const { data, error } = (await supabase
         .from("event_signups")
         .select(
-          "user_id,status,group_index,selected_build_id,profiles(ingame_name,role,main_weapon,off_weapon),player_builds(id,build_name,role,archetype,main_weapon,off_weapon)",
+        "user_id,status,assigned_role,group_index,selected_build_id,profiles(ingame_name,role,main_weapon,off_weapon),player_builds(id,build_name,role,archetype,main_weapon,off_weapon)",
         )
         .eq("event_id", eventId)
         .in("status", ["present", "tentative"])) as {
@@ -165,6 +186,7 @@ export default function RaidGroupsPage() {
           | Array<{
               user_id: string;
               status: "present" | "tentative";
+          assigned_role: string | null;
               group_index: number | null;
               selected_build_id: string | null;
               profiles: {
@@ -204,7 +226,8 @@ export default function RaidGroupsPage() {
       );
       let didAutoAssign = false;
 
-      (data ?? []).forEach((entry) => {
+    const userIds = new Set<string>();
+    (data ?? []).forEach((entry) => {
         const profile = Array.isArray(entry.profiles)
           ? entry.profiles[0]
           : entry.profiles;
@@ -215,17 +238,42 @@ export default function RaidGroupsPage() {
           userId: entry.user_id,
           ingameName: profile?.ingame_name ?? "Inconnu",
           role: build?.role ?? profile?.role ?? null,
+        assignedRole: entry.assigned_role ?? null,
           mainWeapon: build?.main_weapon ?? profile?.main_weapon ?? null,
           offWeapon: build?.off_weapon ?? profile?.off_weapon ?? null,
           status: entry.status,
           groupIndex: entry.group_index,
         };
+      userIds.add(entry.user_id);
         if (entry.group_index && entry.group_index >= 1 && entry.group_index <= 6) {
           nextGroups[entry.group_index - 1].players.push(card);
         } else {
           nextReserve.push(card);
         }
       });
+
+    if (userIds.size > 0) {
+      const { data: builds } = await supabase
+        .from("player_builds")
+        .select("id,user_id,build_name,role,archetype,main_weapon,off_weapon")
+        .in("user_id", Array.from(userIds));
+      const nextBuilds = new Map<string, PlayerBuild[]>();
+      (builds ?? []).forEach((build) => {
+        const list = nextBuilds.get(build.user_id) ?? [];
+        list.push({
+          id: build.id,
+          buildName: build.build_name,
+          role: build.role ?? null,
+          archetype: build.archetype ?? null,
+          mainWeapon: build.main_weapon ?? null,
+          offWeapon: build.off_weapon ?? null,
+        });
+        nextBuilds.set(build.user_id, list);
+      });
+      setBuildsByUser(nextBuilds);
+    } else {
+      setBuildsByUser(new Map());
+    }
 
       const eventType = event?.event_type ?? "";
       const contentMode = PVP_EVENT_TYPES.includes(eventType)
@@ -293,6 +341,10 @@ export default function RaidGroupsPage() {
   };
 
   const handleSelect = (player: PlayerCard) => {
+    if (roleEditMode) {
+      setRoleEditPlayer(player);
+      return;
+    }
     setSelectedPlayer((current) =>
       current?.userId === player.userId ? null : player,
     );
@@ -361,6 +413,43 @@ export default function RaidGroupsPage() {
     markDirty();
     setSelectedPlayer(null);
     setGroupPickerId(null);
+  };
+
+  const handleAssignRole = async (player: PlayerCard, role: string | null) => {
+    const supabase = createClient();
+    if (!supabase) {
+      setActionError("Supabase n'est pas configuré (URL / ANON KEY).");
+      return;
+    }
+    setRoleUpdatingUserId(player.userId);
+    setActionError(null);
+    const { error } = await supabase
+      .from("event_signups")
+      .update({ assigned_role: role })
+      .eq("event_id", eventId)
+      .eq("user_id", player.userId);
+    if (error) {
+      setActionError(
+        error.message || "Impossible de modifier le rôle assigné.",
+      );
+      setRoleUpdatingUserId(null);
+      return;
+    }
+    const updatePlayer = (list: PlayerCard[]) =>
+      list.map((entry) =>
+        entry.userId === player.userId
+          ? { ...entry, assignedRole: role }
+          : entry,
+      );
+    setReserve((prev) => updatePlayer(prev));
+    setGroups((prev) =>
+      prev.map((group) => ({
+        ...group,
+        players: updatePlayer(group.players),
+      })),
+    );
+    setRoleUpdatingUserId(null);
+    setRoleEditPlayer(null);
   };
 
   const handleDropOnGroup = (groupId: number) => (
@@ -516,8 +605,10 @@ export default function RaidGroupsPage() {
             ? "—"
             : group.players
                 .map(
-                  (player) =>
-                    `${player.ingameName} (${getRoleLabel(player.role)})`,
+                  (player) => {
+                    const effectiveRole = getEffectiveRole(player);
+                    return `${player.ingameName} (${getRoleLabel(effectiveRole)})`;
+                  },
                 )
                 .join("\n"),
         inline: false,
@@ -585,11 +676,30 @@ export default function RaidGroupsPage() {
           <p className="text-xs uppercase tracking-[0.35em] text-text/50">
             Squad Builder
           </p>
-          <h1 className="mt-2 font-display text-3xl tracking-[0.15em] text-text">
-            Construction des groupes — {eventTitle}
-          </h1>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <h1 className="font-display text-3xl tracking-[0.15em] text-text">
+              Construction des groupes — {eventTitle}
+            </h1>
+            <button
+              type="button"
+              onClick={() => {
+                setRoleEditMode((prev) => !prev);
+                setRoleEditPlayer(null);
+                setSelectedPlayer(null);
+              }}
+              className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.25em] transition ${
+                roleEditMode
+                  ? "border-amber-400/60 bg-amber-400/10 text-amber-200"
+                  : "border-white/10 bg-black/40 text-text/70 hover:border-white/30"
+              }`}
+            >
+              Modifier le rôle
+            </button>
+          </div>
           <p className="mt-2 text-sm text-text/70">
-            Glissez les joueurs pour composer les groupes.
+            {roleEditMode
+              ? "Cliquez sur un joueur pour modifier son rôle."
+              : "Glissez les joueurs pour composer les groupes."}
           </p>
         </header>
 
@@ -726,6 +836,80 @@ export default function RaidGroupsPage() {
           </div>
         ) : null}
       </section>
+      {roleEditPlayer ? (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-4 py-10">
+          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-zinc-950 p-6 shadow-[0_0_35px_rgba(0,0,0,0.5)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-text">
+                  Modifier le rôle
+                </h2>
+                <p className="mt-1 text-sm text-text/60">
+                  Choisissez un build pour {roleEditPlayer.ingameName}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRoleEditPlayer(null)}
+                className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-text/70"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={roleUpdatingUserId === roleEditPlayer.userId}
+                onClick={() => handleAssignRole(roleEditPlayer, null)}
+                className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs text-text/70 transition hover:border-white/30 disabled:opacity-60"
+              >
+                Rôle par défaut
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {(buildsByUser.get(roleEditPlayer.userId) ?? []).length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/60">
+                  Aucun build enregistré pour ce joueur.
+                </div>
+              ) : (
+                (buildsByUser.get(roleEditPlayer.userId) ?? []).map((build) => (
+                  <button
+                    key={build.id}
+                    type="button"
+                    disabled={
+                      roleUpdatingUserId === roleEditPlayer.userId ||
+                      !build.role
+                    }
+                    onClick={() =>
+                      handleAssignRole(roleEditPlayer, build.role)
+                    }
+                    className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-left text-sm text-text/70 transition hover:border-amber-400/60 disabled:opacity-60"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-text">
+                          {build.buildName || "Build sans nom"}
+                        </div>
+                        <div className="mt-1 text-xs text-text/50">
+                          {getRoleLabel(build.role)} ·{" "}
+                          {build.archetype || "Archétype inconnu"}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-text/60">
+                        <span>{build.mainWeapon || "?"}</span>
+                        <span>·</span>
+                        <span>{build.offWeapon || "?"}</span>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -752,8 +936,12 @@ function PlayerCard({
   onDragEnd,
 }: PlayerCardProps) {
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
-  const RoleBadgeStyle = getRoleStyle(player.role);
-  const roleLabel = getRoleLabel(player.role);
+  const effectiveRole = getEffectiveRole(player);
+  const isForcedRole = player.assignedRole !== null;
+  const RoleBadgeStyle = isForcedRole
+    ? "border-amber-400/60 bg-amber-400/10 text-amber-200"
+    : getRoleStyle(effectiveRole);
+  const roleLabel = getRoleLabel(effectiveRole);
   const MainIcon = getWeaponIcon(player.mainWeapon);
   const OffIcon = getWeaponIcon(player.offWeapon);
   const mainKey = `${player.userId}-main`;
@@ -786,6 +974,11 @@ function PlayerCard({
         <div className="mt-1 flex items-center gap-2 text-xs text-zinc-400">
           <span className={`rounded-full border px-2 py-0.5 ${RoleBadgeStyle}`}>
             {roleLabel}
+            {isForcedRole ? (
+              <span className="ml-1" aria-label="Rôle forcé">
+                👮
+              </span>
+            ) : null}
           </span>
           <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
             {player.status === "present" ? "Présent" : "Tentative"}
