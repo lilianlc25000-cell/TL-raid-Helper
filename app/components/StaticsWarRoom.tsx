@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactPlayer from "react-player";
+import ReactPlayerYoutube from "react-player/youtube";
+import ReactPlayerTwitch from "react-player/twitch";
 import { createClient } from "@/lib/supabase/client";
 
 type ReplayResult = "WIN" | "LOSS" | "DRAW";
@@ -55,21 +57,37 @@ const toPlayableVideoUrl = (raw: string) => {
     const host = url.hostname.replace(/^www\./i, "").toLowerCase();
     if (host === "youtu.be") {
       const id = url.pathname.replace(/^\/+/, "");
-      return id ? `https://www.youtube.com/embed/${id}` : normalized;
+      return id ? `https://www.youtube.com/watch?v=${id}` : normalized;
     }
     if (host === "youtube.com" || host === "m.youtube.com") {
       if (url.pathname.startsWith("/shorts/")) {
         const id = url.pathname.replace("/shorts/", "").split("/")[0];
-        return id ? `https://www.youtube.com/embed/${id}` : normalized;
+        return id ? `https://www.youtube.com/watch?v=${id}` : normalized;
       }
       if (url.pathname === "/watch") {
         const id = url.searchParams.get("v");
-        return id ? `https://www.youtube.com/embed/${id}` : normalized;
+        return id ? `https://www.youtube.com/watch?v=${id}` : normalized;
       }
     }
     return normalized;
   } catch {
     return normalized;
+  }
+};
+
+const getVideoProvider = (raw: string) => {
+  try {
+    const url = new URL(normalizeVideoUrl(raw));
+    const host = url.hostname.replace(/^www\./i, "").toLowerCase();
+    if (host.includes("youtube.com") || host === "youtu.be" || host === "m.youtube.com") {
+      return "youtube";
+    }
+    if (host.includes("twitch.tv") || host.includes("clips.twitch.tv")) {
+      return "twitch";
+    }
+    return "other";
+  } catch {
+    return "other";
   }
 };
 
@@ -333,6 +351,10 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
     }
     return toPlayableVideoUrl(selectedReplay.video_url);
   }, [selectedReplay]);
+  const selectedProvider = useMemo(
+    () => (selectedReplay ? getVideoProvider(selectedReplay.video_url) : "other"),
+    [selectedReplay],
+  );
 
   useEffect(() => {
     if (!selectedUrl) {
@@ -479,7 +501,50 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
                     </a>
                   </div>
                 ) : (
-                  <ReactPlayer
+                  <>
+                  {selectedProvider === "youtube" ? (
+                    <ReactPlayerYoutube
+                      url={selectedUrl}
+                      width="100%"
+                      height="100%"
+                      controls
+                      playing
+                      playsinline
+                      config={{
+                        youtube: {
+                          playerVars: {
+                            origin:
+                              typeof window !== "undefined"
+                                ? window.location.origin
+                                : undefined,
+                          },
+                        },
+                      }}
+                      onError={() =>
+                        setPlayerError("Impossible de lancer la vidéo.")
+                      }
+                    />
+                  ) : selectedProvider === "twitch" ? (
+                    <ReactPlayerTwitch
+                      url={selectedUrl}
+                      width="100%"
+                      height="100%"
+                      controls
+                      playing
+                      playsinline
+                      config={{
+                        twitch: {
+                          options: {
+                            parent: playerHost ? [playerHost] : undefined,
+                          },
+                        },
+                      }}
+                      onError={() =>
+                        setPlayerError("Impossible de lancer la vidéo.")
+                      }
+                    />
+                  ) : (
+                    <ReactPlayer
                     url={selectedUrl}
                     width="100%"
                     height="100%"
@@ -501,7 +566,9 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
                     onError={() =>
                       setPlayerError("Impossible de lancer la vidéo.")
                     }
-                  />
+                    />
+                  )}
+                  </>
                 )}
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
