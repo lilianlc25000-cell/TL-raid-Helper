@@ -55,15 +55,16 @@ const toPlayableVideoUrl = (raw: string) => {
     const host = url.hostname.replace(/^www\./i, "").toLowerCase();
     if (host === "youtu.be") {
       const id = url.pathname.replace(/^\/+/, "");
-      return id ? `https://www.youtube.com/watch?v=${id}` : normalized;
+      return id ? `https://www.youtube.com/embed/${id}` : normalized;
     }
     if (host === "youtube.com" || host === "m.youtube.com") {
       if (url.pathname.startsWith("/shorts/")) {
         const id = url.pathname.replace("/shorts/", "").split("/")[0];
-        return id ? `https://www.youtube.com/watch?v=${id}` : normalized;
+        return id ? `https://www.youtube.com/embed/${id}` : normalized;
       }
       if (url.pathname === "/watch") {
-        return normalized;
+        const id = url.searchParams.get("v");
+        return id ? `https://www.youtube.com/embed/${id}` : normalized;
       }
     }
     return normalized;
@@ -95,6 +96,7 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
   const [commentText, setCommentText] = useState("");
   const [commentTime, setCommentTime] = useState("");
   const [playerError, setPlayerError] = useState<string | null>(null);
+  const [playerHost, setPlayerHost] = useState<string>("");
 
   const loadAccess = useCallback(async () => {
     const supabase = createClient();
@@ -340,6 +342,13 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
     setPlayerError(ReactPlayer.canPlay(selectedUrl) ? null : "Lien vidéo non supporté.");
   }, [selectedUrl]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    setPlayerHost(window.location.hostname);
+  }, []);
+
   if (!isAuthReady) {
     return (
       <div className="rounded-2xl border border-white/10 bg-black/30 px-6 py-6 text-sm text-text/60">
@@ -477,6 +486,18 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
                     controls
                     playing
                     playsinline
+                    config={{
+                      youtube: {
+                        playerVars: {
+                          origin: typeof window !== "undefined" ? window.location.origin : undefined,
+                        },
+                      },
+                      twitch: {
+                        options: {
+                          parent: playerHost ? [playerHost] : undefined,
+                        },
+                      },
+                    }}
                     onError={() =>
                       setPlayerError("Impossible de lancer la vidéo.")
                     }
