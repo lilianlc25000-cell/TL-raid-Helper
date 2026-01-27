@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Swords } from "lucide-react";
 import StaticsTeams from "@/app/components/StaticsTeams";
 
 export default function StaticsPvpPage() {
@@ -22,6 +22,13 @@ export default function StaticsPvpPage() {
         >
           <ArrowLeft className="h-4 w-4" />
           Retour
+        </Link>
+        <Link
+          href="/statics-pvp/war-room"
+          className="inline-flex items-center gap-2 rounded-full border border-amber-400/60 bg-amber-400/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+        >
+          <Swords className="h-4 w-4" />
+          ⚔️ War Room
         </Link>
       </header>
 

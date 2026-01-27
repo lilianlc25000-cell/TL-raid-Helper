@@ -387,6 +387,67 @@ export type Database = {
           loot_session_id?: string | null;
         };
       };
+      combat_replays: {
+        Row: {
+          id: string;
+          guild_id: string;
+          uploader_id: string;
+          video_url: string;
+          title: string;
+          result: string;
+          enemy_guild: string | null;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          guild_id: string;
+          uploader_id: string;
+          video_url: string;
+          title: string;
+          result: string;
+          enemy_guild?: string | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          guild_id?: string;
+          uploader_id?: string;
+          video_url?: string;
+          title?: string;
+          result?: string;
+          enemy_guild?: string | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+      };
+      replay_comments: {
+        Row: {
+          id: string;
+          replay_id: string;
+          user_id: string;
+          content: string;
+          timestamp_ref: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          replay_id: string;
+          user_id: string;
+          content: string;
+          timestamp_ref?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          replay_id?: string;
+          user_id?: string;
+          content?: string;
+          timestamp_ref?: string | null;
+          created_at?: string;
+        };
+      };
       gear_wishlist: {
         Row: {
           id: string;

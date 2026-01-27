@@ -13,7 +13,23 @@ const DISCORD_API_BASE = "https://discord.com/api/v10";
 export default async function AdminSettingsPage() {
   const supabase = await createClient();
   const { data: authData } = await supabase.auth.getUser();
-  const ownerId = authData.user?.id ?? null;
+  const currentUserId = authData.user?.id ?? null;
+  const { data: profile } = currentUserId
+    ? await supabase
+        .from("profiles")
+        .select("guild_id")
+        .eq("user_id", currentUserId)
+        .maybeSingle()
+    : { data: null };
+  const guildId = profile?.guild_id ?? null;
+  const { data: guild } = guildId
+    ? await supabase
+        .from("guilds")
+        .select("owner_id")
+        .eq("id", guildId)
+        .maybeSingle()
+    : { data: null };
+  const ownerId = guild?.owner_id ?? null;
 
   const { data: guildConfig } = ownerId
     ? await supabase

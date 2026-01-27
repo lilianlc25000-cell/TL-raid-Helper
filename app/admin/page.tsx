@@ -55,8 +55,8 @@ const tools = [
     gate: "manage_polls",
   },
   {
-    title: "Éligibilité des membres",
-    description: "Classement participation + wishlist loot",
+    title: "Tableau d'éligibilité",
+    description: "Priorité loot selon l'historique",
     href: "/admin/eligibility",
     icon: ShieldCheck,
     accent: "from-amber-500/20 via-amber-500/10 to-red-500/10",
