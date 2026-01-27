@@ -34,6 +34,17 @@ const resultBadge = (result: ReplayResult) => {
   return "border-amber-400/60 bg-amber-500/10 text-amber-200";
 };
 
+const normalizeVideoUrl = (raw: string) => {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+};
+
 export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [hasStatic, setHasStatic] = useState(false);
@@ -56,6 +67,7 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
   const [isSaving, setIsSaving] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [commentTime, setCommentTime] = useState("");
+  const [playerError, setPlayerError] = useState<string | null>(null);
 
   const loadAccess = useCallback(async () => {
     const supabase = createClient();
@@ -225,6 +237,11 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
       setError("Renseignez l'URL et le titre.");
       return;
     }
+    const normalizedUrl = normalizeVideoUrl(formUrl);
+    if (!ReactPlayer.canPlay(normalizedUrl)) {
+      setError("Lien vidéo non reconnu. Utilisez un lien YouTube/Twitch complet.");
+      return;
+    }
     const supabase = createClient();
     if (!supabase) {
       setError("Supabase n'est pas configuré.");
@@ -235,7 +252,7 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
     const { error: insertError } = await supabase.from("combat_replays").insert({
       guild_id: guildId,
       uploader_id: currentUserId,
-      video_url: formUrl.trim(),
+      video_url: normalizedUrl,
       title: formTitle.trim(),
       result: formResult,
       enemy_guild: formEnemy.trim() || null,
@@ -280,6 +297,21 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
     setCommentTime("");
     await loadComments(selectedReplay.id);
   };
+
+  const selectedUrl = useMemo(() => {
+    if (!selectedReplay) {
+      return "";
+    }
+    return normalizeVideoUrl(selectedReplay.video_url);
+  }, [selectedReplay]);
+
+  useEffect(() => {
+    if (!selectedUrl) {
+      setPlayerError(null);
+      return;
+    }
+    setPlayerError(ReactPlayer.canPlay(selectedUrl) ? null : "Lien vidéo non supporté.");
+  }, [selectedUrl]);
 
   if (!isAuthReady) {
     return (
@@ -398,12 +430,31 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
           <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
             <div className="space-y-4">
               <div className="aspect-video overflow-hidden rounded-2xl border border-white/10 bg-black/50">
-                <ReactPlayer
-                  url={selectedReplay.video_url}
-                  width="100%"
-                  height="100%"
-                  controls
-                />
+                {playerError ? (
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-text/70">
+                    <div>{playerError}</div>
+                    <a
+                      href={selectedUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-amber-200 underline"
+                    >
+                      Ouvrir la vidéo
+                    </a>
+                  </div>
+                ) : (
+                  <ReactPlayer
+                    url={selectedUrl}
+                    width="100%"
+                    height="100%"
+                    controls
+                    playing
+                    playsinline
+                    onError={() =>
+                      setPlayerError("Impossible de lancer la vidéo.")
+                    }
+                  />
+                )}
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
                 <p className="text-xs uppercase tracking-[0.25em] text-text/50">
