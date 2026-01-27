@@ -454,6 +454,17 @@ export default function PlayerLootPage() {
       roll_value: 0,
       loot_session_id: session.id,
     });
+    if (lootSystem === "fcfs") {
+      await supabase
+        .from("active_loot_sessions")
+        .update({ is_active: false })
+        .eq("id", session.id);
+      setSessions((prev) =>
+        prev.map((item) =>
+          item.id === session.id ? { ...item, isActive: false } : item,
+        ),
+      );
+    }
     setRequestsByItem((prev) => ({ ...prev, [session.id]: true }));
   };
 

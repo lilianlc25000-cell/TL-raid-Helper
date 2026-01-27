@@ -15,8 +15,8 @@ import { usePermission } from "../../lib/hooks/usePermission";
 
 const tools = [
   {
-    title: "Distribution de Loots",
-    description: "Gérer l'attribution des items du dimanche",
+    title: "Ajouter un loot ouvert",
+    description: "Publier un loot de brocante",
     href: "/admin/loot",
     icon: Gem,
     accent: "from-violet-500/20 via-violet-500/10 to-amber-400/10",

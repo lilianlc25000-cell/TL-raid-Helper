@@ -20,6 +20,7 @@ type LootQueueItem = {
   isActive: boolean;
   imageUrl?: string | null;
   category?: "guild_raid" | "brocante" | null;
+  customTraits?: string[] | null;
 };
 
 type WishlistCandidate = {
@@ -63,9 +64,7 @@ const mapGameItemsToOptions = (
 export default function LootDistributionPage() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"catalogue" | "brocante">(
-    "catalogue",
-  );
+  const [view, setView] = useState<"add" | "distribution">("add");
   const [queue, setQueue] = useState<LootQueueItem[]>([]);
   const [queueError, setQueueError] = useState<string | null>(null);
   const [isQueueLoading, setIsQueueLoading] = useState(false);
@@ -83,12 +82,13 @@ export default function LootDistributionPage() {
   const [lootSystem, setLootSystem] = useState<
     "fcfs" | "roll" | "council"
   >("council");
+  const [refusalReason, setRefusalReason] = useState<string>("");
 
   const manageLoot = usePermission("manage_loot");
   const distributeLoot = usePermission("distribute_loot");
   const canManageStock = manageLoot.allowed;
   const canDistribute = distributeLoot.allowed;
-  const canAccess = distributeLoot.allowed;
+  const canAccess = distributeLoot.allowed || manageLoot.allowed;
 
   const loadAdminRole = useCallback(async () => {
     const supabase = createClient();
@@ -130,7 +130,7 @@ export default function LootDistributionPage() {
     setQueueError(null);
     const { data, error } = await supabase
       .from("active_loot_sessions")
-      .select("id,item_name,is_active,image_url,category")
+      .select("id,item_name,is_active,image_url,category,custom_traits")
       .eq("guild_id", currentGuildId)
       .order("id", { ascending: false });
     if (error) {
@@ -148,6 +148,9 @@ export default function LootDistributionPage() {
         imageUrl: (row as { image_url?: string | null }).image_url ?? null,
         category: (row as { category?: "guild_raid" | "brocante" | null })
           .category,
+        customTraits: Array.isArray((row as { custom_traits?: string[] | null }).custom_traits)
+          ? ((row as { custom_traits?: string[] | null }).custom_traits as string[])
+          : null,
       }))
       .filter((row) => Boolean(row.id));
     setQueue(mapped);
@@ -413,6 +416,102 @@ export default function LootDistributionPage() {
     await loadQueue();
   };
 
+  const sendNotification = async (userId: string, message: string) => {
+    const supabase = createClient();
+    if (!supabase) {
+      return;
+    }
+    await supabase.from("notifications").insert({
+      user_id: userId,
+      guild_id: currentGuildId,
+      type: "loot",
+      message,
+      is_read: false,
+    });
+  };
+
+  const finalizeLoot = async (lootId: string, winnerId: string | null) => {
+    const supabase = createClient();
+    if (!supabase) {
+      return;
+    }
+    if (winnerId) {
+      await supabase.from("loot_history").insert({
+        guild_id: currentGuildId,
+        user_id: winnerId,
+        item_name: assignment.loot.itemName,
+        raid_event_id: null,
+        loot_method: lootSystem,
+      });
+    }
+    await supabase.from("loot_rolls").delete().eq("loot_session_id", lootId);
+    await supabase.from("active_loot_sessions").delete().eq("id", lootId);
+  };
+
+  const handleAcceptFcfs = async (candidate: WishlistCandidate) => {
+    await sendNotification(
+      candidate.userId,
+      "Félicitations, votre demande de loot a été acceptée. Vous le recevrez prochainement.",
+    );
+    await finalizeLoot(assignment.loot.id, candidate.userId);
+    setAssignment(emptyAssignment);
+    await loadQueue();
+  };
+
+  const handleRefuseFcfs = async (candidate: WishlistCandidate) => {
+    await sendNotification(
+      candidate.userId,
+      `Votre demande de loot a été refusée.${refusalReason ? ` Raison: ${refusalReason}` : ""}`,
+    );
+    const supabase = createClient();
+    if (!supabase) {
+      return;
+    }
+    await supabase
+      .from("loot_rolls")
+      .delete()
+      .eq("loot_session_id", assignment.loot.id)
+      .eq("user_id", candidate.userId);
+    await supabase
+      .from("active_loot_sessions")
+      .update({ is_active: true })
+      .eq("id", assignment.loot.id);
+    setRefusalReason("");
+    setAssignment(emptyAssignment);
+    await loadQueue();
+  };
+
+  const handleAssignCouncil = async (candidate: WishlistCandidate) => {
+    await sendNotification(
+      candidate.userId,
+      "Félicitations, votre demande de loot a été acceptée.",
+    );
+    const others = assignment.candidates.filter(
+      (entry) => entry.userId !== candidate.userId,
+    );
+    await Promise.all(
+      others.map((entry) =>
+        sendNotification(
+          entry.userId,
+          "Désolé, vous n'avez pas gagné la demande de loot.",
+        ),
+      ),
+    );
+    await finalizeLoot(assignment.loot.id, candidate.userId);
+    setAssignment(emptyAssignment);
+    await loadQueue();
+  };
+
+  const handleAssignRoll = async (candidate: WishlistCandidate) => {
+    await sendNotification(
+      candidate.userId,
+      "Félicitations, vous avez gagné le roll du loot.",
+    );
+    await finalizeLoot(assignment.loot.id, candidate.userId);
+    setAssignment(emptyAssignment);
+    await loadQueue();
+  };
+
   useEffect(() => {
     loadAdminRole();
     loadQueue();
@@ -451,17 +550,11 @@ export default function LootDistributionPage() {
     };
   }, [loadAdminRole]);
 
-  const filteredQueue = useMemo(() => {
-    if (activeTab === "brocante") {
-      return queue.filter((loot) => loot.category === "brocante");
-    }
-    return queue.filter((loot) => loot.category !== "brocante");
-  }, [activeTab, queue]);
-
-  const pendingLoots = useMemo(
-    () => filteredQueue.filter((loot) => !loot.isActive),
-    [filteredQueue],
+  const filteredQueue = useMemo(
+    () => queue.filter((loot) => loot.category === "brocante"),
+    [queue],
   );
+
   const activeLoots = useMemo(
     () => filteredQueue.filter((loot) => loot.isActive),
     [filteredQueue],
@@ -472,6 +565,10 @@ export default function LootDistributionPage() {
         (rollCountsByLootId[b.id] ?? 0) - (rollCountsByLootId[a.id] ?? 0),
     );
   }, [activeLoots, rollCountsByLootId]);
+  const distributionQueue = useMemo(
+    () => queue.filter((loot) => (rollCountsByLootId[loot.id] ?? 0) > 0),
+    [queue, rollCountsByLootId],
+  );
 
   const selectedCategoryConfig = selectedCategory
     ? gameItemCategories.find((category) => category.key === selectedCategory)
@@ -542,7 +639,7 @@ export default function LootDistributionPage() {
             File d&apos;attente des loots
           </p>
           <h1 className="mt-2 text-2xl font-semibold text-zinc-100">
-            Distribution de Loots
+            Ajouter un loot ouvert
           </h1>
           <p className="mt-2 text-sm text-zinc-500">
             {authError
@@ -552,39 +649,44 @@ export default function LootDistributionPage() {
         </header>
 
         <div className="flex flex-wrap gap-2">
-          {[
-            { key: "catalogue", label: "Catalogue de Raid" },
-            { key: "brocante", label: "Catalogue de Brocante" },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key as "catalogue" | "brocante")}
-              className={[
-                "rounded-full border px-4 py-2 text-xs uppercase tracking-[0.25em] transition",
-                activeTab === tab.key
-                  ? "border-amber-400/60 bg-amber-400/10 text-amber-200"
-                  : "border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:border-amber-400/40 hover:text-amber-200",
-              ].join(" ")}
-            >
-              {tab.label}
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={() => setView("add")}
+            className={[
+              "rounded-full border px-4 py-2 text-xs uppercase tracking-[0.25em] transition",
+              view === "add"
+                ? "border-amber-400/60 bg-amber-400/10 text-amber-200"
+                : "border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:border-amber-400/40 hover:text-amber-200",
+            ].join(" ")}
+          >
+            Catalogue de brocante
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("distribution")}
+            className={[
+              "rounded-full border px-4 py-2 text-xs uppercase tracking-[0.25em] transition",
+              view === "distribution"
+                ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-200"
+                : "border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:border-emerald-400/40 hover:text-emerald-200",
+            ].join(" ")}
+          >
+            Distribution
+          </button>
         </div>
 
-        {activeTab === "brocante" ? (
-          <BrocanteCreator isAdmin={canManageStock} onCreated={loadQueue} />
-        ) : null}
-        {activeTab === "catalogue" ? (
-          canAccess ? (
+        {view === "add" ? (
+          <>
+            <BrocanteCreator isAdmin={canManageStock} onCreated={loadQueue} />
+            {canAccess ? (
             <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-                    Commandes admin
+                    Ajout de loots ouverts
                   </p>
                   <p className="mt-1 text-sm text-zinc-400">
-                    Ajoutez un loot, ouvrez la distribution ou attribuez-le.
+                    Ajoutez des loots ouverts pour la brocante.
                   </p>
                 </div>
                 <div className="flex w-full flex-wrap gap-2 sm:w-auto">
@@ -605,102 +707,93 @@ export default function LootDistributionPage() {
               Zone réservée aux officiers. Vous pouvez uniquement voir les loots
               en cours de distribution.
             </div>
-          )
+          )}
+
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
+              <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-zinc-500">
+                <span>Loots ouverts</span>
+                <span className="font-mono text-zinc-400">
+                  {activeLoots.length.toString().padStart(2, "0")}
+                </span>
+              </div>
+              <div className="mt-4 space-y-3">
+                {sortedActiveLoots.length === 0 ? (
+                  <div className="rounded-md border border-zinc-900 px-4 py-6 text-center text-sm text-zinc-500">
+                    Aucun loot actif.
+                  </div>
+                ) : (
+                  sortedActiveLoots.map((loot) => {
+                    const imageSrc = imageErrors[loot.id]
+                      ? getSlotPlaceholder("main_hand")
+                      : loot.imageUrl || getItemImage(loot.itemName);
+                    return (
+                      <div
+                        key={loot.id}
+                        className="flex flex-col gap-3 rounded-md border border-zinc-900 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-200 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/70">
+                            <Image
+                              src={imageSrc}
+                              alt={loot.itemName}
+                              width={88}
+                              height={88}
+                              className="h-[88px] w-[88px] rounded-xl object-contain"
+                              unoptimized
+                              onError={() =>
+                                setImageErrors((prev) => ({
+                                  ...prev,
+                                  [loot.id]: true,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div>
+                            <div className="text-base font-medium text-zinc-100">
+                              {loot.itemName}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-300">
+                              <span>
+                                {lootSystem === "roll"
+                                  ? "Rolls ouverts"
+                                  : "Demandes ouvertes"}
+                              </span>
+                              <span className="rounded-full border border-emerald-400/40 bg-emerald-950/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-emerald-200">
+                                {(rollCountsByLootId[loot.id] ?? 0).toString()}{" "}
+                                {lootSystem === "roll" ? "rolls" : "demandes"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        {canManageStock ? (
+                          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLoot(loot.id)}
+                              className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
+                            >
+                              Supprimer
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </>
+        ) : null}
         ) : null}
 
-        <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
+        {view === "distribution" ? (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
           <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-zinc-500">
-            <span>Loots ouverts</span>
+            <span>Distribution</span>
             <span className="font-mono text-zinc-400">
-              {activeLoots.length.toString().padStart(2, "0")}
+              {distributionQueue.length.toString().padStart(2, "0")}
             </span>
           </div>
-          <div className="mt-4 space-y-3">
-            {sortedActiveLoots.length === 0 ? (
-              <div className="rounded-md border border-zinc-900 px-4 py-6 text-center text-sm text-zinc-500">
-                Aucun loot actif.
-              </div>
-            ) : (
-              sortedActiveLoots.map((loot) => {
-                const imageSrc = imageErrors[loot.id]
-                  ? getSlotPlaceholder("main_hand")
-                  : loot.imageUrl || getItemImage(loot.itemName);
-                return (
-                  <div
-                    key={loot.id}
-                    className="flex flex-col gap-3 rounded-md border border-zinc-900 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-200 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/70">
-                        <Image
-                          src={imageSrc}
-                          alt={loot.itemName}
-                          width={88}
-                          height={88}
-                          className="h-[88px] w-[88px] rounded-xl object-contain"
-                          unoptimized
-                          onError={() =>
-                            setImageErrors((prev) => ({
-                              ...prev,
-                              [loot.id]: true,
-                            }))
-                          }
-                        />
-                      </div>
-                        <div>
-                        <div className="text-base font-medium text-zinc-100">
-                          {loot.itemName}
-                        </div>
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-emerald-300">
-                            <span>
-                              {lootSystem === "roll"
-                                ? "Rolls ouverts"
-                                : "Demandes ouvertes"}
-                            </span>
-                            <span className="rounded-full border border-emerald-400/40 bg-emerald-950/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-emerald-200">
-                              {(rollCountsByLootId[loot.id] ?? 0).toString()}{" "}
-                              {lootSystem === "roll" ? "rolls" : "demandes"}
-                            </span>
-                          </div>
-                      </div>
-                    </div>
-                    {canDistribute || canManageStock ? (
-                      <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-                        {canDistribute ? (
-                          <button
-                            type="button"
-                            onClick={() => loadCandidates(loot)}
-                            className="w-full rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500 sm:w-auto"
-                          >
-                            Attribuer
-                          </button>
-                        ) : null}
-                        {canManageStock ? (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteLoot(loot.id)}
-                            className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
-                          >
-                            Supprimer
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {canAccess ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
-            <div className="mb-4 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-zinc-500">
-              <span>Loots en attente</span>
-              <span className="font-mono text-zinc-400">
-                {pendingLoots.length.toString().padStart(2, "0")}
-              </span>
-            </div>
             {isQueueLoading ? (
               <div className="rounded-md border border-zinc-900 px-4 py-6 text-sm text-zinc-500">
                 Chargement...
@@ -709,13 +802,13 @@ export default function LootDistributionPage() {
               <div className="rounded-md border border-red-500/40 bg-red-950/30 px-4 py-6 text-sm text-red-200">
                 {queueError}
               </div>
-            ) : pendingLoots.length === 0 ? (
+            ) : distributionQueue.length === 0 ? (
               <div className="rounded-md border border-zinc-900 px-4 py-6 text-sm text-zinc-500">
-                Aucun loot en attente.
+                Aucun loot en distribution.
               </div>
             ) : (
-              <div className="space-y-3">
-                {pendingLoots.map((loot) => {
+              <div className="mt-4 space-y-3">
+                {distributionQueue.map((loot) => {
                   const imageSrc = imageErrors[loot.id]
                     ? getSlotPlaceholder("main_hand")
                     : loot.imageUrl || getItemImage(loot.itemName);
@@ -746,41 +839,23 @@ export default function LootDistributionPage() {
                             {loot.itemName}
                           </div>
                           <div className="text-xs text-zinc-500">
-                            En attente de publication
+                            {lootSystem === "roll"
+                              ? "Rolls en cours"
+                              : "Demandes en cours"}
                           </div>
                         </div>
                       </div>
-                      <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-                        {canManageStock ? (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenRolls(loot.id)}
-                            className="w-full rounded-md border border-sky-500/60 bg-sky-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-200 transition hover:border-sky-400 sm:w-auto"
-                          >
-                            {lootSystem === "roll"
-                              ? "Ouvrir les rolls"
-                              : "Ouvrir la distribution"}
-                          </button>
-                        ) : null}
-                        {canDistribute ? (
-                          <button
-                            type="button"
-                            onClick={() => loadCandidates(loot)}
-                            className="w-full rounded-md border border-emerald-600 bg-emerald-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500 sm:w-auto"
-                          >
-                            Attribuer
-                          </button>
-                        ) : null}
-                        {canManageStock ? (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteLoot(loot.id)}
-                            className="w-full rounded-md border border-red-500/60 bg-red-950/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400 sm:w-auto"
-                          >
-                            Supprimer
-                          </button>
-                        ) : null}
-                      </div>
+                      {canDistribute ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            loadCandidates(loot);
+                          }}
+                          className="rounded-md border border-emerald-600 bg-emerald-950 px-4 py-2 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500"
+                        >
+                          {lootSystem === "roll" ? "Voir les scores" : "Distribution"}
+                        </button>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -873,11 +948,16 @@ export default function LootDistributionPage() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-                  Attribution
+                  Distribution
                 </p>
                 <h2 className="mt-1 text-xl font-semibold text-zinc-100">
-                  Attribuer {assignment.loot.itemName}
+                  {assignment.loot.itemName}
                 </h2>
+                {assignment.loot.customTraits?.length ? (
+                  <p className="mt-2 text-xs text-zinc-400">
+                    Traits : {assignment.loot.customTraits.join(", ")}
+                  </p>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -914,17 +994,12 @@ export default function LootDistributionPage() {
                         <div className="font-semibold text-zinc-100">
                           {candidate.ingameName}
                         </div>
-                        <div className="text-xs text-zinc-500">
-                          {candidate.lootReceivedCount} loots reçus ·{" "}
-                          {candidate.cohesionPoints} points de participation
-                        </div>
-                        {candidate.itemPriority ? (
-                          <div className="text-xs text-emerald-300">
-                            ✅ Wishlist · Priorité {candidate.itemPriority}
-                          </div>
-                        ) : assignment.loot.category !== "brocante" ? (
-                          <div className="text-xs text-amber-300">
-                            ⚠️ Pas dans la wishlist
+                        {candidate.requestCreatedAt ? (
+                          <div className="text-xs text-zinc-500">
+                            Demande :{" "}
+                            {new Date(candidate.requestCreatedAt).toLocaleString(
+                              "fr-FR",
+                            )}
                           </div>
                         ) : null}
                       </div>
@@ -933,18 +1008,58 @@ export default function LootDistributionPage() {
                           🎲 {candidate.rollValue}
                         </span>
                       ) : null}
-                      <button
-                        type="button"
-                        onClick={() => handleAssign(candidate)}
-                        className="rounded-md border border-emerald-600 bg-emerald-950 px-3 py-2 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500"
-                      >
-                        Attribuer
-                      </button>
+                      {lootSystem === "roll" ? (
+                        <button
+                          type="button"
+                          onClick={() => handleAssignRoll(candidate)}
+                          className="rounded-md border border-emerald-600 bg-emerald-950 px-3 py-2 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500"
+                        >
+                          Attribuer
+                        </button>
+                      ) : lootSystem === "fcfs" ? (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleAcceptFcfs(candidate)}
+                            className="rounded-md border border-emerald-600 bg-emerald-950 px-3 py-2 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500"
+                          >
+                            Accepter
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRefuseFcfs(candidate)}
+                            className="rounded-md border border-red-500/60 bg-red-950/40 px-3 py-2 text-xs uppercase tracking-[0.2em] text-red-200 transition hover:border-red-400"
+                          >
+                            Refuser
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleAssignCouncil(candidate)}
+                          className="rounded-md border border-emerald-600 bg-emerald-950 px-3 py-2 text-xs uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-500"
+                        >
+                          Attribuer
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
             </div>
+            {lootSystem === "fcfs" ? (
+              <div className="mt-4 rounded-md border border-white/10 bg-black/40 p-4 text-sm text-zinc-200">
+                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                  Justification du refus
+                </p>
+                <input
+                  value={refusalReason}
+                  onChange={(event) => setRefusalReason(event.target.value)}
+                  placeholder="Motif du refus"
+                  className="mt-2 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-zinc-100"
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
