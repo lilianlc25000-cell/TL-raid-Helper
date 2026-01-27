@@ -45,6 +45,33 @@ const normalizeVideoUrl = (raw: string) => {
   return `https://${trimmed}`;
 };
 
+const toPlayableVideoUrl = (raw: string) => {
+  const normalized = normalizeVideoUrl(raw);
+  if (!normalized) {
+    return "";
+  }
+  try {
+    const url = new URL(normalized);
+    const host = url.hostname.replace(/^www\./i, "").toLowerCase();
+    if (host === "youtu.be") {
+      const id = url.pathname.replace(/^\/+/, "");
+      return id ? `https://www.youtube.com/watch?v=${id}` : normalized;
+    }
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      if (url.pathname.startsWith("/shorts/")) {
+        const id = url.pathname.replace("/shorts/", "").split("/")[0];
+        return id ? `https://www.youtube.com/watch?v=${id}` : normalized;
+      }
+      if (url.pathname === "/watch") {
+        return normalized;
+      }
+    }
+    return normalized;
+  } catch {
+    return normalized;
+  }
+};
+
 export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [hasStatic, setHasStatic] = useState(false);
@@ -237,7 +264,7 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
       setError("Renseignez l'URL et le titre.");
       return;
     }
-    const normalizedUrl = normalizeVideoUrl(formUrl);
+    const normalizedUrl = toPlayableVideoUrl(formUrl);
     if (!ReactPlayer.canPlay(normalizedUrl)) {
       setError("Lien vidéo non reconnu. Utilisez un lien YouTube/Twitch complet.");
       return;
@@ -302,7 +329,7 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
     if (!selectedReplay) {
       return "";
     }
-    return normalizeVideoUrl(selectedReplay.video_url);
+    return toPlayableVideoUrl(selectedReplay.video_url);
   }, [selectedReplay]);
 
   useEffect(() => {
