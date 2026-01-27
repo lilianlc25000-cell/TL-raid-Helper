@@ -784,7 +784,6 @@ export default function LootDistributionPage() {
             </div>
           </>
         ) : null}
-        ) : null}
 
         {view === "distribution" ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-6 py-5">
