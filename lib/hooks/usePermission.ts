@@ -7,13 +7,17 @@ export type PermissionKey =
   | "manage_pve"
   | "manage_pvp"
   | "manage_loot"
-  | "distribute_loot";
+  | "distribute_loot"
+  | "manage_polls"
+  | "right_hand";
 
 const permissionFieldMap: Record<PermissionKey, keyof PermissionFields> = {
   manage_pve: "perm_manage_pve",
   manage_pvp: "perm_manage_pvp",
   manage_loot: "perm_manage_loot",
   distribute_loot: "perm_distribute_loot",
+  manage_polls: "perm_manage_polls",
+  right_hand: "perm_right_hand",
 };
 
 type PermissionFields = {
@@ -22,6 +26,8 @@ type PermissionFields = {
   perm_manage_pvp?: boolean | null;
   perm_manage_loot?: boolean | null;
   perm_distribute_loot?: boolean | null;
+  perm_manage_polls?: boolean | null;
+  perm_right_hand?: boolean | null;
 };
 
 type PermissionState = {
@@ -76,7 +82,7 @@ export const usePermission = (permission: PermissionKey): PermissionState => {
       const { data: member } = (await supabase
         .from("guild_members")
         .select(
-          "role_rank,perm_manage_pve,perm_manage_pvp,perm_manage_loot,perm_distribute_loot",
+          "role_rank,perm_manage_pve,perm_manage_pvp,perm_manage_loot,perm_distribute_loot,perm_manage_polls,perm_right_hand",
         )
         .eq("guild_id", guildId)
         .eq("user_id", userId)
@@ -91,6 +97,12 @@ export const usePermission = (permission: PermissionKey): PermissionState => {
       if (rank !== "conseiller") {
         if (isMounted) {
           setState({ allowed: false, loading: false, error: null });
+        }
+        return;
+      }
+      if (member?.perm_right_hand) {
+        if (isMounted) {
+          setState({ allowed: true, loading: false, error: null });
         }
         return;
       }

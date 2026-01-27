@@ -9,6 +9,8 @@ export type CounselorEntry = {
   perm_manage_pvp: boolean;
   perm_manage_loot: boolean;
   perm_distribute_loot: boolean;
+  perm_manage_polls: boolean;
+  perm_right_hand: boolean;
 };
 
 type CounselorPermissionsListProps = {
@@ -62,7 +64,7 @@ export default function CounselorPermissionsList({
                   {counselor.ingameName}
                 </div>
                 <div className="text-xs text-text/50">
-                  Cliquer pour éditer
+                {counselor.perm_right_hand ? "Bras droit" : "Conseiller"}
                 </div>
               </div>
             </div>

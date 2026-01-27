@@ -77,8 +77,7 @@ export default function LootRoulettePage() {
   const [guildId, setGuildId] = useState<string | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const manageLoot = usePermission("manage_loot");
-  const distributeLoot = usePermission("distribute_loot");
-  const canAccess = manageLoot.allowed || distributeLoot.allowed;
+  const canAccess = manageLoot.allowed;
   const [itemName, setItemName] = useState("");
   const [eligiblePlayers, setEligiblePlayers] = useState<EligiblePlayer[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -349,7 +348,7 @@ export default function LootRoulettePage() {
     );
   }, [itemName]);
 
-  if (!isAuthReady || manageLoot.loading || distributeLoot.loading) {
+  if (!isAuthReady || manageLoot.loading) {
     return (
       <div className="min-h-screen px-6 py-10 text-zinc-100">
         <div className="rounded-2xl border border-white/10 bg-surface/70 px-6 py-6 text-sm text-text/60">

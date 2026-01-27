@@ -15,13 +15,17 @@ type PermissionKey =
   | "perm_manage_pve"
   | "perm_manage_pvp"
   | "perm_manage_loot"
-  | "perm_distribute_loot";
+  | "perm_distribute_loot"
+  | "perm_manage_polls"
+  | "perm_right_hand";
 
 const permissionLabels: Record<PermissionKey, string> = {
   perm_manage_pve: "Gestion PvE",
   perm_manage_pvp: "Gestion PvP",
-  perm_manage_loot: "Gestion Stock (Loot)",
+  perm_manage_loot: "Gestion de la roulette",
   perm_distribute_loot: "Distribution Loot",
+  perm_manage_polls: "Gestion des sondages",
+  perm_right_hand: "Bras droit (accès complet)",
 };
 
 export default function PermissionEditor({
@@ -35,6 +39,8 @@ export default function PermissionEditor({
     perm_manage_pvp: counselor.perm_manage_pvp,
     perm_manage_loot: counselor.perm_manage_loot,
     perm_distribute_loot: counselor.perm_distribute_loot,
+    perm_manage_polls: counselor.perm_manage_polls,
+    perm_right_hand: counselor.perm_right_hand,
   });
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);

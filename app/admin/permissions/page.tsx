@@ -15,6 +15,8 @@ type MemberRow = {
   perm_manage_pvp: boolean | null;
   perm_manage_loot: boolean | null;
   perm_distribute_loot: boolean | null;
+  perm_manage_polls: boolean | null;
+  perm_right_hand: boolean | null;
 };
 
 export default function CounselorPermissionsPage() {
@@ -89,7 +91,7 @@ export default function CounselorPermissionsPage() {
     const { data: memberRows, error: membersError } = (await supabase
       .from("guild_members")
       .select(
-        "user_id,role_rank,perm_manage_pve,perm_manage_pvp,perm_manage_loot,perm_distribute_loot",
+        "user_id,role_rank,perm_manage_pve,perm_manage_pvp,perm_manage_loot,perm_distribute_loot,perm_manage_polls,perm_right_hand",
       )
       .eq("guild_id", guildId)
       .eq("role_rank", "conseiller")) as {
@@ -132,6 +134,8 @@ export default function CounselorPermissionsPage() {
         perm_manage_pvp: Boolean(row.perm_manage_pvp),
         perm_manage_loot: Boolean(row.perm_manage_loot),
         perm_distribute_loot: Boolean(row.perm_distribute_loot),
+        perm_manage_polls: Boolean(row.perm_manage_polls),
+        perm_right_hand: Boolean(row.perm_right_hand),
       })) ?? [];
 
     setCounselors(mapped);

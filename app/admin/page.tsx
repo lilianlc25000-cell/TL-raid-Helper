@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
+import { usePermission } from "../../lib/hooks/usePermission";
 
 const tools = [
   {
@@ -21,6 +22,7 @@ const tools = [
     accent: "from-violet-500/20 via-violet-500/10 to-amber-400/10",
     border: "border-violet-400/40",
     text: "text-amber-200",
+    gate: "distribute_loot",
   },
   {
     title: "Roulette de loot",
@@ -30,6 +32,7 @@ const tools = [
     accent: "from-sky-500/20 via-indigo-500/10 to-purple-500/10",
     border: "border-sky-400/40",
     text: "text-sky-200",
+    gate: "manage_loot",
   },
   {
     title: "Création d'Événement",
@@ -39,6 +42,7 @@ const tools = [
     accent: "from-emerald-500/20 via-emerald-500/10 to-green-500/10",
     border: "border-emerald-400/40",
     text: "text-emerald-200",
+    gate: "manage_events",
   },
   {
     title: "Sondages",
@@ -48,6 +52,7 @@ const tools = [
     accent: "from-sky-500/20 via-sky-500/10 to-blue-500/10",
     border: "border-sky-400/40",
     text: "text-sky-200",
+    gate: "manage_polls",
   },
   {
     title: "Éligibilité des membres",
@@ -57,6 +62,7 @@ const tools = [
     accent: "from-amber-500/20 via-amber-500/10 to-red-500/10",
     border: "border-amber-400/40",
     text: "text-amber-200",
+    gate: "admin_only",
   },
   {
     title: "Paramètres",
@@ -66,6 +72,7 @@ const tools = [
     accent: "from-sky-500/20 via-sky-500/10 to-indigo-500/10",
     border: "border-sky-400/40",
     text: "text-sky-200",
+    gate: "admin_only",
   },
   {
     title: "👮 Permissions Conseiller",
@@ -75,12 +82,26 @@ const tools = [
     accent: "from-amber-500/20 via-amber-500/10 to-rose-500/10",
     border: "border-amber-400/40",
     text: "text-amber-200",
+    gate: "admin_only",
   },
-];
+] as const;
 
 export default function AdminDashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const managePve = usePermission("manage_pve");
+  const managePvp = usePermission("manage_pvp");
+  const manageLoot = usePermission("manage_loot");
+  const distributeLoot = usePermission("distribute_loot");
+  const managePolls = usePermission("manage_polls");
+  const rightHand = usePermission("right_hand");
+  const permissionsLoading =
+    managePve.loading ||
+    managePvp.loading ||
+    manageLoot.loading ||
+    distributeLoot.loading ||
+    managePolls.loading ||
+    rightHand.loading;
 
   const loadAdminRole = useCallback(async () => {
     const supabase = createClient();
@@ -123,7 +144,7 @@ export default function AdminDashboardPage() {
     };
   }, [loadAdminRole]);
 
-  if (!isAuthReady) {
+  if (!isAuthReady || permissionsLoading) {
     return (
       <div className="min-h-[70vh] rounded-3xl border border-zinc-800 bg-zinc-950 px-6 py-10 text-zinc-100 shadow-[0_0_30px_rgba(0,0,0,0.35)]">
         <p className="text-xs uppercase tracking-[0.4em] text-zinc-500">
@@ -158,6 +179,15 @@ export default function AdminDashboardPage() {
     );
   }
 
+  const canManageEvents = managePve.allowed || managePvp.allowed;
+  const gateMap = {
+    distribute_loot: distributeLoot.allowed,
+    manage_loot: manageLoot.allowed,
+    manage_polls: managePolls.allowed,
+    manage_events: canManageEvents,
+    admin_only: rightHand.allowed,
+  } as const;
+
   return (
     <div className="min-h-screen text-zinc-100">
       <header className="rounded-3xl border border-gold/50 bg-surface/70 px-6 py-6 shadow-[0_0_40px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10">
@@ -172,12 +202,10 @@ export default function AdminDashboardPage() {
       <section className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {tools.map((tool) => {
           const Icon = tool.icon;
-          return (
-            <Link
-              key={tool.title}
-              href={tool.href}
-              className={`group rounded-3xl border ${tool.border} bg-gradient-to-br ${tool.accent} p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] transition hover:-translate-y-1`}
-            >
+          const canAccess = gateMap[tool.gate];
+          const cardClass = `group rounded-3xl border ${tool.border} bg-gradient-to-br ${tool.accent} p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] transition hover:-translate-y-1`;
+          return canAccess ? (
+            <Link key={tool.title} href={tool.href} className={cardClass}>
               <div className="flex items-center justify-between">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/40">
                   <Icon className={`h-6 w-6 ${tool.text}`} />
@@ -194,6 +222,27 @@ export default function AdminDashboardPage() {
                 Accéder
               </span>
             </Link>
+          ) : (
+            <div
+              key={tool.title}
+              className={`${cardClass} cursor-not-allowed opacity-50`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/40">
+                  <Icon className={`h-6 w-6 ${tool.text}`} />
+                </div>
+                <span className="text-xs uppercase tracking-[0.3em] text-text/40">
+                  Verrouillé
+                </span>
+              </div>
+              <h2 className="mt-6 text-xl font-semibold text-text">
+                {tool.title}
+              </h2>
+              <p className="mt-2 text-sm text-text/60">{tool.description}</p>
+              <span className="mt-6 inline-flex items-center text-xs uppercase tracking-[0.25em] text-text/40">
+                Accès restreint
+              </span>
+            </div>
           );
         })}
       </section>

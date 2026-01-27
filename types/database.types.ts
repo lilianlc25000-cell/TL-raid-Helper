@@ -89,6 +89,8 @@ export type Database = {
           perm_manage_pvp: boolean;
           perm_manage_loot: boolean;
           perm_distribute_loot: boolean;
+          perm_manage_polls: boolean;
+          perm_right_hand: boolean;
         };
         Insert: {
           guild_id: string;
@@ -99,6 +101,8 @@ export type Database = {
           perm_manage_pvp?: boolean;
           perm_manage_loot?: boolean;
           perm_distribute_loot?: boolean;
+          perm_manage_polls?: boolean;
+          perm_right_hand?: boolean;
         };
         Update: {
           guild_id?: string;
@@ -109,6 +113,8 @@ export type Database = {
           perm_manage_pvp?: boolean;
           perm_manage_loot?: boolean;
           perm_distribute_loot?: boolean;
+          perm_manage_polls?: boolean;
+          perm_right_hand?: boolean;
         };
       };
       guild_settings: {

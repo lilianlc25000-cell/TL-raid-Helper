@@ -87,8 +87,8 @@ export default function LootDistributionPage() {
   const manageLoot = usePermission("manage_loot");
   const distributeLoot = usePermission("distribute_loot");
   const canManageStock = manageLoot.allowed;
-  const canDistribute = distributeLoot.allowed || manageLoot.allowed;
-  const canAccess = canManageStock || distributeLoot.allowed;
+  const canDistribute = distributeLoot.allowed;
+  const canAccess = distributeLoot.allowed;
 
   const loadAdminRole = useCallback(async () => {
     const supabase = createClient();
@@ -588,12 +588,6 @@ export default function LootDistributionPage() {
                   </p>
                 </div>
                 <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-                  <Link
-                    href="/admin/loot/roulette"
-                    className="w-full rounded-md border border-sky-400/60 bg-sky-500/10 px-4 py-2 text-center text-xs uppercase tracking-[0.25em] text-sky-200 transition hover:border-sky-300 sm:w-auto"
-                  >
-                    🎲 Roulette de loot
-                  </Link>
                   {canManageStock ? (
                     <button
                       type="button"
