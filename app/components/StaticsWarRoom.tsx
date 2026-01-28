@@ -209,6 +209,7 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
   const [playerHost, setPlayerHost] = useState<string>("");
   const [playerOrigin, setPlayerOrigin] = useState<string>("");
   const [currentTime, setCurrentTime] = useState<number>(0);
+  const [isTimeRequestPending, setIsTimeRequestPending] = useState(false);
   const playerFrameRef = useRef<HTMLIFrameElement | null>(null);
 
   const loadAccess = useCallback(async () => {
@@ -543,12 +544,16 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
         };
         if (data.event === "infoDelivery" && data.info?.currentTime != null) {
           setCurrentTime(data.info.currentTime);
+          if (isTimeRequestPending) {
+            setCommentTime(formatTimestamp(data.info.currentTime));
+            setIsTimeRequestPending(false);
+          }
         }
       }
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, []);
+  }, [isTimeRequestPending]);
 
   const requestCurrentTime = () => {
     if (!selectedEmbed || selectedEmbed.type !== "youtube") {
@@ -558,13 +563,17 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
     if (!frameWindow) {
       return;
     }
+    setIsTimeRequestPending(true);
     frameWindow.postMessage(
       JSON.stringify({ event: "command", func: "getCurrentTime", args: [] }),
       "*",
     );
     window.setTimeout(() => {
-      setCommentTime(formatTimestamp(currentTime));
-    }, 120);
+      if (isTimeRequestPending) {
+        setCommentTime(formatTimestamp(currentTime));
+        setIsTimeRequestPending(false);
+      }
+    }, 250);
   };
 
   const seekToTimestamp = (value: string) => {
@@ -735,6 +744,19 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                         allowFullScreen
                         referrerPolicy="no-referrer-when-downgrade"
+                        onLoad={() => {
+                          if (selectedEmbed.type !== "youtube") {
+                            return;
+                          }
+                          const frameWindow = playerFrameRef.current?.contentWindow;
+                          if (!frameWindow) {
+                            return;
+                          }
+                          frameWindow.postMessage(
+                            JSON.stringify({ event: "listening" }),
+                            "*",
+                          );
+                        }}
                         onError={() => {
                           console.error("Erreur iframe video");
                           setPlayerError("Impossible de lancer la vidéo.");
