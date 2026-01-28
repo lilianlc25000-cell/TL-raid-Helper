@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import ReactPlayer from "react-player";
 import { createClient } from "@/lib/supabase/client";
 import ClientOnly from "@/app/components/ClientOnly";
 
@@ -44,6 +43,54 @@ const normalizeVideoUrl = (raw: string) => {
     return trimmed;
   }
   return `https://${trimmed}`;
+};
+
+const getEmbedInfo = (raw: string, parentHost?: string) => {
+  const normalized = normalizeVideoUrl(raw);
+  if (!normalized) {
+    return null;
+  }
+  try {
+    const url = new URL(normalized);
+    const host = url.hostname.replace(/^www\./i, "").toLowerCase();
+    if (host === "youtu.be") {
+      const id = url.pathname.replace(/^\/+/, "");
+      return id ? { type: "youtube", src: `https://www.youtube.com/embed/${id}` } : null;
+    }
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      if (url.pathname.startsWith("/shorts/")) {
+        const id = url.pathname.replace("/shorts/", "").split("/")[0];
+        return id ? { type: "youtube", src: `https://www.youtube.com/embed/${id}` } : null;
+      }
+      if (url.pathname === "/watch") {
+        const id = url.searchParams.get("v");
+        return id ? { type: "youtube", src: `https://www.youtube.com/embed/${id}` } : null;
+      }
+    }
+    if (host.endsWith("twitch.tv")) {
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (parts[0] === "videos" && parts[1]) {
+        return parentHost
+          ? {
+              type: "twitch",
+              src: `https://player.twitch.tv/?video=${parts[1]}&parent=${parentHost}`,
+            }
+          : null;
+      }
+    }
+    if (host === "clips.twitch.tv") {
+      const slug = url.pathname.split("/").filter(Boolean)[0];
+      return parentHost
+        ? {
+            type: "twitch",
+            src: `https://clips.twitch.tv/embed?clip=${slug}&parent=${parentHost}`,
+          }
+        : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 };
 
 const toPlayableVideoUrl = (raw: string) => {
@@ -269,7 +316,8 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
       return;
     }
     const normalizedUrl = toPlayableVideoUrl(formUrl);
-    if (!ReactPlayer.canPlay(normalizedUrl)) {
+    const embedCheck = getEmbedInfo(normalizedUrl, playerHost || undefined);
+    if (!embedCheck) {
       setError("Lien vidéo non reconnu. Utilisez un lien YouTube/Twitch complet.");
       return;
     }
@@ -335,12 +383,18 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
     }
     return toPlayableVideoUrl(selectedReplay.video_url);
   }, [selectedReplay]);
+  const selectedEmbed = useMemo(() => {
+    if (!selectedReplay) {
+      return null;
+    }
+    return getEmbedInfo(selectedReplay.video_url, playerHost || undefined);
+  }, [selectedReplay, playerHost]);
   useEffect(() => {
     if (!selectedUrl) {
       setPlayerError(null);
       return;
     }
-    setPlayerError(ReactPlayer.canPlay(selectedUrl) ? null : "Lien vidéo non supporté.");
+    setPlayerError(null);
   }, [selectedUrl]);
 
   useEffect(() => {
@@ -482,33 +536,24 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
                 ) : (
                   <ClientOnly>
                     {console.log("URL envoyee au player :", selectedUrl)}
-                    <ReactPlayer
-                      url={selectedUrl}
-                      width="100%"
-                      height="100%"
-                      controls
-                      playing={false}
-                      playsinline
-                      config={{
-                        youtube: {
-                          playerVars: {
-                            origin:
-                              typeof window !== "undefined"
-                                ? window.location.origin
-                                : undefined,
-                          },
-                        },
-                        twitch: {
-                          options: {
-                            parent: playerHost ? [playerHost] : undefined,
-                          },
-                        },
-                      }}
-                      onError={(error) => {
-                        console.error("Erreur ReactPlayer:", error);
-                        setPlayerError("Impossible de lancer la vidéo.");
-                      }}
-                    />
+                    {selectedEmbed ? (
+                      <iframe
+                        src={selectedEmbed.src}
+                        title={selectedReplay.title}
+                        className="h-full w-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        referrerPolicy="no-referrer-when-downgrade"
+                        onError={() => {
+                          console.error("Erreur iframe video");
+                          setPlayerError("Impossible de lancer la vidéo.");
+                        }}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-sm text-text/70">
+                        Lien vidéo non supporté.
+                      </div>
+                    )}
                   </ClientOnly>
                 )}
               </div>
