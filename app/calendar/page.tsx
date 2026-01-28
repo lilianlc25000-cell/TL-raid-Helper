@@ -6,6 +6,7 @@ import { Swords } from "lucide-react";
 import { createClient } from "../../lib/supabase/client";
 import { PARTICIPATION_POINTS_PER_RAID } from "../../lib/game-constants";
 import { getWeaponImage } from "../../lib/weapons";
+import useRealtimeSubscription from "@/src/hooks/useRealtimeSubscription";
 
 type EventEntry = {
   id: string;
@@ -227,6 +228,8 @@ export default function CalendarPage() {
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [loadEvents]);
+
+  useRealtimeSubscription("events", loadEvents);
 
   const sortedEvents = useMemo(() => {
     return [...events].sort(

@@ -13,6 +13,7 @@ import {
 } from "../../../lib/game-items";
 import { createClient } from "../../../lib/supabase/client";
 import { usePermission } from "../../../lib/hooks/usePermission";
+import useRealtimeSubscription from "@/src/hooks/useRealtimeSubscription";
 
 type LootQueueItem = {
   id: string;
@@ -516,6 +517,13 @@ export default function LootDistributionPage() {
     loadAdminRole();
     loadQueue();
   }, [loadAdminRole, loadQueue]);
+
+  useRealtimeSubscription(
+    "loot_history",
+    loadQueue,
+    currentGuildId ? `guild_id=eq.${currentGuildId}` : undefined,
+    Boolean(currentGuildId),
+  );
 
   useEffect(() => {
     const supabase = createClient();

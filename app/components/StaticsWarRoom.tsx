@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import ClientOnly from "@/app/components/ClientOnly";
+import useRealtimeSubscription from "@/src/hooks/useRealtimeSubscription";
 
 type ReplayResult = "WIN" | "LOSS" | "DRAW";
 
@@ -45,7 +46,11 @@ const normalizeVideoUrl = (raw: string) => {
   return `https://${trimmed}`;
 };
 
-const getEmbedInfo = (raw: string, parentHost?: string) => {
+const getEmbedInfo = (
+  raw: string,
+  parentHost?: string,
+  origin?: string,
+) => {
   const normalized = normalizeVideoUrl(raw);
   if (!normalized) {
     return null;
@@ -55,16 +60,37 @@ const getEmbedInfo = (raw: string, parentHost?: string) => {
     const host = url.hostname.replace(/^www\./i, "").toLowerCase();
     if (host === "youtu.be") {
       const id = url.pathname.replace(/^\/+/, "");
-      return id ? { type: "youtube", src: `https://www.youtube.com/embed/${id}` } : null;
+      return id
+        ? {
+            type: "youtube",
+            src: `https://www.youtube.com/embed/${id}?enablejsapi=1${
+              origin ? `&origin=${encodeURIComponent(origin)}` : ""
+            }`,
+          }
+        : null;
     }
     if (host === "youtube.com" || host === "m.youtube.com") {
       if (url.pathname.startsWith("/shorts/")) {
         const id = url.pathname.replace("/shorts/", "").split("/")[0];
-        return id ? { type: "youtube", src: `https://www.youtube.com/embed/${id}` } : null;
+        return id
+          ? {
+              type: "youtube",
+              src: `https://www.youtube.com/embed/${id}?enablejsapi=1${
+                origin ? `&origin=${encodeURIComponent(origin)}` : ""
+              }`,
+            }
+          : null;
       }
       if (url.pathname === "/watch") {
         const id = url.searchParams.get("v");
-        return id ? { type: "youtube", src: `https://www.youtube.com/embed/${id}` } : null;
+        return id
+          ? {
+              type: "youtube",
+              src: `https://www.youtube.com/embed/${id}?enablejsapi=1${
+                origin ? `&origin=${encodeURIComponent(origin)}` : ""
+              }`,
+            }
+          : null;
       }
     }
     if (host.endsWith("twitch.tv")) {
@@ -91,6 +117,37 @@ const getEmbedInfo = (raw: string, parentHost?: string) => {
   } catch {
     return null;
   }
+};
+
+const formatTimestamp = (seconds: number) => {
+  const total = Math.max(0, Math.floor(seconds));
+  const hrs = Math.floor(total / 3600);
+  const mins = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (hrs > 0) {
+    return `${hrs}:${mins.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+};
+
+const parseTimestamp = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parts = trimmed.split(":").map((item) => Number(item));
+  if (parts.some((item) => Number.isNaN(item))) {
+    return null;
+  }
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  }
+  return null;
 };
 
 const toPlayableVideoUrl = (raw: string) => {
@@ -136,16 +193,22 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
   const [search, setSearch] = useState("");
   const [resultFilter, setResultFilter] = useState<"ALL" | ReplayResult>("ALL");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [formUrl, setFormUrl] = useState("");
   const [formTitle, setFormTitle] = useState("");
   const [formResult, setFormResult] = useState<ReplayResult>("WIN");
   const [formEnemy, setFormEnemy] = useState("");
   const [formNotes, setFormNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteSelection, setDeleteSelection] = useState<string[]>([]);
   const [commentText, setCommentText] = useState("");
   const [commentTime, setCommentTime] = useState("");
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [playerHost, setPlayerHost] = useState<string>("");
+  const [playerOrigin, setPlayerOrigin] = useState<string>("");
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const playerFrameRef = useRef<HTMLIFrameElement | null>(null);
 
   const loadAccess = useCallback(async () => {
     const supabase = createClient();
@@ -287,6 +350,13 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
     void loadComments(selectedReplay.id);
   }, [selectedReplay, loadComments]);
 
+  useRealtimeSubscription(
+    "combat_replays",
+    loadReplays,
+    guildId ? `guild_id=eq.${guildId}` : undefined,
+    Boolean(guildId && hasStatic),
+  );
+
   const filteredReplays = useMemo(() => {
     return replays.filter((replay) => {
       const matchesResult =
@@ -316,7 +386,11 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
       return;
     }
     const normalizedUrl = toPlayableVideoUrl(formUrl);
-    const embedCheck = getEmbedInfo(normalizedUrl, playerHost || undefined);
+    const embedCheck = getEmbedInfo(
+      normalizedUrl,
+      playerHost || undefined,
+      playerOrigin || undefined,
+    );
     if (!embedCheck) {
       setError("Lien vidéo non reconnu. Utilisez un lien YouTube/Twitch complet.");
       return;
@@ -377,6 +451,32 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
     await loadComments(selectedReplay.id);
   };
 
+  const handleDeleteReplays = async () => {
+    if (!guildId || deleteSelection.length === 0) {
+      return;
+    }
+    const supabase = createClient();
+    if (!supabase) {
+      return;
+    }
+    setIsDeleting(true);
+    const { error: deleteError } = await supabase
+      .from("combat_replays")
+      .delete()
+      .in("id", deleteSelection);
+    setIsDeleting(false);
+    if (deleteError) {
+      setError(deleteError.message || "Impossible de supprimer les replays.");
+      return;
+    }
+    if (selectedReplay && deleteSelection.includes(selectedReplay.id)) {
+      setSelectedReplay(null);
+    }
+    setDeleteSelection([]);
+    setIsDeleteModalOpen(false);
+    await loadReplays();
+  };
+
   const selectedUrl = useMemo(() => {
     if (!selectedReplay) {
       return "";
@@ -387,8 +487,12 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
     if (!selectedReplay) {
       return null;
     }
-    return getEmbedInfo(selectedReplay.video_url, playerHost || undefined);
-  }, [selectedReplay, playerHost]);
+    return getEmbedInfo(
+      selectedReplay.video_url,
+      playerHost || undefined,
+      playerOrigin || undefined,
+    );
+  }, [selectedReplay, playerHost, playerOrigin]);
   useEffect(() => {
     if (!selectedUrl) {
       setPlayerError(null);
@@ -402,7 +506,74 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
       return;
     }
     setPlayerHost(window.location.hostname);
+    setPlayerOrigin(window.location.origin);
   }, []);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (!event.data) {
+        return;
+      }
+      let payload: unknown = event.data;
+      if (typeof event.data === "string") {
+        try {
+          payload = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+      }
+      if (
+        typeof payload === "object" &&
+        payload !== null &&
+        "event" in payload
+      ) {
+        const data = payload as {
+          event?: string;
+          info?: { currentTime?: number };
+        };
+        if (data.event === "infoDelivery" && data.info?.currentTime != null) {
+          setCurrentTime(data.info.currentTime);
+        }
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  const requestCurrentTime = () => {
+    if (!selectedEmbed || selectedEmbed.type !== "youtube") {
+      return;
+    }
+    const frameWindow = playerFrameRef.current?.contentWindow;
+    if (!frameWindow) {
+      return;
+    }
+    frameWindow.postMessage(
+      JSON.stringify({ event: "command", func: "getCurrentTime", args: [] }),
+      "*",
+    );
+    window.setTimeout(() => {
+      setCommentTime(formatTimestamp(currentTime));
+    }, 120);
+  };
+
+  const seekToTimestamp = (value: string) => {
+    if (!selectedEmbed || selectedEmbed.type !== "youtube") {
+      return;
+    }
+    const seconds = parseTimestamp(value);
+    if (seconds == null) {
+      return;
+    }
+    const frameWindow = playerFrameRef.current?.contentWindow;
+    if (!frameWindow) {
+      return;
+    }
+    frameWindow.postMessage(
+      JSON.stringify({ event: "command", func: "seekTo", args: [seconds, true] }),
+      "*",
+    );
+  };
 
   if (!isAuthReady) {
     return (
@@ -431,13 +602,22 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
             Analyse vidéo &amp; replays
           </h2>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsModalOpen(true)}
-          className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300"
-        >
-          Ajouter un Replay
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300"
+          >
+            Ajouter un Replay
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsDeleteModalOpen(true)}
+            className="rounded-full border border-red-500/60 bg-red-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-red-200 transition hover:border-red-400"
+          >
+            Supprimer un replay
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_2fr]">
@@ -538,6 +718,7 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
                     {console.log("URL envoyee au player :", selectedUrl)}
                     {selectedEmbed ? (
                       <iframe
+                        ref={selectedEmbed.type === "youtube" ? playerFrameRef : undefined}
                         src={selectedEmbed.src}
                         title={selectedReplay.title}
                         className="h-full w-full"
@@ -570,11 +751,17 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
                     Aucun commentaire pour ce replay.
                   </div>
                 ) : (
-                  <div className="mt-3 space-y-2">
+                <div className="mt-3 space-y-2">
                     {comments.map((comment) => (
-                      <div
+                      <button
                         key={comment.id}
-                        className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-text/70"
+                        type="button"
+                        onClick={() =>
+                          comment.timestamp_ref
+                            ? seekToTimestamp(comment.timestamp_ref)
+                            : undefined
+                        }
+                        className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-left text-sm text-text/70 transition hover:border-white/30"
                       >
                         <div className="flex items-center justify-between text-xs text-text/50">
                           <span>{comment.authorName}</span>
@@ -585,23 +772,25 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
                         <p className="mt-1 text-sm text-text/80">
                           {comment.content}
                         </p>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
-                <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_140px]">
+                <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_180px]">
                   <input
                     value={commentText}
                     onChange={(event) => setCommentText(event.target.value)}
                     placeholder="Ajouter un commentaire..."
                     className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-text/80"
                   />
-                  <input
-                    value={commentTime}
-                    onChange={(event) => setCommentTime(event.target.value)}
-                    placeholder="04:20"
-                    className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-text/80"
-                  />
+                  <button
+                    type="button"
+                    onClick={requestCurrentTime}
+                    disabled={!selectedEmbed || selectedEmbed.type !== "youtube"}
+                    className="rounded-xl border border-amber-400/60 bg-amber-500/10 px-3 py-2 text-xs uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {commentTime ? `⏱ ${commentTime}` : "⏱ Temps actuel"}
+                  </button>
                 </div>
                 <button
                   type="button"
@@ -707,6 +896,99 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
                 className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-5 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSaving ? "Sauvegarde..." : "Enregistrer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isDeleteModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-surface/95 p-6 shadow-[0_0_40px_rgba(0,0,0,0.6)] backdrop-blur">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+                  Supprimer des replays
+                </p>
+                <h3 className="mt-2 text-xl font-semibold text-text">
+                  Sélection multiple
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-text/70"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteSelection(replays.map((replay) => replay.id))}
+                className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-text/70 transition hover:border-white/30"
+              >
+                Tout sélectionner
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteSelection([])}
+                className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-text/70 transition hover:border-white/30"
+              >
+                Tout désélectionner
+              </button>
+            </div>
+
+            <div className="mt-4 max-h-[320px] space-y-2 overflow-auto pr-1">
+              {replays.length === 0 ? (
+                <div className="rounded-xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-text/60">
+                  Aucun replay à supprimer.
+                </div>
+              ) : (
+                replays.map((replay) => {
+                  const checked = deleteSelection.includes(replay.id);
+                  return (
+                    <label
+                      key={replay.id}
+                      className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/70"
+                    >
+                      <div>
+                        <div className="font-semibold text-text">{replay.title}</div>
+                        <div className="text-xs text-text/50">
+                          {replay.uploaderName} ·{" "}
+                          {new Date(replay.created_at).toLocaleDateString("fr-FR")}
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setDeleteSelection((prev) =>
+                            checked
+                              ? prev.filter((id) => id !== replay.id)
+                              : [...prev, replay.id],
+                          )
+                        }
+                        className="h-4 w-4 accent-red-500"
+                      />
+                    </label>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-between">
+              <p className="text-xs text-text/50">
+                {deleteSelection.length} sélectionné(s)
+              </p>
+              <button
+                type="button"
+                onClick={handleDeleteReplays}
+                disabled={deleteSelection.length === 0 || isDeleting}
+                className="rounded-full border border-red-500/60 bg-red-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-red-200 transition hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeleting ? "Suppression..." : "Supprimer"}
               </button>
             </div>
           </div>

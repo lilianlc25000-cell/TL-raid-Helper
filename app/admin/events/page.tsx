@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CalendarPlus } from "lucide-react";
 import { createClient } from "../../../lib/supabase/client";
 import { usePermission } from "../../../lib/hooks/usePermission";
 import { createEvent } from "../../../lib/actions/events";
 import { PARTICIPATION_POINTS_PER_RAID } from "../../../lib/game-constants";
+import useRealtimeSubscription from "@/src/hooks/useRealtimeSubscription";
 
 type EventType =
   | "Raid de Guilde"
@@ -104,46 +105,48 @@ export default function AdminEventsPage() {
   const [alliance, setAlliance] = useState("");
   const [note, setNote] = useState("");
 
-  useEffect(() => {
-    const loadEvents = async () => {
-      const supabase = createClient();
-      if (!supabase) {
-        setError("Supabase n'est pas configuré (URL / ANON KEY).");
-        return;
-      }
-      setIsLoading(true);
-      const { data, error: fetchError } = await supabase
-        .from("events")
-        .select("id,title,event_type,difficulty,start_time,description,cohesion_reward")
-        .order("start_time", { ascending: true });
+  const loadEvents = useCallback(async () => {
+    const supabase = createClient();
+    if (!supabase) {
+      setError("Supabase n'est pas configuré (URL / ANON KEY).");
+      return;
+    }
+    setIsLoading(true);
+    const { data, error: fetchError } = await supabase
+      .from("events")
+      .select("id,title,event_type,difficulty,start_time,description,cohesion_reward")
+      .order("start_time", { ascending: true });
 
-      if (fetchError) {
-        setError("Impossible de charger les événements.");
-        setIsLoading(false);
-        return;
-      }
-
-      const visibleEvents = (data ?? []).filter(
-        (event) => event.event_type !== "DPS",
-      );
-      if (visibleEvents.length > 0) {
-        setEvents(
-          visibleEvents.map((event) => ({
-            id: event.id,
-            title: event.title,
-            eventType: event.event_type as EventType,
-            difficulty: event.difficulty as Difficulty | null,
-            dateTime: event.start_time,
-            participationReward: event.cohesion_reward ?? PARTICIPATION_POINTS_PER_RAID,
-            note: event.description ?? undefined,
-          })),
-        );
-      }
+    if (fetchError) {
+      setError("Impossible de charger les événements.");
       setIsLoading(false);
-    };
+      return;
+    }
 
-    loadEvents();
+    const visibleEvents = (data ?? []).filter(
+      (event) => event.event_type !== "DPS",
+    );
+    if (visibleEvents.length > 0) {
+      setEvents(
+        visibleEvents.map((event) => ({
+          id: event.id,
+          title: event.title,
+          eventType: event.event_type as EventType,
+          difficulty: event.difficulty as Difficulty | null,
+          dateTime: event.start_time,
+          participationReward: event.cohesion_reward ?? PARTICIPATION_POINTS_PER_RAID,
+          note: event.description ?? undefined,
+        })),
+      );
+    }
+    setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
+  useRealtimeSubscription("events", loadEvents);
 
   useEffect(() => {
     if (contentType) {

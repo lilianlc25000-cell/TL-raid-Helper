@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Crosshair,
   Shield,
@@ -14,6 +14,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { usePermission } from "@/lib/hooks/usePermission";
 import { getWeaponImage } from "@/lib/weapons";
+import useRealtimeSubscription from "@/src/hooks/useRealtimeSubscription";
 
 type SignupEntry = {
   userId: string;
@@ -186,6 +187,52 @@ export default function RosterClient({
   useEffect(() => {
     setLocalSignups(signups);
   }, [signups]);
+
+  const loadSignups = useCallback(async () => {
+    const supabase = createClient();
+    if (!supabase) {
+      setActionError("Supabase n'est pas configuré (URL / ANON KEY).");
+      return;
+    }
+    const { data: updatedSignups, error } = await supabase
+      .from("event_signups")
+      .select(
+        "user_id,status,assigned_role,selected_build_id,profiles(ingame_name,role,archetype,main_weapon,off_weapon),player_builds(id,build_name,role,archetype,main_weapon,off_weapon)",
+      )
+      .eq("event_id", eventId)
+      .in("status", ["present", "tentative", "bench"]);
+
+    if (error) {
+      setActionError(error.message || "Impossible de rafraîchir les inscrits.");
+      return;
+    }
+    const mapped =
+      updatedSignups?.map((signup) => {
+        const profile = Array.isArray(signup.profiles)
+          ? signup.profiles[0]
+          : signup.profiles;
+        const build = Array.isArray(signup.player_builds)
+          ? signup.player_builds[0]
+          : signup.player_builds;
+        return {
+          userId: signup.user_id,
+          status: signup.status as "present" | "tentative" | "bench",
+          ingameName: profile?.ingame_name ?? "Inconnu",
+          role: build?.role ?? profile?.role ?? null,
+          assignedRole: signup.assigned_role ?? null,
+          archetype: build?.archetype ?? profile?.archetype ?? null,
+          mainWeapon: build?.main_weapon ?? profile?.main_weapon ?? null,
+          offWeapon: build?.off_weapon ?? profile?.off_weapon ?? null,
+        };
+      }) ?? [];
+    setLocalSignups(mapped);
+  }, [eventId]);
+
+  useRealtimeSubscription(
+    "event_signups",
+    loadSignups,
+    `event_id=eq.${eventId}`,
+  );
 
   const sortedSignups = useMemo(() => {
     return [...localSignups].sort((a, b) =>

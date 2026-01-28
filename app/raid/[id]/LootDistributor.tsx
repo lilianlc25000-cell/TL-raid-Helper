@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { gameItemsByCategory } from "@/lib/game-items";
 import { motion } from "framer-motion";
+import useRealtimeSubscription from "@/src/hooks/useRealtimeSubscription";
 
 type EligiblePlayer = {
   userId: string;
@@ -52,6 +53,7 @@ export default function LootDistributor() {
   const [animationX, setAnimationX] = useState(0);
   const [animationSeed, setAnimationSeed] = useState(0);
   const [targetIndex, setTargetIndex] = useState<number | null>(null);
+  const [guildId, setGuildId] = useState<string | null>(null);
 
   const itemOptions = useMemo(
     () =>
@@ -62,7 +64,7 @@ export default function LootDistributor() {
     [],
   );
 
-  useEffect(() => {
+  const loadEligible = useCallback(async () => {
     if (!eventId || !itemName.trim()) {
       setEligiblePlayers([]);
       setWinnerId(null);
@@ -73,102 +75,110 @@ export default function LootDistributor() {
       return;
     }
 
-    const loadEligible = async () => {
-      const supabase = createClient();
-      if (!supabase) {
-        setStatus("Supabase n'est pas configuré (URL / ANON KEY).");
-        return;
-      }
-      setIsLoading(true);
-      setStatus(null);
-      setWinnerId(null);
-      setWinner(null);
-      setStripItems([]);
-      setIsSpinning(false);
-      setTargetIndex(null);
+    const supabase = createClient();
+    if (!supabase) {
+      setStatus("Supabase n'est pas configuré (URL / ANON KEY).");
+      return;
+    }
+    setIsLoading(true);
+    setStatus(null);
+    setWinnerId(null);
+    setWinner(null);
+    setStripItems([]);
+    setIsSpinning(false);
+    setTargetIndex(null);
 
-      const { data: participantsData, error: participantsError } =
-        (await supabase
-          .from("event_signups")
-          .select("user_id,assigned_role,guild_id,profiles(ingame_name,role,guild_id)")
-          .eq("event_id", eventId)
-          .eq("status", "present")) as {
-          data: ParticipantRow[] | null;
-          error: { message?: string } | null;
-        };
+    const { data: participantsData, error: participantsError } =
+      (await supabase
+        .from("event_signups")
+        .select("user_id,assigned_role,guild_id,profiles(ingame_name,role,guild_id)")
+        .eq("event_id", eventId)
+        .eq("status", "present")) as {
+        data: ParticipantRow[] | null;
+        error: { message?: string } | null;
+      };
 
-      if (participantsError) {
-        setStatus(
-          participantsError.message ||
-            "Impossible de charger les participants.",
-        );
-        setIsLoading(false);
-        return;
-      }
-
-      const participants = participantsData ?? [];
-      if (participants.length === 0) {
-        setEligiblePlayers([]);
-        setIsLoading(false);
-        return;
-      }
-
-      const guildId =
-        participants.find((row) => row.guild_id)?.guild_id ??
-        (Array.isArray(participants[0].profiles)
-          ? participants[0].profiles[0]?.guild_id
-          : participants[0].profiles?.guild_id) ??
-        null;
-
-      const participantByUser = new Map(
-        participants.map((row) => [
-          row.user_id,
-          {
-            assignedRole: row.assigned_role ?? null,
-            profile: Array.isArray(row.profiles)
-              ? row.profiles[0]
-              : row.profiles,
-          },
-        ]),
+    if (participantsError) {
+      setStatus(
+        participantsError.message || "Impossible de charger les participants.",
       );
-
-      const userIds = participants.map((row) => row.user_id);
-      const { data: wishlistRows } = await supabase
-        .from("gear_wishlist")
-        .select("user_id")
-        .eq("item_name", itemName)
-        .in("user_id", userIds);
-
-      const eligibleIds = new Set(
-        (wishlistRows ?? []).map((row) => row.user_id),
-      );
-
-      if (eligibleIds.size === 0) {
-        setEligiblePlayers([]);
-        setIsLoading(false);
-        return;
-      }
-
-      const mapped = Array.from(eligibleIds)
-        .map((userId) => {
-          const details = participantByUser.get(userId);
-          const profile = details?.profile;
-          const role = getEffectiveRole(details?.assignedRole ?? null, profile?.role ?? null);
-          return {
-            userId,
-            ingameName: profile?.ingame_name ?? "Inconnu",
-            role,
-            checked: true,
-          };
-        })
-        .sort((a, b) => a.ingameName.localeCompare(b.ingameName, "fr"));
-
-      setEligiblePlayers(mapped);
       setIsLoading(false);
-    };
+      return;
+    }
 
-    void loadEligible();
+    const participants = participantsData ?? [];
+    if (participants.length === 0) {
+      setEligiblePlayers([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const resolvedGuildId =
+      participants.find((row) => row.guild_id)?.guild_id ??
+      (Array.isArray(participants[0].profiles)
+        ? participants[0].profiles[0]?.guild_id
+        : participants[0].profiles?.guild_id) ??
+      null;
+    setGuildId(resolvedGuildId);
+
+    const participantByUser = new Map(
+      participants.map((row) => [
+        row.user_id,
+        {
+          assignedRole: row.assigned_role ?? null,
+          profile: Array.isArray(row.profiles) ? row.profiles[0] : row.profiles,
+        },
+      ]),
+    );
+
+    const userIds = participants.map((row) => row.user_id);
+    const { data: wishlistRows } = await supabase
+      .from("gear_wishlist")
+      .select("user_id")
+      .eq("item_name", itemName)
+      .in("user_id", userIds);
+
+    const eligibleIds = new Set(
+      (wishlistRows ?? []).map((row) => row.user_id),
+    );
+
+    if (eligibleIds.size === 0) {
+      setEligiblePlayers([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const mapped = Array.from(eligibleIds)
+      .map((userId) => {
+        const details = participantByUser.get(userId);
+        const profile = details?.profile;
+        const role = getEffectiveRole(
+          details?.assignedRole ?? null,
+          profile?.role ?? null,
+        );
+        return {
+          userId,
+          ingameName: profile?.ingame_name ?? "Inconnu",
+          role,
+          checked: true,
+        };
+      })
+      .sort((a, b) => a.ingameName.localeCompare(b.ingameName, "fr"));
+
+    setEligiblePlayers(mapped);
+    setIsLoading(false);
   }, [eventId, itemName]);
+
+  useEffect(() => {
+    void loadEligible();
+  }, [loadEligible]);
+
+  useRealtimeSubscription(
+    "loot_history",
+    loadEligible,
+    guildId ? `guild_id=eq.${guildId}` : undefined,
+    Boolean(guildId && itemName.trim()),
+  );
 
   const handleToggle = (userId: string) => {
     setEligiblePlayers((prev) =>
