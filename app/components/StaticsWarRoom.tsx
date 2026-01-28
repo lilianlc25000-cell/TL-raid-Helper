@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactPlayer from "react-player";
 import { createClient } from "@/lib/supabase/client";
+import ClientOnly from "@/app/components/ClientOnly";
 
 type ReplayResult = "WIN" | "LOSS" | "DRAW";
 
@@ -479,29 +480,36 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
                     </a>
                   </div>
                 ) : (
-                  <ReactPlayer
-                    url={selectedUrl}
-                    width="100%"
-                    height="100%"
-                    controls
-                    playing
-                    playsinline
-                    config={{
-                      youtube: {
-                        playerVars: {
-                          origin: typeof window !== "undefined" ? window.location.origin : undefined,
+                  <ClientOnly>
+                    {console.log("URL envoyee au player :", selectedUrl)}
+                    <ReactPlayer
+                      url={selectedUrl}
+                      width="100%"
+                      height="100%"
+                      controls
+                      playing={false}
+                      playsinline
+                      config={{
+                        youtube: {
+                          playerVars: {
+                            origin:
+                              typeof window !== "undefined"
+                                ? window.location.origin
+                                : undefined,
+                          },
                         },
-                      },
-                      twitch: {
-                        options: {
-                          parent: playerHost ? [playerHost] : undefined,
+                        twitch: {
+                          options: {
+                            parent: playerHost ? [playerHost] : undefined,
+                          },
                         },
-                      },
-                    }}
-                    onError={() =>
-                      setPlayerError("Impossible de lancer la vidéo.")
-                    }
+                      }}
+                      onError={(error) => {
+                        console.error("Erreur ReactPlayer:", error);
+                        setPlayerError("Impossible de lancer la vidéo.");
+                      }}
                     />
+                  </ClientOnly>
                 )}
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
