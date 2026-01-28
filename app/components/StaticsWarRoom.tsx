@@ -184,6 +184,7 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
   const [hasStatic, setHasStatic] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [guildId, setGuildId] = useState<string | null>(null);
+  const [teamIndex, setTeamIndex] = useState<number | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [replays, setReplays] = useState<CombatReplay[]>([]);
   const [selectedReplay, setSelectedReplay] = useState<CombatReplay | null>(null);
@@ -241,12 +242,17 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
       .eq("mode", mode)
       .eq("user_id", userId)
       .maybeSingle();
-    setHasStatic(Boolean(staticRow?.team_index));
+    const resolvedTeamIndex =
+      staticRow?.team_index === null || staticRow?.team_index === undefined
+        ? null
+        : staticRow.team_index;
+    setTeamIndex(resolvedTeamIndex);
+    setHasStatic(resolvedTeamIndex !== null);
     setIsAuthReady(true);
   }, [mode]);
 
   const loadReplays = useCallback(async () => {
-    if (!guildId || !hasStatic) {
+    if (!guildId || !hasStatic || teamIndex == null) {
       setReplays([]);
       return;
     }
@@ -263,6 +269,8 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
         "id,guild_id,uploader_id,video_url,title,result,enemy_guild,notes,created_at",
       )
       .eq("guild_id", guildId)
+      .eq("team_index", teamIndex)
+      .eq("mode", mode)
       .order("created_at", { ascending: false });
     if (replayError) {
       setError(replayError.message || "Impossible de charger les replays.");
@@ -291,7 +299,7 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
       })) ?? [];
     setReplays(mapped as CombatReplay[]);
     setIsLoading(false);
-  }, [guildId, hasStatic]);
+  }, [guildId, hasStatic, teamIndex, mode]);
 
   const loadComments = useCallback(
     async (replayId: string) => {
@@ -354,7 +362,7 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
     "combat_replays",
     loadReplays,
     guildId ? `guild_id=eq.${guildId}` : undefined,
-    Boolean(guildId && hasStatic),
+    Boolean(guildId && hasStatic && teamIndex != null),
   );
 
   const filteredReplays = useMemo(() => {
@@ -377,7 +385,7 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
   }, [replays, resultFilter, search]);
 
   const handleSaveReplay = async () => {
-    if (!guildId || !currentUserId) {
+    if (!guildId || !currentUserId || teamIndex == null) {
       setError("Aucune guilde active.");
       return;
     }
@@ -408,6 +416,8 @@ export default function StaticsWarRoom({ mode }: { mode: "pvp" | "pve" }) {
       video_url: normalizedUrl,
       title: formTitle.trim(),
       result: formResult,
+      team_index: teamIndex,
+      mode,
       enemy_guild: formEnemy.trim() || null,
       notes: formNotes.trim() || null,
     });
