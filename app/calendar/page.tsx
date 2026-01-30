@@ -56,6 +56,46 @@ const statusOptions: Array<{
 ];
 
 const POST_EVENT_HIDE_MINUTES = 15;
+const normalizeEventType = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z]/g, "");
+const EVENT_IMAGE_BY_TYPE: Record<string, string> = {
+  calanthia:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Calanthia.png",
+  chateau:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Chateau.png",
+  pierrefaille:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Pierre_de_faille.png",
+  raiddeguilde:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Raid_de_guilde.png",
+  raidboss:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Raid_de_guilde.png",
+  siege:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Chateau.png",
+  taxe:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Taxe.png",
+  taxdelivery:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Taxe.png",
+  wargame:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/War_game.png",
+  wargames:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/War_game.png",
+};
+
+const getEventImageUrl = (eventType: string) => {
+  const normalized = normalizeEventType(eventType);
+  if (!normalized) return undefined;
+  if (EVENT_IMAGE_BY_TYPE[normalized]) {
+    return EVENT_IMAGE_BY_TYPE[normalized];
+  }
+  const matchKey = Object.keys(EVENT_IMAGE_BY_TYPE).find((key) =>
+    normalized.includes(key),
+  );
+  return matchKey ? EVENT_IMAGE_BY_TYPE[matchKey] : undefined;
+};
 
 const formatCountdown = (target: Date) => {
   const diffMs = target.getTime() - Date.now();
@@ -352,6 +392,7 @@ export default function CalendarPage() {
           const eventDate = new Date(event.startTime);
           const status = statusByEvent[event.id];
           const countdownLabel = formatCountdown(eventDate);
+          const eventImageUrl = getEventImageUrl(event.eventType);
           return (
             <div
               key={event.id}
@@ -372,14 +413,30 @@ export default function CalendarPage() {
                     })}
                   </p>
                 </div>
-                {countdownLabel ? (
-                  <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-right">
-                    <p className="text-xs uppercase tracking-[0.25em] text-text/50">
-                      Compte à rebours
-                    </p>
-                    <p className="mt-2 text-lg font-semibold text-gold">
-                      {countdownLabel}
-                    </p>
+                {eventImageUrl || countdownLabel ? (
+                  <div className="flex flex-wrap items-start justify-end gap-3">
+                    {eventImageUrl ? (
+                      <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-1">
+                        <Image
+                          src={eventImageUrl}
+                          alt={`Illustration ${event.eventType}`}
+                          width={200}
+                          height={110}
+                          className="h-24 w-auto rounded-xl object-cover"
+                          unoptimized
+                        />
+                      </div>
+                    ) : null}
+                    {countdownLabel ? (
+                      <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-right">
+                        <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+                          Compte à rebours
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-gold">
+                          {countdownLabel}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

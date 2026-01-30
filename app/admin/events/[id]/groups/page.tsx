@@ -288,6 +288,11 @@ export default function RaidGroupsPage() {
     return date.toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
   }, [eventStartTime]);
 
+  const eventImageUrl = useMemo(
+    () => getEventImageUrl(eventType),
+    [eventType],
+  );
+
   const getPlayerById = (playerId: string) =>
     allPlayers.find((player) => player.userId === playerId) ?? null;
 
@@ -799,11 +804,9 @@ export default function RaidGroupsPage() {
           .filter((section) => section.entries.length > 0)
           .map(
             (section) =>
-              `**— ${section.title} —**\n${section.entries
-                .map((line) => `- ${line}`)
-                .join("\n")}`,
+              `**— ${section.title} —**\n${section.entries.join("\n")}`,
           )
-          .join("\n");
+          .join("\n\n");
         return {
           name: `Groupe ${group.id}`,
           value: sections || "—",
@@ -813,19 +816,12 @@ export default function RaidGroupsPage() {
 
       const fields = groups.flatMap((group, index) => {
         const groupField = buildGroupField(group);
-        const isSecondInPair = index % 2 === 1;
+        const isRowEnd = (index + 1) % 3 === 0;
         const isLast = index === groups.length - 1;
-        const pairSeparator = !isLast && isSecondInPair;
-
-        const withColumnGap = isSecondInPair
-          ? [groupField]
-          : [groupField, { name: "\u200B", value: "\u200B", inline: true }];
-        return pairSeparator
-          ? [
-              ...withColumnGap,
-              { name: "\u200B", value: "\u200B", inline: false },
-            ]
-          : withColumnGap;
+        if (isRowEnd && !isLast) {
+          return [groupField, { name: "\u200B", value: "\u200B", inline: false }];
+        }
+        return [groupField];
       });
 
       const imageUrl = getEventImageUrl(eventType);
@@ -918,6 +914,20 @@ export default function RaidGroupsPage() {
               Modifier le rôle
             </button>
           </div>
+          {eventImageUrl ? (
+            <div className="mt-4 flex justify-end">
+              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-1">
+                <Image
+                  src={eventImageUrl}
+                  alt={`Illustration ${eventType ?? "événement"}`}
+                  width={220}
+                  height={120}
+                  className="h-24 w-auto rounded-xl object-cover"
+                  unoptimized
+                />
+              </div>
+            </div>
+          ) : null}
           <p className="mt-2 text-sm text-text/70">
             {roleEditMode
               ? "Cliquez sur un joueur pour modifier son rôle."
