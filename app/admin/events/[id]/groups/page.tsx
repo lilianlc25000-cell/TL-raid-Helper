@@ -45,6 +45,34 @@ const GROUP_SIZE = 6;
 const PVP_EVENT_TYPES = ["Pierre de Faille", "Château", "War Game", "Taxe"];
 const PVE_EVENT_TYPES = ["Raid de Guilde", "Calanthia"];
 const PARIS_TIME_ZONE = "Europe/Paris";
+const normalizeEventType = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z]/g, "");
+const EVENT_IMAGE_BY_TYPE: Record<string, string> = {
+  calanthia:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Calanthia.png",
+  chateau:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Chateau.png",
+  pierrefaille:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Pierre_de_faille.png",
+  raiddeguilde:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Raid_de_guilde.png",
+  raidboss:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Raid_de_guilde.png",
+  siege:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Chateau.png",
+  taxe:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Taxe.png",
+  taxdelivery:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Taxe.png",
+  wargame:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/War_game.png",
+  wargames:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/War_game.png",
+};
 const EVENT_DAYS = [
   { key: "lundi", label: "📆-Lundi" },
   { key: "mardi", label: "📆-Mardi" },
@@ -106,6 +134,15 @@ const getStatusLabel = (status: PlayerCard["status"]) => {
   if (status === "bench") return "Banc";
   if (status === "absent") return "Absent";
   return "Inconnu";
+};
+
+const getRoleBucket = (role: string | null) => {
+  if (!role) return "dps";
+  const normalized = role.toLowerCase();
+  if (normalized.includes("tank")) return "tank";
+  if (normalized.includes("heal") || normalized.includes("soin")) return "heal";
+  if (normalized.includes("dps")) return "dps";
+  return "dps";
 };
 
 const getWeaponIcon = (weaponName?: string | null) => {
@@ -714,26 +751,55 @@ export default function RaidGroupsPage() {
       const timestamp = eventStartTime
         ? Math.floor(new Date(eventStartTime).getTime() / 1000)
         : null;
-      const fields = groups.map((group) => ({
-        name: `Groupe ${group.id}`,
-        value:
-          group.players.length === 0
-            ? "—"
-            : group.players
-                .map(
-                  (player) => {
-                    const effectiveRole = getEffectiveRole(player);
-                    const mainEmoji = getWeaponEmoji(player.mainWeapon);
-                    const offEmoji = getWeaponEmoji(player.offWeapon);
-                    const emojis = [mainEmoji, offEmoji].filter(Boolean).join(" ");
-                    const emojiPrefix = emojis ? `${emojis} ` : "";
-                    return `${emojiPrefix}${player.ingameName} (${getRoleLabel(effectiveRole)})`;
-                  },
-                )
-                .join("\n"),
-        inline: false,
-      }));
+      const fields = groups.map((group) => {
+        if (group.players.length === 0) {
+          return {
+            name: `Groupe ${group.id}`,
+            value: "—",
+            inline: false,
+          };
+        }
+        const tanks: string[] = [];
+        const dps: string[] = [];
+        const heals: string[] = [];
+        group.players.forEach((player) => {
+          const effectiveRole = getEffectiveRole(player);
+          const roleLabel = getRoleLabel(effectiveRole);
+          const bucket = getRoleBucket(effectiveRole);
+          const mainEmoji = getWeaponEmoji(player.mainWeapon);
+          const offEmoji = getWeaponEmoji(player.offWeapon);
+          const emojis = [mainEmoji, offEmoji].filter(Boolean).join(" ");
+          const emojiPrefix = emojis ? `${emojis} ` : "";
+          const line = `${emojiPrefix}${player.ingameName} (${roleLabel})`;
+          if (bucket === "tank") {
+            tanks.push(line);
+          } else if (bucket === "heal") {
+            heals.push(line);
+          } else {
+            dps.push(line);
+          }
+        });
+        const sections = [
+          { title: "🛡️ Tanks", entries: tanks },
+          { title: "⚔️ DPS", entries: dps },
+          { title: "🌿 Heals", entries: heals },
+        ]
+          .filter((section) => section.entries.length > 0)
+          .map(
+            (section) =>
+              `${section.title}\n${section.entries.map((line) => `- ${line}`).join("\n")}`,
+          )
+          .join("\n\n");
+        return {
+          name: `Groupe ${group.id}`,
+          value: sections || "—",
+          inline: false,
+        };
+      });
 
+      const imageUrl = eventType
+        ? EVENT_IMAGE_BY_TYPE[normalizeEventType(eventType)] ?? undefined
+        : undefined;
       const { error: discordError } = await supabase.functions.invoke(
         "discord-notify",
         {
@@ -744,15 +810,16 @@ export default function RaidGroupsPage() {
             parent_name: dayCategory ?? undefined,
             content: timestamp ? `⏳ Départ <t:${timestamp}:R>` : undefined,
             embed: {
-              title: `📋 Groupes - ${eventTitle}`,
+              title: `⚔️ **${eventTitle.toUpperCase()}** ⚔️`,
               description: timestamp
                 ? `Événement : <t:${timestamp}:F>\nLes groupes sont publiés. Préparez-vous !`
                 : `Événement : ${formattedEventDate}\nLes groupes sont publiés. Préparez-vous !`,
               fields,
-              color: 0x00ff00,
+              color: 0xffa600,
+              image: imageUrl ? { url: imageUrl } : undefined,
             },
             replace: {
-              match_title_prefix: "📋 Groupes -",
+              match_title_prefix: "⚔️",
               limit: 25,
             },
           },
