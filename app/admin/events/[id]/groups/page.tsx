@@ -751,50 +751,58 @@ export default function RaidGroupsPage() {
       const timestamp = eventStartTime
         ? Math.floor(new Date(eventStartTime).getTime() / 1000)
         : null;
-      const fields = groups.map((group) => {
-        if (group.players.length === 0) {
-          return {
-            name: `Groupe ${group.id}`,
-            value: "—",
-            inline: false,
-          };
-        }
-        const tanks: string[] = [];
-        const dps: string[] = [];
-        const heals: string[] = [];
-        group.players.forEach((player) => {
-          const effectiveRole = getEffectiveRole(player);
-          const roleLabel = getRoleLabel(effectiveRole);
-          const bucket = getRoleBucket(effectiveRole);
-          const mainEmoji = getWeaponEmoji(player.mainWeapon);
-          const offEmoji = getWeaponEmoji(player.offWeapon);
-          const emojis = [mainEmoji, offEmoji].filter(Boolean).join(" ");
-          const emojiPrefix = emojis ? `${emojis} ` : "";
-          const line = `${emojiPrefix}${player.ingameName} (${roleLabel})`;
-          if (bucket === "tank") {
-            tanks.push(line);
-          } else if (bucket === "heal") {
-            heals.push(line);
-          } else {
-            dps.push(line);
-          }
-        });
-        const sections = [
-          { title: "🛡️ Tanks", entries: tanks },
-          { title: "⚔️ DPS", entries: dps },
-          { title: "🌿 Heals", entries: heals },
-        ]
-          .filter((section) => section.entries.length > 0)
-          .map(
-            (section) =>
-              `${section.title}\n${section.entries.map((line) => `- ${line}`).join("\n")}`,
-          )
-          .join("\n\n");
-        return {
-          name: `Groupe ${group.id}`,
-          value: sections || "—",
-          inline: false,
-        };
+      const fields = groups.flatMap((group, index) => {
+        const field =
+          group.players.length === 0
+            ? {
+                name: `Groupe ${group.id}`,
+                value: "—",
+                inline: true,
+              }
+            : (() => {
+                const tanks: string[] = [];
+                const dps: string[] = [];
+                const heals: string[] = [];
+                group.players.forEach((player) => {
+                  const effectiveRole = getEffectiveRole(player);
+                  const bucket = getRoleBucket(effectiveRole);
+                  const mainEmoji = getWeaponEmoji(player.mainWeapon);
+                  const offEmoji = getWeaponEmoji(player.offWeapon);
+                  const emojis = [mainEmoji, offEmoji].filter(Boolean).join(" ");
+                  const emojiPrefix = emojis ? `${emojis} ` : "";
+                  const line = `${emojiPrefix}${player.ingameName}`;
+                  if (bucket === "tank") {
+                    tanks.push(line);
+                  } else if (bucket === "heal") {
+                    heals.push(line);
+                  } else {
+                    dps.push(line);
+                  }
+                });
+                const sections = [
+                  { title: "🛡️ Tanks", entries: tanks },
+                  { title: "⚔️ DPS", entries: dps },
+                  { title: "🌿 Heals", entries: heals },
+                ]
+                  .filter((section) => section.entries.length > 0)
+                  .map(
+                    (section) =>
+                      `${section.title}\n${section.entries
+                        .map((line) => `- ${line}`)
+                        .join("\n")}`,
+                  )
+                  .join("\n");
+                return {
+                  name: `Groupe ${group.id}`,
+                  value: sections || "—",
+                  inline: true,
+                };
+              })();
+
+        const needsSpacer = index % 2 === 1 && index < groups.length - 1;
+        return needsSpacer
+          ? [field, { name: "\u200B", value: "\u200B", inline: true }]
+          : [field];
       });
 
       const imageUrl = eventType
