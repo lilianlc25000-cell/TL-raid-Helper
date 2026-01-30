@@ -24,6 +24,7 @@ const VIEW_CHANNEL_PERMISSION = 1024;
 const MEMBER_ROLE_NAME = "Joueur TL-App";
 const CATEGORY_TYPE = 4;
 const TEXT_CHANNEL_TYPE = 0;
+const ROOT_CATEGORY_NAME = "TL-Raid-Manager";
 
 const jsonHeaders = {
   "Content-Type": "application/json",
@@ -139,7 +140,26 @@ serve(async (req) => {
 
     const hasAnyChannel = Object.values(channelConfig).some(Boolean);
     if (!hasAnyChannel && body.mode !== "reset") {
-      return respondJson(400, { error: "Aucun salon sélectionné." });
+      await deleteChannel("📅-tl-planning");
+      await deleteChannel("🎁-tl-loots");
+      await deleteChannel("groupe");
+      await deleteChannel("wishlist");
+      await deleteChannel("dps-meter");
+      await deleteChannel("sondage");
+      await deleteChannel("points-activites");
+      const days = [
+        "event-lundi",
+        "event-mardi",
+        "event-mercredi",
+        "event-jeudi",
+        "event-vendredi",
+        "event-samedi",
+        "event-dimanche",
+      ];
+      for (const day of days) {
+        await deleteChannel(day);
+      }
+      return respondJson(200, { success: true, channels: [] });
     }
     const discordHeaders = {
       Authorization: `Bot ${botToken}`,
@@ -307,7 +327,13 @@ serve(async (req) => {
       }
     };
 
-    const inscriptionResult = await ensureChannel("🔓-inscription");
+    const rootCategory = await ensureChannel(ROOT_CATEGORY_NAME, undefined, {
+      type: CATEGORY_TYPE,
+    });
+
+    const inscriptionResult = await ensureChannel("🔓-inscription", undefined, {
+      parentId: rootCategory.channel.id,
+    });
     if (inscriptionResult.created) {
       await postWelcomeMessage(inscriptionResult.channel.id);
     }
@@ -318,39 +344,33 @@ serve(async (req) => {
       null;
 
     if (channelConfig.event) {
-      const categoryResult = await ensureChannel(
-        "Event",
-        privateOverwrites,
-        { type: CATEGORY_TYPE },
-      );
       const days = [
-        "lundi",
-        "mardi",
-        "mercredi",
-        "jeudi",
-        "vendredi",
-        "samedi",
-        "dimanche",
+        "event-lundi",
+        "event-mardi",
+        "event-mercredi",
+        "event-jeudi",
+        "event-vendredi",
+        "event-samedi",
+        "event-dimanche",
       ];
       for (const day of days) {
-        await ensureChannel(
-          day,
-          privateOverwrites,
-          { parentId: categoryResult.channel.id },
-        );
+        await ensureChannel(day, privateOverwrites, {
+          parentId: rootCategory.channel.id,
+        });
       }
-      planningResult = await ensureChannel("📅-tl-planning", privateOverwrites);
+      planningResult = await ensureChannel("📅-tl-planning", privateOverwrites, {
+        parentId: rootCategory.channel.id,
+      });
     } else {
       await deleteChannel("📅-tl-planning");
-      await deleteChannel("Event", CATEGORY_TYPE);
       const days = [
-        "lundi",
-        "mardi",
-        "mercredi",
-        "jeudi",
-        "vendredi",
-        "samedi",
-        "dimanche",
+        "event-lundi",
+        "event-mardi",
+        "event-mercredi",
+        "event-jeudi",
+        "event-vendredi",
+        "event-samedi",
+        "event-dimanche",
       ];
       for (const day of days) {
         await deleteChannel(day);
@@ -358,37 +378,49 @@ serve(async (req) => {
     }
 
     if (channelConfig.group) {
-      groupsResult = await ensureChannel("groupe", privateOverwrites);
+      groupsResult = await ensureChannel("groupe", privateOverwrites, {
+        parentId: rootCategory.channel.id,
+      });
     } else {
       await deleteChannel("groupe");
     }
 
     if (channelConfig.loot) {
-      await ensureChannel("🎁-tl-loots", privateOverwrites);
+      await ensureChannel("🎁-tl-loots", privateOverwrites, {
+        parentId: rootCategory.channel.id,
+      });
     } else {
       await deleteChannel("🎁-tl-loots");
     }
 
     if (channelConfig.wishlist) {
-      await ensureChannel("wishlist", privateOverwrites);
+      await ensureChannel("wishlist", privateOverwrites, {
+        parentId: rootCategory.channel.id,
+      });
     } else {
       await deleteChannel("wishlist");
     }
 
     if (channelConfig.dps_meter) {
-      await ensureChannel("dps-meter", privateOverwrites);
+      await ensureChannel("dps-meter", privateOverwrites, {
+        parentId: rootCategory.channel.id,
+      });
     } else {
       await deleteChannel("dps-meter");
     }
 
     if (channelConfig.polls) {
-      await ensureChannel("sondage", privateOverwrites);
+      await ensureChannel("sondage", privateOverwrites, {
+        parentId: rootCategory.channel.id,
+      });
     } else {
       await deleteChannel("sondage");
     }
 
     if (channelConfig.activity_points) {
-      await ensureChannel("points-activites", privateOverwrites);
+      await ensureChannel("points-activites", privateOverwrites, {
+        parentId: rootCategory.channel.id,
+      });
     } else {
       await deleteChannel("points-activites");
     }

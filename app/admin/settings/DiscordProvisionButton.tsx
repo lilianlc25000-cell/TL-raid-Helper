@@ -5,10 +5,12 @@ import { createClient } from "@/lib/supabase/client";
 
 type DiscordProvisionButtonProps = {
   guildId: string;
+  channelConfig?: Record<string, boolean> | null;
 };
 
 export default function DiscordProvisionButton({
   guildId,
+  channelConfig,
 }: DiscordProvisionButtonProps) {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">(
     "idle",
@@ -20,7 +22,11 @@ export default function DiscordProvisionButton({
     setMessage(null);
     const supabase = createClient();
     const { error } = await supabase.functions.invoke("discord-provision", {
-      body: { guild_id: guildId, mode: "reset" },
+      body: {
+        guild_id: guildId,
+        mode: "custom",
+        channel_config: channelConfig ?? {},
+      },
     });
     if (error) {
       setStatus("error");

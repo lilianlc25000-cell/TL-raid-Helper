@@ -106,6 +106,12 @@ export default async function AdminSettingsPage() {
               </div>
               <DiscordProvisionButton
                 guildId={effectiveGuildConfig.discord_guild_id}
+                channelConfig={
+                  (effectiveGuildConfig.discord_channel_config as Record<
+                    string,
+                    boolean
+                  >) ?? null
+                }
               />
               <DiscordChannelManager
                 ownerId={ownerId}
