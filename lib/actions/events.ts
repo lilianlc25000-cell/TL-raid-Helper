@@ -126,21 +126,30 @@ export async function createEvent({
         EVENT_IMAGE_BY_TYPE[normalizeEventType(data.event_type)] ?? undefined;
       const eventDate = new Date(data.start_time);
       const timestamp = Math.floor(eventDate.getTime() / 1000);
-      const commentValue = data.description?.trim() || "Aucun commentaire.";
-      const appLink = calendarUrl || appUrl || undefined;
+      const rawDescription = data.description?.trim() || "";
+      const allianceMatch = rawDescription.match(
+        /^(?:alliance|alliance\s*:)\s*(.+)$/im,
+      );
+      const allianceValue = allianceMatch?.[1]?.trim() || null;
+      const commentValue = rawDescription
+        .split(/\r?\n/)
+        .filter((line) => !/^alliance\s*:/i.test(line.trim()))
+        .join("\n")
+        .trim();
+      const appLink = "https://tl-raid-helper.vercel.app/calendar";
 
       await notifyDiscordWithResilience({
         supabase,
         accessToken,
         ownerId: auth.user.id,
         payload: {
-          channel_id: guildConfig.raid_channel_id ?? undefined,
+          channel_id: dayCategory ? undefined : guildConfig.raid_channel_id ?? undefined,
           guild_id: guildConfig.discord_guild_id ?? undefined,
           channel_name: dayCategory ? "📝-inscription-event" : undefined,
           parent_name: dayCategory ?? undefined,
           embed: {
             title: `⚔️ **${data.title.toUpperCase()}** ⚔️`,
-            description: `> ${commentValue}`,
+            description: commentValue ? `> ${commentValue}` : undefined,
             url: appLink,
             color: 0xffa600,
             fields: [
@@ -154,9 +163,18 @@ export async function createEvent({
                 value: `<t:${timestamp}:R>`,
                 inline: true,
               },
+              ...(allianceValue
+                ? [
+                    {
+                      name: "🤝 Alliance",
+                      value: allianceValue,
+                      inline: true,
+                    },
+                  ]
+                : []),
               {
                 name: "🎯 Commentaire",
-                value: commentValue,
+                value: commentValue || "Aucun commentaire.",
               },
             ],
             image: imageUrl ? { url: imageUrl } : undefined,
