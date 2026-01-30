@@ -28,6 +28,18 @@ type DiscordEmbed = {
   };
 };
 
+type DiscordButtonComponent = {
+  type: 2;
+  style: 5;
+  label: string;
+  url: string;
+};
+
+type DiscordActionRowComponent = {
+  type: 1;
+  components: DiscordButtonComponent[];
+};
+
 type ReplaceOptions = {
   match_title_prefix?: string;
   match_content_prefix?: string;
@@ -41,14 +53,38 @@ type NotifyPayload = {
   parent_name?: string;
   content?: string;
   embed?: DiscordEmbed;
+  components?: DiscordActionRowComponent[];
   replace?: ReplaceOptions;
 };
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 
+const normalizeDiscordName = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+
+const matchesDiscordName = (candidate: string, target: string) => {
+  if (candidate === target) {
+    return true;
+  }
+  const normalizedCandidate = normalizeDiscordName(candidate);
+  const normalizedTarget = normalizeDiscordName(target);
+  if (normalizedCandidate === normalizedTarget) {
+    return true;
+  }
+  return normalizedCandidate.includes(normalizedTarget);
+};
+
 const postDiscordMessage = async (
   channelId: string,
-  body: { content?: string; embeds?: DiscordEmbed[] },
+  body: {
+    content?: string;
+    embeds?: DiscordEmbed[];
+    components?: DiscordActionRowComponent[];
+  },
   botToken: string,
 ) => {
   const response = await fetch(
@@ -149,16 +185,16 @@ serve(async (req) => {
           type?: number;
           parent_id?: string | null;
         }>;
-        const parent =
-          payload.parent_name
-            ? channels.find(
-                (channel) =>
-                  channel.type === 4 && channel.name === payload.parent_name,
-              )
-            : null;
+        const parent = payload.parent_name
+          ? channels.find(
+              (channel) =>
+                channel.type === 4 &&
+                matchesDiscordName(channel.name, payload.parent_name ?? ""),
+            )
+          : null;
         const match = channels.find(
           (channel) =>
-            channel.name === payload.channel_name &&
+            matchesDiscordName(channel.name, payload.channel_name ?? "") &&
             (!parent || channel.parent_id === parent.id),
         );
         if (match?.id) {
@@ -253,12 +289,19 @@ serve(async (req) => {
     }
   }
 
-  const discordBody: { content?: string; embeds?: DiscordEmbed[] } = {};
+  const discordBody: {
+    content?: string;
+    embeds?: DiscordEmbed[];
+    components?: DiscordActionRowComponent[];
+  } = {};
   if (content) {
     discordBody.content = content;
   }
   if (embed) {
     discordBody.embeds = [embed];
+  }
+  if (payload.components?.length) {
+    discordBody.components = payload.components;
   }
 
   const result = await postDiscordMessage(

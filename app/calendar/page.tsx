@@ -55,8 +55,13 @@ const statusOptions: Array<{
   },
 ];
 
+const POST_EVENT_HIDE_MINUTES = 15;
+
 const formatCountdown = (target: Date) => {
   const diffMs = target.getTime() - Date.now();
+  if (diffMs <= -POST_EVENT_HIDE_MINUTES * 60 * 1000) {
+    return null;
+  }
   if (diffMs <= 0) {
     return "En cours";
   }
@@ -341,6 +346,7 @@ export default function CalendarPage() {
         {sortedEvents.map((event) => {
           const eventDate = new Date(event.startTime);
           const status = statusByEvent[event.id];
+          const countdownLabel = formatCountdown(eventDate);
           return (
             <div
               key={event.id}
@@ -361,14 +367,16 @@ export default function CalendarPage() {
                     })}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-right">
-                  <p className="text-xs uppercase tracking-[0.25em] text-text/50">
-                    Compte à rebours
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-gold">
-                    {formatCountdown(eventDate)}
-                  </p>
-                </div>
+                {countdownLabel ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-right">
+                    <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+                      Compte à rebours
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-gold">
+                      {countdownLabel}
+                    </p>
+                  </div>
+                ) : null}
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.25em] text-text/60">

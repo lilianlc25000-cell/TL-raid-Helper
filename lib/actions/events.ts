@@ -45,15 +45,6 @@ const EVENT_IMAGE_BY_TYPE: Record<string, string> = {
     "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/War_game.png",
 };
 
-const buildDateLabel = (startTime: string) =>
-  new Date(startTime).toLocaleDateString("fr-FR", {
-    timeZone: PARIS_TIME_ZONE,
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-
 const buildWeekdayKey = (startTime: string) =>
   new Date(startTime)
     .toLocaleDateString("fr-FR", {
@@ -78,13 +69,6 @@ const weekdayToDiscordCategory = (weekday: string) => {
   };
   return map[normalized] ?? null;
 };
-
-const buildTimeLabel = (startTime: string) =>
-  new Date(startTime).toLocaleTimeString("fr-FR", {
-    timeZone: PARIS_TIME_ZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 
 export async function createEvent({
   title,
@@ -136,12 +120,14 @@ export async function createEvent({
       .maybeSingle();
 
     if (guildConfig?.discord_guild_id || guildConfig?.raid_channel_id) {
-      const dateLabel = buildDateLabel(data.start_time);
-      const timeLabel = buildTimeLabel(data.start_time);
       const weekdayKey = buildWeekdayKey(data.start_time);
       const dayCategory = weekdayToDiscordCategory(weekdayKey);
       const imageUrl =
         EVENT_IMAGE_BY_TYPE[normalizeEventType(data.event_type)] ?? undefined;
+      const eventDate = new Date(data.start_time);
+      const timestamp = Math.floor(eventDate.getTime() / 1000);
+      const commentValue = data.description?.trim() || "Aucun commentaire.";
+      const appLink = calendarUrl || appUrl || undefined;
 
       await notifyDiscordWithResilience({
         supabase,
@@ -153,12 +139,43 @@ export async function createEvent({
           channel_name: dayCategory ? "📝-inscription-event" : undefined,
           parent_name: dayCategory ?? undefined,
           embed: {
-            title: `⚔️ Nouveau Raid : ${data.title}`,
-            description: `Date : ${dateLabel} à ${timeLabel}\nRéservez votre place dès maintenant !`,
-            url: calendarUrl || undefined,
-            color: 0x00ff00,
+            title: `⚔️ **${data.title.toUpperCase()}** ⚔️`,
+            description: `> ${commentValue}`,
+            url: appLink,
+            color: 0xffa600,
+            fields: [
+              {
+                name: "📅 Date & Heure",
+                value: `<t:${timestamp}:F>`,
+                inline: true,
+              },
+              {
+                name: "⏳ Départ",
+                value: `<t:${timestamp}:R>`,
+                inline: true,
+              },
+              {
+                name: "🎯 Commentaire",
+                value: commentValue,
+              },
+            ],
             image: imageUrl ? { url: imageUrl } : undefined,
           },
+          components: appLink
+            ? [
+                {
+                  type: 1,
+                  components: [
+                    {
+                      type: 2,
+                      style: 5,
+                      label: "🚀 S'INSCRIRE AU RAID",
+                      url: appLink,
+                    },
+                  ],
+                },
+              ]
+            : undefined,
         },
       });
     }
