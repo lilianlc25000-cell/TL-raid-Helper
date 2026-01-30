@@ -20,7 +20,7 @@ export default function DiscordProvisionButton({
     setMessage(null);
     const supabase = createClient();
     const { error } = await supabase.functions.invoke("discord-provision", {
-      body: { guild_id: guildId },
+      body: { guild_id: guildId, mode: "reset" },
     });
     if (error) {
       setStatus("error");

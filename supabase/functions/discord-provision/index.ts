@@ -96,9 +96,10 @@ serve(async (req) => {
       return respondJson(401, { error: "Unauthorized." });
     }
 
-    const body = await req.json().catch(() => ({})) as {
+    const body = (await req.json().catch(() => ({}))) as {
       guild_id?: string;
       channel_config?: Record<string, boolean>;
+      mode?: "reset" | "custom";
     };
 
     const { data: guildConfig, error: configError } = await supabase
@@ -113,7 +114,7 @@ serve(async (req) => {
     }
 
     const guildId = guildConfig.discord_guild_id;
-    const channelConfig = {
+    const baseConfig = {
       event: false,
       group: false,
       loot: false,
@@ -121,9 +122,25 @@ serve(async (req) => {
       dps_meter: false,
       polls: false,
       activity_points: false,
-      ...(guildConfig.discord_channel_config ?? {}),
-      ...(body.channel_config ?? {}),
     };
+    const channelConfig =
+      body.mode === "reset"
+        ? {
+            ...baseConfig,
+            event: true,
+            group: true,
+            loot: true,
+          }
+        : {
+            ...baseConfig,
+            ...(guildConfig.discord_channel_config ?? {}),
+            ...(body.channel_config ?? {}),
+          };
+
+    const hasAnyChannel = Object.values(channelConfig).some(Boolean);
+    if (!hasAnyChannel && body.mode !== "reset") {
+      return respondJson(400, { error: "Aucun salon sélectionné." });
+    }
     const discordHeaders = {
       Authorization: `Bot ${botToken}`,
       "Content-Type": "application/json",
