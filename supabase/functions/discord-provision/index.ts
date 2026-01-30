@@ -10,6 +10,8 @@ export const corsHeaders = {
 type DiscordChannel = {
   id: string;
   name: string;
+  type?: number;
+  parent_id?: string | null;
 };
 
 type DiscordRole = {
@@ -20,6 +22,8 @@ type DiscordRole = {
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 const VIEW_CHANNEL_PERMISSION = 1024;
 const MEMBER_ROLE_NAME = "Joueur TL-App";
+const CATEGORY_TYPE = 4;
+const TEXT_CHANNEL_TYPE = 0;
 
 const jsonHeaders = {
   "Content-Type": "application/json",
@@ -92,9 +96,14 @@ serve(async (req) => {
       return respondJson(401, { error: "Unauthorized." });
     }
 
+    const body = await req.json().catch(() => ({})) as {
+      guild_id?: string;
+      channel_config?: Record<string, boolean>;
+    };
+
     const { data: guildConfig, error: configError } = await supabase
       .from("guild_configs")
-      .select("discord_guild_id")
+      .select("discord_guild_id,discord_channel_config")
       .eq("owner_id", authData.user.id)
       .maybeSingle();
 
@@ -104,6 +113,17 @@ serve(async (req) => {
     }
 
     const guildId = guildConfig.discord_guild_id;
+    const channelConfig = {
+      event: false,
+      group: false,
+      loot: false,
+      wishlist: false,
+      dps_meter: false,
+      polls: false,
+      activity_points: false,
+      ...(guildConfig.discord_channel_config ?? {}),
+      ...(body.channel_config ?? {}),
+    };
     const discordHeaders = {
       Authorization: `Bot ${botToken}`,
       "Content-Type": "application/json",
@@ -161,15 +181,22 @@ serve(async (req) => {
       return respondJson(502, { error: "Impossible de lire les salons." });
     }
 
+    const channels = channelsResult.data ?? [];
     const channelsByName = new Map(
-      (channelsResult.data ?? []).map((channel) => [channel.name, channel]),
+      channels.map((channel) => [channel.name, channel]),
     );
+    const findChannel = (name: string, type?: number) =>
+      channels.find(
+        (channel) =>
+          channel.name === name && (type === undefined || channel.type === type),
+      );
 
     const ensureChannel = async (
       name: string,
       overwrites?: typeof privateOverwrites,
+      options?: { type?: number; parentId?: string | null },
     ): Promise<{ channel: DiscordChannel; created: boolean }> => {
-      const existing = channelsByName.get(name);
+      const existing = findChannel(name, options?.type);
       if (existing) {
         if (overwrites) {
           const patchResult = await fetchDiscord(
@@ -195,7 +222,8 @@ serve(async (req) => {
           headers: discordHeaders,
           body: JSON.stringify({
             name,
-            type: 0,
+            type: options?.type ?? TEXT_CHANNEL_TYPE,
+            parent_id: options?.parentId ?? null,
             permission_overwrites: overwrites,
           }),
         },
@@ -208,6 +236,23 @@ serve(async (req) => {
 
       channelsByName.set(name, createResult.data);
       return { channel: createResult.data, created: true };
+    };
+
+    const deleteChannel = async (name: string, type?: number) => {
+      const existing = findChannel(name, type);
+      if (!existing) {
+        return;
+      }
+      const deleteResult = await fetchDiscord(
+        `${DISCORD_API_BASE}/channels/${existing.id}`,
+        {
+          method: "DELETE",
+          headers: discordHeaders,
+        },
+      );
+      if (!deleteResult.ok) {
+        console.error("discord-provision: delete failed", deleteResult);
+      }
     };
 
     const postWelcomeMessage = async (channelId: string) => {
@@ -250,15 +295,92 @@ serve(async (req) => {
       await postWelcomeMessage(inscriptionResult.channel.id);
     }
 
-    const planningResult = await ensureChannel("📅-tl-planning", privateOverwrites);
-    const lootsResult = await ensureChannel("🎁-tl-loots", privateOverwrites);
-    const groupsResult = await ensureChannel("groupe", privateOverwrites);
+    let planningResult: { channel: DiscordChannel; created: boolean } | null =
+      null;
+    let groupsResult: { channel: DiscordChannel; created: boolean } | null =
+      null;
+
+    if (channelConfig.event) {
+      const categoryResult = await ensureChannel(
+        "Event",
+        privateOverwrites,
+        { type: CATEGORY_TYPE },
+      );
+      const days = [
+        "lundi",
+        "mardi",
+        "mercredi",
+        "jeudi",
+        "vendredi",
+        "samedi",
+        "dimanche",
+      ];
+      for (const day of days) {
+        await ensureChannel(
+          day,
+          privateOverwrites,
+          { parentId: categoryResult.channel.id },
+        );
+      }
+      planningResult = await ensureChannel("📅-tl-planning", privateOverwrites);
+    } else {
+      await deleteChannel("📅-tl-planning");
+      await deleteChannel("Event", CATEGORY_TYPE);
+      const days = [
+        "lundi",
+        "mardi",
+        "mercredi",
+        "jeudi",
+        "vendredi",
+        "samedi",
+        "dimanche",
+      ];
+      for (const day of days) {
+        await deleteChannel(day);
+      }
+    }
+
+    if (channelConfig.group) {
+      groupsResult = await ensureChannel("groupe", privateOverwrites);
+    } else {
+      await deleteChannel("groupe");
+    }
+
+    if (channelConfig.loot) {
+      await ensureChannel("🎁-tl-loots", privateOverwrites);
+    } else {
+      await deleteChannel("🎁-tl-loots");
+    }
+
+    if (channelConfig.wishlist) {
+      await ensureChannel("wishlist", privateOverwrites);
+    } else {
+      await deleteChannel("wishlist");
+    }
+
+    if (channelConfig.dps_meter) {
+      await ensureChannel("dps-meter", privateOverwrites);
+    } else {
+      await deleteChannel("dps-meter");
+    }
+
+    if (channelConfig.polls) {
+      await ensureChannel("sondage", privateOverwrites);
+    } else {
+      await deleteChannel("sondage");
+    }
+
+    if (channelConfig.activity_points) {
+      await ensureChannel("points-activites", privateOverwrites);
+    } else {
+      await deleteChannel("points-activites");
+    }
 
     const { error: updateError } = await supabase
       .from("guild_configs")
       .update({
-        raid_channel_id: planningResult.channel.id,
-        group_channel_id: groupsResult.channel.id,
+        raid_channel_id: planningResult?.channel.id ?? null,
+        group_channel_id: groupsResult?.channel.id ?? null,
         discord_member_role_id: memberRole.id,
       })
       .eq("owner_id", authData.user.id);
@@ -273,9 +395,8 @@ serve(async (req) => {
       role_id: memberRole.id,
       channels: [
         inscriptionResult.channel,
-        planningResult.channel,
-        lootsResult.channel,
-        groupsResult.channel,
+        planningResult?.channel ?? null,
+        groupsResult?.channel ?? null,
       ],
     });
   } catch (error) {

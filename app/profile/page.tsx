@@ -284,6 +284,12 @@ export default function ProfilePage() {
   const [isBuildPanelOpen, setIsBuildPanelOpen] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [participationPoints, setParticipationPoints] = useState<number>(0);
+  const [activityPoints, setActivityPoints] = useState<number>(0);
+  const [activityFile, setActivityFile] = useState<File | null>(null);
+  const [activityStatus, setActivityStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
+  const [activityMessage, setActivityMessage] = useState<string | null>(null);
   const [roleRank, setRoleRank] = useState<string>("soldat");
   const [profileGuildId, setProfileGuildId] = useState<string | null>(null);
   const rollChannelRef = useRef<BroadcastChannel | null>(null);
@@ -332,7 +338,7 @@ export default function ProfilePage() {
       const { data } = await supabase
         .from("profiles")
         .select(
-          "ingame_name,main_weapon,off_weapon,role,archetype,gear_score,cohesion_points,guild_id,role_rank",
+          "ingame_name,main_weapon,off_weapon,role,archetype,gear_score,cohesion_points,activity_points,guild_id,role_rank",
         )
         .eq("user_id", userId)
         .single();
@@ -349,6 +355,7 @@ export default function ProfilePage() {
         setRole(data.role ?? "");
         setArchetype(data.archetype ?? "");
         setParticipationPoints(data.cohesion_points ?? 0);
+        setActivityPoints(data.activity_points ?? 0);
         setProfileGuildId(data.guild_id ?? null);
         setRoleRank(data.role_rank ?? "soldat");
       }
@@ -360,6 +367,61 @@ export default function ProfilePage() {
       isMounted = false;
     };
   }, [userId]);
+
+  const fileToBase64 = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result;
+        if (typeof result === "string") {
+          const base64 = result.split(",")[1] ?? "";
+          resolve(base64);
+        } else {
+          reject(new Error("Format de fichier invalide."));
+        }
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+
+  const handleActivityUpload = async () => {
+    if (!activityFile) {
+      setActivityMessage("Sélectionnez une image.");
+      setActivityStatus("error");
+      return;
+    }
+    setActivityStatus("loading");
+    setActivityMessage(null);
+    try {
+      const base64 = await fileToBase64(activityFile);
+      const supabase = createClient();
+      const { data, error } = await supabase.functions.invoke("activity-ocr", {
+        body: { image_base64: base64, source: "app" },
+      });
+      if (error) {
+        setActivityStatus("error");
+        setActivityMessage(
+          error.message || "Impossible d'analyser l'image.",
+        );
+        return;
+      }
+      const points =
+        typeof data?.points === "number" ? data.points : Number(data?.points);
+      if (Number.isNaN(points)) {
+        setActivityStatus("error");
+        setActivityMessage("Aucun score détecté.");
+        return;
+      }
+      setActivityPoints(points);
+      setActivityStatus("success");
+      setActivityMessage("Points d'activité mis à jour.");
+    } catch (err) {
+      setActivityStatus("error");
+      setActivityMessage(
+        err instanceof Error ? err.message : "Erreur inconnue.",
+      );
+    }
+  };
 
   useEffect(() => {
     if (!toastMessage) {
@@ -883,6 +945,10 @@ export default function ProfilePage() {
               <Sparkles className="h-3.5 w-3.5" />
               {participationPoints} points de participation
             </div>
+            <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-amber-200">
+              <Sparkles className="h-3.5 w-3.5" />
+              {activityPoints} points d&apos;activité
+            </div>
             <div className="mt-4 flex flex-wrap items-center justify-start gap-3 sm:justify-end">
               <button
                 type="button"
@@ -904,6 +970,46 @@ export default function ProfilePage() {
 
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
+          <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
+            <h2 className="text-sm uppercase tracking-[0.3em] text-text/50">
+              Points d&apos;activité
+            </h2>
+            <p className="mt-2 text-sm text-text/70">
+              Importez une capture de vos points d&apos;activité pour mise à jour automatique.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_200px]">
+              <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/70">
+                <span className="text-xs uppercase tracking-[0.25em] text-text/50">
+                  Capture d&apos;écran
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) =>
+                    setActivityFile(event.target.files?.[0] ?? null)
+                  }
+                  className="text-xs text-text/70"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={handleActivityUpload}
+                disabled={!activityFile || activityStatus === "loading"}
+                className="rounded-2xl border border-amber-400/60 bg-amber-400/10 px-4 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {activityStatus === "loading" ? "Analyse..." : "Analyser"}
+              </button>
+            </div>
+            {activityMessage ? (
+              <p
+                className={`mt-3 text-xs ${
+                  activityStatus === "error" ? "text-red-300" : "text-emerald-200"
+                }`}
+              >
+                {activityMessage}
+              </p>
+            ) : null}
+          </div>
           <div className="relative z-20 rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
             <h2 className="text-sm uppercase tracking-[0.3em] text-text/50">
               Identité

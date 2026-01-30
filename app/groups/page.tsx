@@ -143,6 +143,18 @@ export default function PlayerGroupsPage() {
       setError("Supabase n'est pas configuré (URL / ANON KEY).");
       return;
     }
+    if (selectedEvent?.id === event.id) {
+      setSelectedEvent(null);
+      setGroups(
+        Array.from({ length: 6 }, (_, index) => ({
+          id: index + 1,
+          members: [],
+        })),
+      );
+      setPlayerGroup(null);
+      setIsLoadingGroups(false);
+      return;
+    }
     setSelectedEvent(event);
     setIsLoadingGroups(true);
     setError(null);

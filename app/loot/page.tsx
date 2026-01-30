@@ -131,6 +131,8 @@ export default function PlayerLootPage() {
   const [rollsError, setRollsError] = useState<string | null>(null);
   const [lootSystem, setLootSystem] = useState<LootSystemValue>("council");
 
+  const showGuildTreasure = lootSystem === "roll";
+
   useEffect(() => {
     let isMounted = true;
     const supabase = createClient();
@@ -299,6 +301,12 @@ export default function PlayerLootPage() {
     };
     void loadThreshold();
   }, [guildId]);
+
+  useEffect(() => {
+    if (!showGuildTreasure && activeTab === "guild") {
+      setActiveTab("brocante");
+    }
+  }, [showGuildTreasure, activeTab]);
 
   useEffect(() => {
     if (!guildId) {
@@ -618,7 +626,9 @@ export default function PlayerLootPage() {
       <section className="mt-8 space-y-6">
         <div className="flex flex-wrap gap-2">
           {[
-            { key: "guild", label: "🏛️ Trésor de Guilde" },
+            ...(showGuildTreasure
+              ? [{ key: "guild", label: "🏛️ Trésor de Guilde" }]
+              : []),
             { key: "brocante", label: "⚖️ La Brocante" },
           ].map((tab) => (
             <button

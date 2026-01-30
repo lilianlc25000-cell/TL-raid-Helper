@@ -55,6 +55,24 @@ export default function GuildMembersPage() {
   const [currentGuildId, setCurrentGuildId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
+  useEffect(() => {
+    if (!menuOpenId) {
+      return;
+    }
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) {
+        return;
+      }
+      if (target.closest("[data-member-menu]")) {
+        return;
+      }
+      setMenuOpenId(null);
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, [menuOpenId]);
+
   const loadAccess = useCallback(async () => {
     const supabase = createClient();
     if (!supabase) {
@@ -446,7 +464,7 @@ export default function GuildMembersPage() {
                         <ShieldCheck className="h-4 w-4 text-text/70" />
                       )}
                     </span>
-                    <div className="relative">
+                    <div className="relative" data-member-menu>
                       {canManage ? (
                         <button
                           type="button"
@@ -456,6 +474,7 @@ export default function GuildMembersPage() {
                             )
                           }
                           className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/40 text-text/60 transition hover:text-text"
+                          data-member-menu
                         >
                           <MoreVertical className="h-4 w-4" />
                         </button>

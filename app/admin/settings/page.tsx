@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import DiscordProvisionButton from "@/app/admin/settings/DiscordProvisionButton";
-import DiscordNotifyTestButton from "@/app/admin/settings/DiscordNotifyTestButton";
+import DiscordChannelManager from "@/app/admin/settings/DiscordChannelManager";
+import EligibilityCriteriaSettingsClient from "@/app/admin/settings/EligibilityCriteriaSettingsClient";
 import LootSystemSettingsClient from "@/app/admin/settings/LootSystemSettingsClient";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,9 @@ export default async function AdminSettingsPage() {
   const { data: guildConfig } = ownerId
     ? await supabase
         .from("guild_configs")
-        .select("discord_guild_id,discord_guild_name,raid_channel_id,loot_system")
+        .select(
+          "discord_guild_id,discord_guild_name,raid_channel_id,loot_system,discord_channel_config,eligibility_criteria",
+        )
         .eq("owner_id", ownerId)
         .maybeSingle()
     : { data: null };
@@ -77,6 +80,11 @@ export default async function AdminSettingsPage() {
           hasGuildConfig={Boolean(effectiveGuildConfig?.discord_guild_id)}
         />
 
+        <EligibilityCriteriaSettingsClient
+          ownerId={ownerId}
+          initialCriteria={(effectiveGuildConfig?.eligibility_criteria as string[]) ?? []}
+        />
+
         <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
           <p className="text-xs uppercase tracking-[0.25em] text-text/50">
             Configuration Discord
@@ -95,12 +103,19 @@ export default async function AdminSettingsPage() {
                   ✅ Connecté au serveur :{" "}
                   {effectiveGuildConfig.discord_guild_name ?? "Serveur Discord"}
                 </span>
-                <DiscordNotifyTestButton
-                  channelId={effectiveGuildConfig.raid_channel_id ?? null}
-                />
               </div>
               <DiscordProvisionButton
                 guildId={effectiveGuildConfig.discord_guild_id}
+              />
+              <DiscordChannelManager
+                ownerId={ownerId}
+                guildId={effectiveGuildConfig.discord_guild_id}
+                initialConfig={
+                  (effectiveGuildConfig.discord_channel_config as Record<
+                    string,
+                    boolean
+                  >) ?? null
+                }
               />
             </div>
           ) : oauthUrl ? (

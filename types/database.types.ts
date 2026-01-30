@@ -18,6 +18,8 @@ export type Database = {
           main_weapon: string | null;
           off_weapon: string | null;
           cohesion_points: number;
+          activity_points: number | null;
+          activity_points_updated_at: string | null;
           loot_received_count: number;
           gear_score: number | null;
           role_rank: string | null;
@@ -32,6 +34,8 @@ export type Database = {
           main_weapon?: string | null;
           off_weapon?: string | null;
           cohesion_points?: number;
+          activity_points?: number | null;
+          activity_points_updated_at?: string | null;
           loot_received_count?: number;
           gear_score?: number | null;
           role_rank?: string | null;
@@ -46,6 +50,8 @@ export type Database = {
           main_weapon?: string | null;
           off_weapon?: string | null;
           cohesion_points?: number;
+          activity_points?: number | null;
+          activity_points_updated_at?: string | null;
           loot_received_count?: number;
           gear_score?: number | null;
           role_rank?: string | null;
@@ -146,6 +152,9 @@ export type Database = {
           discord_member_role_id: string | null;
           group_channel_id: string | null;
           raid_channel_id: string | null;
+          loot_system: string | null;
+          discord_channel_config: Json | null;
+          eligibility_criteria: string[] | null;
           created_at: string | null;
         };
         Insert: {
@@ -156,6 +165,9 @@ export type Database = {
           discord_member_role_id?: string | null;
           group_channel_id?: string | null;
           raid_channel_id?: string | null;
+          loot_system?: string | null;
+          discord_channel_config?: Json | null;
+          eligibility_criteria?: string[] | null;
           created_at?: string | null;
         };
         Update: {
@@ -166,7 +178,36 @@ export type Database = {
           discord_member_role_id?: string | null;
           group_channel_id?: string | null;
           raid_channel_id?: string | null;
+          loot_system?: string | null;
+          discord_channel_config?: Json | null;
+          eligibility_criteria?: string[] | null;
           created_at?: string | null;
+        };
+      };
+      activity_points_history: {
+        Row: {
+          id: string;
+          guild_id: string | null;
+          user_id: string | null;
+          points: number;
+          source: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          guild_id?: string | null;
+          user_id?: string | null;
+          points: number;
+          source?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          guild_id?: string | null;
+          user_id?: string | null;
+          points?: number;
+          source?: string;
+          created_at?: string;
         };
       };
       events: {

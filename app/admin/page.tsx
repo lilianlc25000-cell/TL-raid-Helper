@@ -89,6 +89,9 @@ const tools = [
 export default function AdminDashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [lootSystem, setLootSystem] = useState<"fcfs" | "roll" | "council">(
+    "council",
+  );
   const managePve = usePermission("manage_pve");
   const managePvp = usePermission("manage_pvp");
   const manageLoot = usePermission("manage_loot");
@@ -119,14 +122,36 @@ export default function AdminDashboardPage() {
     }
     const { data: profile } = (await supabase
       .from("profiles")
-      .select("role_rank")
+      .select("role_rank,guild_id")
       .eq("user_id", userId)
       .maybeSingle()) as {
-      data: { role_rank?: string | null } | null;
+      data: { role_rank?: string | null; guild_id?: string | null } | null;
     };
     setIsAdmin(
       profile?.role_rank === "admin" || profile?.role_rank === "conseiller",
     );
+    const guildId = profile?.guild_id ?? null;
+    if (guildId) {
+      const { data: guild } = await supabase
+        .from("guilds")
+        .select("owner_id")
+        .eq("id", guildId)
+        .maybeSingle();
+      if (guild?.owner_id) {
+        const { data: config } = await supabase
+          .from("guild_configs")
+          .select("loot_system")
+          .eq("owner_id", guild.owner_id)
+          .maybeSingle();
+        if (
+          config?.loot_system === "fcfs" ||
+          config?.loot_system === "roll" ||
+          config?.loot_system === "council"
+        ) {
+          setLootSystem(config.loot_system);
+        }
+      }
+    }
     setIsAuthReady(true);
   }, []);
 
@@ -200,7 +225,14 @@ export default function AdminDashboardPage() {
       </header>
 
       <section className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {tools.map((tool) => {
+        {tools
+          .filter((tool) => {
+            if (tool.title === "Roulette de loot") {
+              return lootSystem !== "roll";
+            }
+            return true;
+          })
+          .map((tool) => {
           const Icon = tool.icon;
           const canAccess = gateMap[tool.gate];
           const cardClass = `group rounded-3xl border ${tool.border} bg-gradient-to-br ${tool.accent} p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] transition hover:-translate-y-1`;
