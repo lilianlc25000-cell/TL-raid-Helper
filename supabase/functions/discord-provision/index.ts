@@ -24,7 +24,27 @@ const VIEW_CHANNEL_PERMISSION = 1024;
 const MEMBER_ROLE_NAME = "Joueur TL-App";
 const CATEGORY_TYPE = 4;
 const TEXT_CHANNEL_TYPE = 0;
-const ROOT_CATEGORY_NAME = "TL-Raid-Manager";
+const ROOT_CATEGORY_NAME = "🛡️-TL-Raid-Manager";
+const EVENT_CATEGORY_NAME = "📅-Event";
+const LOOT_CATEGORY_NAME = "🎁-Loot";
+const MISC_CATEGORY_NAME = "🧰-Divers";
+const INSCRIPTION_CHANNEL = "🔓-inscription";
+const EVENT_INSCRIPTION_CHANNEL = "📝-inscription-event";
+const EVENT_GROUP_CHANNEL = "👥-groupe";
+const EVENT_POLL_CHANNEL = "📊-sondage";
+const WISHLIST_CHANNEL = "📜-wish-list";
+const LOOT_CHANNEL = "🎁-coffre-de-guilde";
+const DPS_CHANNEL = "📈-dps-meter";
+const ACTIVITY_CHANNEL = "⭐-points-activite";
+const EVENT_DAYS = [
+  { key: "lundi", label: "📆-Lundi" },
+  { key: "mardi", label: "📆-Mardi" },
+  { key: "mercredi", label: "📆-Mercredi" },
+  { key: "jeudi", label: "📆-Jeudi" },
+  { key: "vendredi", label: "📆-Vendredi" },
+  { key: "samedi", label: "📆-Samedi" },
+  { key: "dimanche", label: "📆-Dimanche" },
+];
 
 const jsonHeaders = {
   "Content-Type": "application/json",
@@ -139,7 +159,7 @@ serve(async (req) => {
           };
 
     const hasAnyChannel = Object.values(channelConfig).some(Boolean);
-    if (!hasAnyChannel && body.mode !== "reset") {
+    const legacyCleanup = async () => {
       await deleteChannel("📅-tl-planning");
       await deleteChannel("🎁-tl-loots");
       await deleteChannel("groupe");
@@ -147,7 +167,15 @@ serve(async (req) => {
       await deleteChannel("dps-meter");
       await deleteChannel("sondage");
       await deleteChannel("points-activites");
+      await deleteChannel("Event", CATEGORY_TYPE);
       const days = [
+        "lundi",
+        "mardi",
+        "mercredi",
+        "jeudi",
+        "vendredi",
+        "samedi",
+        "dimanche",
         "event-lundi",
         "event-mardi",
         "event-mercredi",
@@ -159,6 +187,10 @@ serve(async (req) => {
       for (const day of days) {
         await deleteChannel(day);
       }
+    };
+
+    if (!hasAnyChannel && body.mode !== "reset") {
+      await legacyCleanup();
       return respondJson(200, { success: true, channels: [] });
     }
     const discordHeaders = {
@@ -231,17 +263,21 @@ serve(async (req) => {
     const ensureChannel = async (
       name: string,
       overwrites?: typeof privateOverwrites,
-      options?: { type?: number; parentId?: string | null },
+      options?: { type?: number; parentId?: string | null; position?: number },
     ): Promise<{ channel: DiscordChannel; created: boolean }> => {
       const existing = findChannel(name, options?.type);
       if (existing) {
-        if (overwrites) {
+        if (overwrites || options?.parentId !== undefined || options?.position !== undefined) {
           const patchResult = await fetchDiscord(
             `${DISCORD_API_BASE}/channels/${existing.id}`,
             {
               method: "PATCH",
               headers: discordHeaders,
-              body: JSON.stringify({ permission_overwrites: overwrites }),
+              body: JSON.stringify({
+                permission_overwrites: overwrites,
+                parent_id: options?.parentId ?? null,
+                position: options?.position,
+              }),
             },
           );
           if (!patchResult.ok) {
@@ -261,6 +297,7 @@ serve(async (req) => {
             name,
             type: options?.type ?? TEXT_CHANNEL_TYPE,
             parent_id: options?.parentId ?? null,
+            position: options?.position,
             permission_overwrites: overwrites,
           }),
         },
@@ -327,12 +364,16 @@ serve(async (req) => {
       }
     };
 
+    await legacyCleanup();
+
     const rootCategory = await ensureChannel(ROOT_CATEGORY_NAME, undefined, {
       type: CATEGORY_TYPE,
+      position: 0,
     });
 
-    const inscriptionResult = await ensureChannel("🔓-inscription", undefined, {
+    const inscriptionResult = await ensureChannel(INSCRIPTION_CHANNEL, undefined, {
       parentId: rootCategory.channel.id,
+      position: 0,
     });
     if (inscriptionResult.created) {
       await postWelcomeMessage(inscriptionResult.channel.id);
@@ -343,86 +384,118 @@ serve(async (req) => {
     let groupsResult: { channel: DiscordChannel; created: boolean } | null =
       null;
 
+    let categoryPosition = 1;
+    let eventCategory: { channel: DiscordChannel } | null = null;
+
     if (channelConfig.event) {
-      const days = [
-        "event-lundi",
-        "event-mardi",
-        "event-mercredi",
-        "event-jeudi",
-        "event-vendredi",
-        "event-samedi",
-        "event-dimanche",
-      ];
-      for (const day of days) {
-        await ensureChannel(day, privateOverwrites, {
-          parentId: rootCategory.channel.id,
+      for (const [index, day] of EVENT_DAYS.entries()) {
+        const dayCategory = await ensureChannel(day.label, privateOverwrites, {
+          type: CATEGORY_TYPE,
+          position: categoryPosition++,
         });
+        const dayInscription = await ensureChannel(
+          EVENT_INSCRIPTION_CHANNEL,
+          privateOverwrites,
+          {
+            parentId: dayCategory.channel.id,
+            position: 0,
+          },
+        );
+        const dayGroup = await ensureChannel(
+          EVENT_GROUP_CHANNEL,
+          privateOverwrites,
+          {
+            parentId: dayCategory.channel.id,
+            position: 1,
+          },
+        );
+        if (index === 0) {
+          planningResult = dayInscription;
+          groupsResult = dayGroup;
+        }
       }
-      planningResult = await ensureChannel("📅-tl-planning", privateOverwrites, {
-        parentId: rootCategory.channel.id,
-      });
     } else {
-      await deleteChannel("📅-tl-planning");
-      const days = [
-        "event-lundi",
-        "event-mardi",
-        "event-mercredi",
-        "event-jeudi",
-        "event-vendredi",
-        "event-samedi",
-        "event-dimanche",
-      ];
-      for (const day of days) {
-        await deleteChannel(day);
+      for (const day of EVENT_DAYS) {
+        await deleteChannel(day.label, CATEGORY_TYPE);
       }
     }
 
-    if (channelConfig.group) {
-      groupsResult = await ensureChannel("groupe", privateOverwrites, {
-        parentId: rootCategory.channel.id,
+    if (channelConfig.event || channelConfig.polls) {
+      eventCategory = await ensureChannel(EVENT_CATEGORY_NAME, privateOverwrites, {
+        type: CATEGORY_TYPE,
+        position: categoryPosition++,
       });
     } else {
-      await deleteChannel("groupe");
+      await deleteChannel(EVENT_CATEGORY_NAME, CATEGORY_TYPE);
     }
 
-    if (channelConfig.loot) {
-      await ensureChannel("🎁-tl-loots", privateOverwrites, {
-        parentId: rootCategory.channel.id,
+    if (eventCategory && channelConfig.polls) {
+      await ensureChannel(EVENT_POLL_CHANNEL, privateOverwrites, {
+        parentId: eventCategory.channel.id,
+        position: 0,
       });
     } else {
-      await deleteChannel("🎁-tl-loots");
+      await deleteChannel(EVENT_POLL_CHANNEL);
     }
 
-    if (channelConfig.wishlist) {
-      await ensureChannel("wishlist", privateOverwrites, {
-        parentId: rootCategory.channel.id,
+    let lootCategory: { channel: DiscordChannel } | null = null;
+    if (channelConfig.loot || channelConfig.wishlist) {
+      lootCategory = await ensureChannel(LOOT_CATEGORY_NAME, privateOverwrites, {
+        type: CATEGORY_TYPE,
+        position: categoryPosition++,
       });
     } else {
-      await deleteChannel("wishlist");
+      await deleteChannel(LOOT_CATEGORY_NAME, CATEGORY_TYPE);
     }
 
-    if (channelConfig.dps_meter) {
-      await ensureChannel("dps-meter", privateOverwrites, {
-        parentId: rootCategory.channel.id,
-      });
-    } else {
-      await deleteChannel("dps-meter");
+    if (lootCategory) {
+      let lootPosition = 0;
+      if (channelConfig.wishlist) {
+        await ensureChannel(WISHLIST_CHANNEL, privateOverwrites, {
+          parentId: lootCategory.channel.id,
+          position: lootPosition++,
+        });
+      } else {
+        await deleteChannel(WISHLIST_CHANNEL);
+      }
+      if (channelConfig.loot) {
+        await ensureChannel(LOOT_CHANNEL, privateOverwrites, {
+          parentId: lootCategory.channel.id,
+          position: lootPosition++,
+        });
+      } else {
+        await deleteChannel(LOOT_CHANNEL);
+      }
     }
 
-    if (channelConfig.polls) {
-      await ensureChannel("sondage", privateOverwrites, {
-        parentId: rootCategory.channel.id,
+    let miscCategory: { channel: DiscordChannel } | null = null;
+    if (channelConfig.dps_meter || channelConfig.activity_points) {
+      miscCategory = await ensureChannel(MISC_CATEGORY_NAME, privateOverwrites, {
+        type: CATEGORY_TYPE,
+        position: categoryPosition++,
       });
     } else {
-      await deleteChannel("sondage");
+      await deleteChannel(MISC_CATEGORY_NAME, CATEGORY_TYPE);
     }
 
-    if (channelConfig.activity_points) {
-      await ensureChannel("points-activites", privateOverwrites, {
-        parentId: rootCategory.channel.id,
-      });
-    } else {
-      await deleteChannel("points-activites");
+    if (miscCategory) {
+      let miscPosition = 0;
+      if (channelConfig.dps_meter) {
+        await ensureChannel(DPS_CHANNEL, privateOverwrites, {
+          parentId: miscCategory.channel.id,
+          position: miscPosition++,
+        });
+      } else {
+        await deleteChannel(DPS_CHANNEL);
+      }
+      if (channelConfig.activity_points) {
+        await ensureChannel(ACTIVITY_CHANNEL, privateOverwrites, {
+          parentId: miscCategory.channel.id,
+          position: miscPosition++,
+        });
+      } else {
+        await deleteChannel(ACTIVITY_CHANNEL);
+      }
     }
 
     const { error: updateError } = await supabase
