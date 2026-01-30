@@ -1,7 +1,7 @@
-\"use client\";
+"use client";
 
-import { useMemo, useState } from \"react\";
-import { createClient } from \"@/lib/supabase/client\";
+import { useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type ChannelConfig = {
   event: boolean;
