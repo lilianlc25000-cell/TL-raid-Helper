@@ -314,6 +314,11 @@ export default function CalendarPage() {
       );
       return;
     }
+    if (builds.length === 1) {
+      handleStatusChange(eventId, status, builds[0].id);
+      setError(null);
+      return;
+    }
     const preselected =
       selectedBuildByEvent[eventId] ?? builds[0]?.id ?? null;
     setSelectedBuildId(preselected);

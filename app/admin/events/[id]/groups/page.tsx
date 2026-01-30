@@ -73,6 +73,19 @@ const EVENT_IMAGE_BY_TYPE: Record<string, string> = {
   wargames:
     "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/War_game.png",
 };
+
+const getEventImageUrl = (eventType: string | null) => {
+  if (!eventType) return undefined;
+  const normalized = normalizeEventType(eventType);
+  if (!normalized) return undefined;
+  if (EVENT_IMAGE_BY_TYPE[normalized]) {
+    return EVENT_IMAGE_BY_TYPE[normalized];
+  }
+  const matchKey = Object.keys(EVENT_IMAGE_BY_TYPE).find((key) =>
+    normalized.includes(key),
+  );
+  return matchKey ? EVENT_IMAGE_BY_TYPE[matchKey] : undefined;
+};
 const EVENT_DAYS = [
   { key: "lundi", label: "📆-Lundi" },
   { key: "mardi", label: "📆-Mardi" },
@@ -751,63 +764,71 @@ export default function RaidGroupsPage() {
       const timestamp = eventStartTime
         ? Math.floor(new Date(eventStartTime).getTime() / 1000)
         : null;
-      const fields = groups.flatMap((group, index) => {
-        const field =
-          group.players.length === 0
-            ? {
-                name: `Groupe ${group.id}`,
-                value: "—",
-                inline: true,
-              }
-            : (() => {
-                const tanks: string[] = [];
-                const dps: string[] = [];
-                const heals: string[] = [];
-                group.players.forEach((player) => {
-                  const effectiveRole = getEffectiveRole(player);
-                  const bucket = getRoleBucket(effectiveRole);
-                  const mainEmoji = getWeaponEmoji(player.mainWeapon);
-                  const offEmoji = getWeaponEmoji(player.offWeapon);
-                  const emojis = [mainEmoji, offEmoji].filter(Boolean).join(" ");
-                  const emojiPrefix = emojis ? `${emojis} ` : "";
-                  const line = `${emojiPrefix}${player.ingameName}`;
-                  if (bucket === "tank") {
-                    tanks.push(line);
-                  } else if (bucket === "heal") {
-                    heals.push(line);
-                  } else {
-                    dps.push(line);
-                  }
-                });
-                const sections = [
-                  { title: "🛡️ Tanks", entries: tanks },
-                  { title: "⚔️ DPS", entries: dps },
-                  { title: "🌿 Heals", entries: heals },
-                ]
-                  .filter((section) => section.entries.length > 0)
-                  .map(
-                    (section) =>
-                      `${section.title}\n${section.entries
-                        .map((line) => `- ${line}`)
-                        .join("\n")}`,
-                  )
-                  .join("\n");
-                return {
-                  name: `Groupe ${group.id}`,
-                  value: sections || "—",
-                  inline: true,
-                };
-              })();
+      const buildGroupField = (group: GroupState) => {
+        if (group.players.length === 0) {
+          return {
+            name: `Groupe ${group.id}`,
+            value: "—",
+            inline: true,
+          };
+        }
+        const tanks: string[] = [];
+        const dps: string[] = [];
+        const heals: string[] = [];
+        group.players.forEach((player) => {
+          const effectiveRole = getEffectiveRole(player);
+          const bucket = getRoleBucket(effectiveRole);
+          const mainEmoji = getWeaponEmoji(player.mainWeapon);
+          const offEmoji = getWeaponEmoji(player.offWeapon);
+          const emojis = [mainEmoji, offEmoji].filter(Boolean).join(" ");
+          const emojiPrefix = emojis ? `${emojis} ` : "";
+          const line = `${emojiPrefix}${player.ingameName}`;
+          if (bucket === "tank") {
+            tanks.push(line);
+          } else if (bucket === "heal") {
+            heals.push(line);
+          } else {
+            dps.push(line);
+          }
+        });
+        const sections = [
+          { title: "🛡️ Tanks", entries: tanks },
+          { title: "⚔️ DPS", entries: dps },
+          { title: "🌿 Heals", entries: heals },
+        ]
+          .filter((section) => section.entries.length > 0)
+          .map(
+            (section) =>
+              `**— ${section.title} —**\n${section.entries
+                .map((line) => `- ${line}`)
+                .join("\n")}`,
+          )
+          .join("\n");
+        return {
+          name: `Groupe ${group.id}`,
+          value: sections || "—",
+          inline: true,
+        };
+      };
 
-        const needsSpacer = index % 2 === 1 && index < groups.length - 1;
-        return needsSpacer
-          ? [field, { name: "\u200B", value: "\u200B", inline: true }]
-          : [field];
+      const fields = groups.flatMap((group, index) => {
+        const groupField = buildGroupField(group);
+        const isSecondInPair = index % 2 === 1;
+        const isLast = index === groups.length - 1;
+        const pairSeparator = !isLast && isSecondInPair;
+
+        const withColumnGap = isSecondInPair
+          ? [groupField]
+          : [groupField, { name: "\u200B", value: "\u200B", inline: true }];
+        return pairSeparator
+          ? [
+              ...withColumnGap,
+              { name: "\u200B", value: "\u200B", inline: false },
+            ]
+          : withColumnGap;
       });
 
-      const imageUrl = eventType
-        ? EVENT_IMAGE_BY_TYPE[normalizeEventType(eventType)] ?? undefined
-        : undefined;
+      const imageUrl = getEventImageUrl(eventType);
       const { error: discordError } = await supabase.functions.invoke(
         "discord-notify",
         {

@@ -293,6 +293,7 @@ export default function ProfilePage() {
   const [roleRank, setRoleRank] = useState<string>("soldat");
   const [profileGuildId, setProfileGuildId] = useState<string | null>(null);
   const rollChannelRef = useRef<BroadcastChannel | null>(null);
+  const didAutoApplyMainBuild = useRef(false);
   const playerName = name || "Mozorh";
   const isProfileValid =
     Boolean(name.trim());
@@ -452,7 +453,7 @@ export default function ProfilePage() {
         setBuildError(error.message || "Impossible de charger vos builds.");
         return;
       }
-      setBuilds(
+      const nextBuilds =
         (data ?? []).map((build) => ({
           id: build.id,
           name: build.build_name,
@@ -466,14 +467,22 @@ export default function ProfilePage() {
               : null,
           gearScore:
             typeof build.gear_score === "number" ? build.gear_score : null,
-        })),
-      );
+        })) ?? [];
+      setBuilds(nextBuilds);
+      if (
+        nextBuilds.length === 1 &&
+        !didAutoApplyMainBuild.current &&
+        !(weapon1 && weapon2 && role)
+      ) {
+        didAutoApplyMainBuild.current = true;
+        handleApplyMainBuild(nextBuilds[0].id, nextBuilds[0]);
+      }
     };
     loadBuilds();
     return () => {
       isMounted = false;
     };
-  }, [userId]);
+  }, [userId, weapon1, weapon2, role]);
 
   const handleSaveProfile = async () => {
     if (!userId) {
@@ -612,7 +621,7 @@ export default function ProfilePage() {
       )
       .eq("user_id", userId)
       .order("updated_at", { ascending: false });
-    setBuilds(
+    const nextBuilds =
       (data ?? []).map((build) => ({
         id: build.id,
         name: build.build_name,
@@ -626,8 +635,16 @@ export default function ProfilePage() {
             : null,
         gearScore:
           typeof build.gear_score === "number" ? build.gear_score : null,
-      })),
-    );
+      })) ?? [];
+    setBuilds(nextBuilds);
+    if (
+      nextBuilds.length === 1 &&
+      !didAutoApplyMainBuild.current &&
+      !(weapon1 && weapon2 && role)
+    ) {
+      didAutoApplyMainBuild.current = true;
+      handleApplyMainBuild(nextBuilds[0].id, nextBuilds[0]);
+    }
   };
 
   const handleEditBuild = (build: BuildEntry) => {
@@ -645,8 +662,12 @@ export default function ProfilePage() {
     setIsBuildPanelOpen(true);
   };
 
-  const handleApplyMainBuild = async (buildId: string) => {
-    const selected = builds.find((build) => build.id === buildId);
+  const handleApplyMainBuild = async (
+    buildId: string,
+    buildOverride?: BuildEntry,
+  ) => {
+    const selected =
+      buildOverride ?? builds.find((build) => build.id === buildId);
     if (!selected) {
       return;
     }
@@ -1058,15 +1079,19 @@ export default function ProfilePage() {
               Classe principale
             </p>
             <p className="mt-2 text-sm text-text/70">
-              Choisis le build qui sera visible en guilde.
+              {builds.length > 1
+                ? "Choisis le build qui sera visible en guilde."
+                : "Classe principale automatique tant que tu n'as qu'un seul build."}
             </p>
-            <button
-              type="button"
-              onClick={() => setIsMainBuildPickerOpen(true)}
-              className="mt-4 w-full rounded-2xl border border-amber-400/60 bg-amber-400/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
-            >
-              Sélectionner ma classe principale
-            </button>
+            {builds.length > 1 ? (
+              <button
+                type="button"
+                onClick={() => setIsMainBuildPickerOpen(true)}
+                className="mt-4 w-full rounded-2xl border border-amber-400/60 bg-amber-400/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+              >
+                Sélectionner ma classe principale
+              </button>
+            ) : null}
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
