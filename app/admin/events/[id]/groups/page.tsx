@@ -796,6 +796,11 @@ export default function RaidGroupsPage() {
             dps.push(line);
           }
         });
+        const tableSeparator = "────────────────";
+        const formatTableEntries = (entries: string[]) =>
+          entries.length <= 1
+            ? entries.join("\n")
+            : entries.join(`\n${tableSeparator}\n`);
         const sections = [
           { title: "🛡️ Tanks", entries: tanks },
           { title: "⚔️ DPS", entries: dps },
@@ -804,7 +809,7 @@ export default function RaidGroupsPage() {
           .filter((section) => section.entries.length > 0)
           .map(
             (section) =>
-              `**— ${section.title} —**\n${section.entries.join("\n")}`,
+              `**${section.title}**\n${formatTableEntries(section.entries)}`,
           )
           .join("\n\n");
         return {
