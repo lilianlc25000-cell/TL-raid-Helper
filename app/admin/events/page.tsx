@@ -40,8 +40,7 @@ const EVENT_TYPES_BY_CONTENT: Record<ContentType, EventType[]> = {
 
 const difficulties: Difficulty[] = ["Normal", "Difficile", "Nightmare"];
 
-const requiresTitle = (type: EventType) =>
-  type === "Pierre de Faille" || type === "Château" || type === "War Game";
+const requiresTitle = (type: EventType) => type === "Pierre de Faille";
 
 const requiresAlliance = (type: EventType) =>
   type === "Château" || type === "Taxe";

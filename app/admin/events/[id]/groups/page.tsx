@@ -23,7 +23,7 @@ type PlayerCard = {
   assignedRole: string | null;
   mainWeapon: string | null;
   offWeapon: string | null;
-  status: "present" | "tentative";
+  status: "present" | "tentative" | "bench" | "absent";
   groupIndex: number | null;
 };
 
@@ -44,6 +44,33 @@ type GroupState = {
 const GROUP_SIZE = 6;
 const PVP_EVENT_TYPES = ["Pierre de Faille", "Château", "War Game", "Taxe"];
 const PVE_EVENT_TYPES = ["Raid de Guilde", "Calanthia"];
+const PARIS_TIME_ZONE = "Europe/Paris";
+const EVENT_DAYS = [
+  { key: "lundi", label: "📆-Lundi" },
+  { key: "mardi", label: "📆-Mardi" },
+  { key: "mercredi", label: "📆-Mercredi" },
+  { key: "jeudi", label: "📆-Jeudi" },
+  { key: "vendredi", label: "📆-Vendredi" },
+  { key: "samedi", label: "📆-Samedi" },
+  { key: "dimanche", label: "📆-Dimanche" },
+];
+
+const getWeekdayKey = (startTime: string) =>
+  new Date(startTime)
+    .toLocaleDateString("fr-FR", {
+      timeZone: PARIS_TIME_ZONE,
+      weekday: "long",
+    })
+    .toLowerCase();
+
+const weekdayToDiscordCategory = (weekday: string) => {
+  const normalized = weekday
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z]/g, "");
+  const match = EVENT_DAYS.find((day) => day.key === normalized);
+  return match?.label ?? null;
+};
 
 const roleStyles: Record<string, string> = {
   tank: "border-sky-500/50 bg-sky-500/10 text-sky-200",
@@ -73,6 +100,14 @@ const getRoleStyle = (role: string | null) => {
   return "border-zinc-700 bg-zinc-900/60 text-zinc-300";
 };
 
+const getStatusLabel = (status: PlayerCard["status"]) => {
+  if (status === "present") return "Présent";
+  if (status === "tentative") return "Tentative";
+  if (status === "bench") return "Banc";
+  if (status === "absent") return "Absent";
+  return "Inconnu";
+};
+
 const getWeaponIcon = (weaponName?: string | null) => {
   if (!weaponName) return Swords;
   const normalized = weaponName.toLowerCase();
@@ -97,6 +132,43 @@ const getWeaponIcon = (weaponName?: string | null) => {
   return Sparkles;
 };
 
+const normalizeWeaponName = (name: string) =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/’/g, "'")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const WEAPON_EMOJI_BY_KEY: Record<string, string> = {
+  orbe: "<:orbe:1465385386661646542>",
+  baguette: "<:baguette:1465385271481729074>",
+  baton: "<:baton:1465385290225946832>",
+  epee_bouclier: "<:epee_bouclier:1465385331414274272>",
+  dagues: "<:dagues:1465385307850408108>",
+  lance: "<:lance:1465385368701374635>",
+  espadon: "<:espadon:1465385351915770031>",
+  arc_long: "<:arc_long:1465385252628201636>",
+  arbalete: "<:arbalete:1465385200354590720>",
+};
+
+const getWeaponEmoji = (weaponName?: string | null) => {
+  if (!weaponName) return "";
+  const normalized = normalizeWeaponName(weaponName);
+  if (normalized.includes("arbal")) return WEAPON_EMOJI_BY_KEY.arbalete;
+  if (normalized.includes("arc")) return WEAPON_EMOJI_BY_KEY.arc_long;
+  if (normalized.includes("baguette")) return WEAPON_EMOJI_BY_KEY.baguette;
+  if (normalized.includes("baton") || normalized.includes("bton"))
+    return WEAPON_EMOJI_BY_KEY.baton;
+  if (normalized.includes("dague")) return WEAPON_EMOJI_BY_KEY.dagues;
+  if (normalized.includes("espadon")) return WEAPON_EMOJI_BY_KEY.espadon;
+  if (normalized.includes("lance")) return WEAPON_EMOJI_BY_KEY.lance;
+  if (normalized.includes("orbe")) return WEAPON_EMOJI_BY_KEY.orbe;
+  if (normalized.includes("bouclier") || normalized.includes("epee"))
+    return WEAPON_EMOJI_BY_KEY.epee_bouclier;
+  return "";
+};
+
 export default function RaidGroupsPage() {
   const params = useParams();
   const eventId = String(params?.id ?? "");
@@ -118,6 +190,10 @@ export default function RaidGroupsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [roleEditMode, setRoleEditMode] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<
+    "present" | "tentative" | "bench" | "absent"
+  >("present");
   const [roleEditPlayer, setRoleEditPlayer] = useState<PlayerCard | null>(null);
   const [roleUpdatingUserId, setRoleUpdatingUserId] = useState<string | null>(
     null,
@@ -188,17 +264,17 @@ export default function RaidGroupsPage() {
       setIsPublished(published);
       setIsDirty(false);
 
-    const { data, error } = (await supabase
+      const { data, error } = (await supabase
         .from("event_signups")
         .select(
         "user_id,status,assigned_role,group_index,selected_build_id,profiles(ingame_name,role,main_weapon,off_weapon),player_builds(id,build_name,role,archetype,main_weapon,off_weapon)",
         )
         .eq("event_id", eventId)
-        .in("status", ["present", "tentative"])) as {
+        .in("status", ["present", "tentative", "bench", "absent"])) as {
         data:
           | Array<{
               user_id: string;
-              status: "present" | "tentative";
+              status: "present" | "tentative" | "bench" | "absent";
           assigned_role: string | null;
               group_index: number | null;
               selected_build_id: string | null;
@@ -309,10 +385,26 @@ export default function RaidGroupsPage() {
           const teamByUser = new Map(
             staticsTeams.map((row) => [row.user_id, row.team_index]),
           );
+          const presentCounts = new Map<number, number>();
+          nextReserve
+            .filter((player) => player.status === "present")
+            .forEach((player) => {
+              const teamIndex = teamByUser.get(player.userId);
+              if (teamIndex && teamIndex >= 1 && teamIndex <= 6) {
+                presentCounts.set(
+                  teamIndex,
+                  (presentCounts.get(teamIndex) ?? 0) + 1,
+                );
+              }
+            });
           const remainingReserve: PlayerCard[] = [];
           nextReserve.forEach((player) => {
             const teamIndex = teamByUser.get(player.userId);
-            if (teamIndex && teamIndex >= 1 && teamIndex <= 6) {
+            const hasTeam =
+              teamIndex && teamIndex >= 1 && teamIndex <= 6
+                ? (presentCounts.get(teamIndex) ?? 0) > 1
+                : false;
+            if (player.status === "present" && hasTeam) {
               nextGroups[teamIndex - 1].players.push({
                 ...player,
                 groupIndex: teamIndex,
@@ -599,18 +691,29 @@ export default function RaidGroupsPage() {
       const accessToken = sessionData.session?.access_token;
       const { data: guildConfig } = await supabase
         .from("guild_configs")
-        .select("raid_channel_id,group_channel_id")
+        .select("raid_channel_id,group_channel_id,discord_guild_id")
         .eq("owner_id", ownerId)
         .maybeSingle();
 
+      const dayCategory = eventStartTime
+        ? weekdayToDiscordCategory(getWeekdayKey(eventStartTime))
+        : null;
       const targetChannelId =
-        guildConfig?.group_channel_id ?? guildConfig?.raid_channel_id;
-      if (!targetChannelId) {
+        dayCategory
+          ? undefined
+          : guildConfig?.group_channel_id ?? guildConfig?.raid_channel_id;
+      if (
+        (!dayCategory && !targetChannelId) ||
+        (dayCategory && !guildConfig?.discord_guild_id)
+      ) {
         setActionError("Aucun salon Discord configuré pour publier les groupes.");
         setIsPublishing(false);
         return;
       }
 
+      const timestamp = eventStartTime
+        ? Math.floor(new Date(eventStartTime).getTime() / 1000)
+        : null;
       const fields = groups.map((group) => ({
         name: `Groupe ${group.id}`,
         value:
@@ -620,7 +723,11 @@ export default function RaidGroupsPage() {
                 .map(
                   (player) => {
                     const effectiveRole = getEffectiveRole(player);
-                    return `${player.ingameName} (${getRoleLabel(effectiveRole)})`;
+                    const mainEmoji = getWeaponEmoji(player.mainWeapon);
+                    const offEmoji = getWeaponEmoji(player.offWeapon);
+                    const emojis = [mainEmoji, offEmoji].filter(Boolean).join(" ");
+                    const emojiPrefix = emojis ? `${emojis} ` : "";
+                    return `${emojiPrefix}${player.ingameName} (${getRoleLabel(effectiveRole)})`;
                   },
                 )
                 .join("\n"),
@@ -632,9 +739,15 @@ export default function RaidGroupsPage() {
         {
           body: {
             channel_id: targetChannelId,
+            guild_id: dayCategory ? guildConfig?.discord_guild_id ?? undefined : undefined,
+            channel_name: dayCategory ? "👥-groupe" : undefined,
+            parent_name: dayCategory ?? undefined,
+            content: timestamp ? `⏳ Départ <t:${timestamp}:R>` : undefined,
             embed: {
               title: `📋 Groupes - ${eventTitle}`,
-              description: `Événement : ${formattedEventDate}\nLes groupes sont publiés. Préparez-vous !`,
+              description: timestamp
+                ? `Événement : <t:${timestamp}:F>\nLes groupes sont publiés. Préparez-vous !`
+                : `Événement : ${formattedEventDate}\nLes groupes sont publiés. Préparez-vous !`,
               fields,
               color: 0x00ff00,
             },
@@ -740,16 +853,60 @@ export default function RaidGroupsPage() {
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-text/50">
               <span>Réserve / Banc</span>
               <span className="font-mono text-text/50">
-                {reserve.length.toString().padStart(2, "0")}
+                {reserve
+                  .filter((player) => player.status === statusFilter)
+                  .length.toString()
+                  .padStart(2, "0")}
               </span>
             </div>
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => setIsFilterOpen((prev) => !prev)}
+                className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-text/70 transition hover:border-white/20 hover:text-text"
+              >
+                Filtrer les inscrits
+              </button>
+              {isFilterOpen ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {[
+                    { value: "present", label: "Présents" },
+                    { value: "tentative", label: "Tentatives" },
+                    { value: "bench", label: "Banc" },
+                    { value: "absent", label: "Absents" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        setStatusFilter(
+                          option.value as "present" | "tentative" | "bench" | "absent",
+                        );
+                        setIsFilterOpen(false);
+                      }}
+                      className={[
+                        "rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] transition",
+                        statusFilter === option.value
+                          ? "border-amber-400/70 bg-amber-400/10 text-amber-100"
+                          : "border-white/10 bg-black/40 text-text/60 hover:border-white/20 hover:text-text",
+                      ].join(" ")}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <div className="mt-4 space-y-3">
-              {reserve.length === 0 ? (
+              {reserve.filter((player) => player.status === statusFilter).length ===
+              0 ? (
                 <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-6 text-sm text-text/60">
                   Tous les joueurs sont assignés.
                 </div>
               ) : (
-                reserve.map((player) => (
+                reserve
+                  .filter((player) => player.status === statusFilter)
+                  .map((player) => (
                   <PlayerCard
                     key={player.userId}
                     player={player}
@@ -1006,7 +1163,7 @@ function PlayerCard({
             ) : null}
           </span>
           <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-            {player.status === "present" ? "Présent" : "Tentative"}
+            {getStatusLabel(player.status)}
           </span>
         </div>
       </div>

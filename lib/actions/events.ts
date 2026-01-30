@@ -137,6 +137,7 @@ export async function createEvent({
         .join("\n")
         .trim();
       const appLink = "https://tl-raid-helper.vercel.app/calendar";
+      const countdownContent = `⏳ Départ <t:${timestamp}:R>`;
 
       await notifyDiscordWithResilience({
         supabase,
@@ -147,9 +148,9 @@ export async function createEvent({
           guild_id: guildConfig.discord_guild_id ?? undefined,
           channel_name: dayCategory ? "📝-inscription-event" : undefined,
           parent_name: dayCategory ?? undefined,
+          content: countdownContent,
           embed: {
             title: `⚔️ **${data.title.toUpperCase()}** ⚔️`,
-            description: commentValue ? `> ${commentValue}` : undefined,
             url: appLink,
             color: 0xffa600,
             fields: [
