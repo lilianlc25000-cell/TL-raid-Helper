@@ -15,6 +15,36 @@ type CreateEventInput = {
 
 const PARIS_TIME_ZONE = "Europe/Paris";
 
+const normalizeEventType = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z]/g, "");
+
+const EVENT_IMAGE_BY_TYPE: Record<string, string> = {
+  calanthia:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Calanthia.png",
+  chateau:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Chateau.png",
+  pierrefaille:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Pierre_de_faille.png",
+  raiddeguilde:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Raid_de_guilde.png",
+  raidboss:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Raid_de_guilde.png",
+  siege:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Chateau.png",
+  taxe:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Taxe.png",
+  taxdelivery:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Taxe.png",
+  wargame:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/War_game.png",
+  wargames:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/War_game.png",
+};
+
 const buildDateLabel = (startTime: string) =>
   new Date(startTime).toLocaleDateString("fr-FR", {
     timeZone: PARIS_TIME_ZONE,
@@ -110,6 +140,8 @@ export async function createEvent({
       const timeLabel = buildTimeLabel(data.start_time);
       const weekdayKey = buildWeekdayKey(data.start_time);
       const dayCategory = weekdayToDiscordCategory(weekdayKey);
+      const imageUrl =
+        EVENT_IMAGE_BY_TYPE[normalizeEventType(data.event_type)] ?? undefined;
 
       await notifyDiscordWithResilience({
         supabase,
@@ -125,6 +157,7 @@ export async function createEvent({
             description: `Date : ${dateLabel} à ${timeLabel}\nRéservez votre place dès maintenant !`,
             url: calendarUrl || undefined,
             color: 0x00ff00,
+            image: imageUrl ? { url: imageUrl } : undefined,
           },
         },
       });

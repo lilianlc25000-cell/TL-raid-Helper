@@ -19,6 +19,9 @@ type DiscordEmbed = {
   url?: string;
   color?: number;
   fields?: DiscordEmbedField[];
+  image?: {
+    url: string;
+  };
   footer?: {
     text: string;
     icon_url?: string;
