@@ -32,7 +32,10 @@ type ReplaceOptions = {
 };
 
 type NotifyPayload = {
-  channel_id: string;
+  channel_id?: string;
+  guild_id?: string;
+  channel_name?: string;
+  parent_name?: string;
   content?: string;
   embed?: DiscordEmbed;
   replace?: ReplaceOptions;
@@ -129,7 +132,42 @@ serve(async (req) => {
     });
   }
 
-  if (!payload?.channel_id) {
+  let channelId = payload.channel_id ?? null;
+  if (!channelId && payload.guild_id && payload.channel_name) {
+    const channelsResult = await fetchDiscord(
+      `${DISCORD_API_BASE}/guilds/${payload.guild_id}/channels`,
+      { headers: { Authorization: `Bot ${botToken}` } },
+    );
+    if (channelsResult.ok && channelsResult.body) {
+      try {
+        const channels = JSON.parse(channelsResult.body) as Array<{
+          id: string;
+          name: string;
+          type?: number;
+          parent_id?: string | null;
+        }>;
+        const parent =
+          payload.parent_name
+            ? channels.find(
+                (channel) =>
+                  channel.type === 4 && channel.name === payload.parent_name,
+              )
+            : null;
+        const match = channels.find(
+          (channel) =>
+            channel.name === payload.channel_name &&
+            (!parent || channel.parent_id === parent.id),
+        );
+        if (match?.id) {
+          channelId = match.id;
+        }
+      } catch {
+        channelId = null;
+      }
+    }
+  }
+
+  if (!channelId) {
     return new Response(JSON.stringify({ error: "Missing channel_id." }), {
       status: 400,
       headers: { "Content-Type": "application/json", ...corsHeaders },
@@ -165,7 +203,7 @@ serve(async (req) => {
   if (replace?.match_title_prefix || replace?.match_content_prefix) {
     const limit = Math.min(Math.max(replace.limit ?? 30, 1), 100);
     const messagesResult = await fetchDiscord(
-      `${DISCORD_API_BASE}/channels/${payload.channel_id}/messages?limit=${limit}`,
+      `${DISCORD_API_BASE}/channels/${channelId}/messages?limit=${limit}`,
       { headers: { Authorization: `Bot ${botToken}` } },
     );
     if (messagesResult.ok && messagesResult.body) {
@@ -199,7 +237,7 @@ serve(async (req) => {
         });
         if (target?.id) {
           const deleteResult = await fetchDiscord(
-            `${DISCORD_API_BASE}/channels/${payload.channel_id}/messages/${target.id}`,
+            `${DISCORD_API_BASE}/channels/${channelId}/messages/${target.id}`,
             { method: "DELETE", headers: { Authorization: `Bot ${botToken}` } },
           );
           if (!deleteResult.ok) {
@@ -221,7 +259,7 @@ serve(async (req) => {
   }
 
   const result = await postDiscordMessage(
-    payload.channel_id,
+    channelId,
     discordBody,
     botToken,
   );

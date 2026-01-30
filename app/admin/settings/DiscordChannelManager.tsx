@@ -103,7 +103,6 @@ export default function DiscordChannelManager({
       setMessage("Connectez d'abord un serveur Discord.");
       return;
     }
-    const hasAnyChannel = Object.values(config).some(Boolean);
     setStatus("saving");
     setMessage(null);
     const supabase = createClient();
@@ -114,11 +113,6 @@ export default function DiscordChannelManager({
     if (error) {
       setStatus("error");
       setMessage(error.message || "Impossible de sauvegarder la config.");
-      return;
-    }
-    if (!hasAnyChannel) {
-      setStatus("success");
-      setMessage("Aucun salon selectionne.");
       return;
     }
     const { error: provisionError } = await supabase.functions.invoke(

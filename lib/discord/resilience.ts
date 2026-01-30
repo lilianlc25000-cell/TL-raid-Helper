@@ -18,7 +18,10 @@ type DiscordEmbed = {
 };
 
 export type DiscordNotifyPayload = {
-  channel_id: string;
+  channel_id?: string;
+  guild_id?: string;
+  channel_name?: string;
+  parent_name?: string;
   content?: string;
   embed?: DiscordEmbed;
 };
@@ -119,24 +122,24 @@ export const notifyDiscordWithResilience = async ({
     return { ok: false, repaired: true, error: "Utilisateur non connecté." };
   }
 
-  const { data: guildConfig, error: configError } = await supabase
-    .from("guild_configs")
-    .select("raid_channel_id")
-    .eq("owner_id", resolvedOwnerId)
-    .maybeSingle();
+  const retryPayload: DiscordNotifyPayload = { ...payload };
+  if (!retryPayload.channel_id) {
+    const { data: guildConfig, error: configError } = await supabase
+      .from("guild_configs")
+      .select("raid_channel_id")
+      .eq("owner_id", resolvedOwnerId)
+      .maybeSingle();
 
-  if (configError || !guildConfig?.raid_channel_id) {
-    return {
-      ok: false,
-      repaired: true,
-      error: "Salon Discord introuvable après réparation.",
-    };
+    if (configError || !guildConfig?.raid_channel_id) {
+      return {
+        ok: false,
+        repaired: true,
+        error: "Salon Discord introuvable après réparation.",
+      };
+    }
+
+    retryPayload.channel_id = guildConfig.raid_channel_id;
   }
-
-  const retryPayload: DiscordNotifyPayload = {
-    ...payload,
-    channel_id: guildConfig.raid_channel_id,
-  };
 
   const { error: retryError } = await supabase.functions.invoke(
     "discord-notify",

@@ -24,6 +24,31 @@ const buildDateLabel = (startTime: string) =>
     year: "numeric",
   });
 
+const buildWeekdayKey = (startTime: string) =>
+  new Date(startTime)
+    .toLocaleDateString("fr-FR", {
+      timeZone: PARIS_TIME_ZONE,
+      weekday: "long",
+    })
+    .toLowerCase();
+
+const weekdayToDiscordCategory = (weekday: string) => {
+  const normalized = weekday
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z]/g, "");
+  const map: Record<string, string> = {
+    lundi: "📆-Lundi",
+    mardi: "📆-Mardi",
+    mercredi: "📆-Mercredi",
+    jeudi: "📆-Jeudi",
+    vendredi: "📆-Vendredi",
+    samedi: "📆-Samedi",
+    dimanche: "📆-Dimanche",
+  };
+  return map[normalized] ?? null;
+};
+
 const buildTimeLabel = (startTime: string) =>
   new Date(startTime).toLocaleTimeString("fr-FR", {
     timeZone: PARIS_TIME_ZONE,
@@ -76,20 +101,25 @@ export async function createEvent({
   try {
     const { data: guildConfig } = await supabase
       .from("guild_configs")
-      .select("raid_channel_id")
+      .select("raid_channel_id,discord_guild_id")
       .eq("owner_id", auth.user.id)
       .maybeSingle();
 
-    if (guildConfig?.raid_channel_id) {
+    if (guildConfig?.discord_guild_id || guildConfig?.raid_channel_id) {
       const dateLabel = buildDateLabel(data.start_time);
       const timeLabel = buildTimeLabel(data.start_time);
+      const weekdayKey = buildWeekdayKey(data.start_time);
+      const dayCategory = weekdayToDiscordCategory(weekdayKey);
 
       await notifyDiscordWithResilience({
         supabase,
         accessToken,
         ownerId: auth.user.id,
         payload: {
-          channel_id: guildConfig.raid_channel_id,
+          channel_id: guildConfig.raid_channel_id ?? undefined,
+          guild_id: guildConfig.discord_guild_id ?? undefined,
+          channel_name: dayCategory ? "📝-inscription-event" : undefined,
+          parent_name: dayCategory ?? undefined,
           embed: {
             title: `⚔️ Nouveau Raid : ${data.title}`,
             description: `Date : ${dateLabel} à ${timeLabel}\nRéservez votre place dès maintenant !`,
