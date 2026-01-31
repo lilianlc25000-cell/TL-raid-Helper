@@ -53,11 +53,23 @@ const jsonHeaders = {
 const respondJson = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: jsonHeaders });
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const fetchDiscord = async <T>(
   url: string,
   options: RequestInit,
+  attempt = 0,
 ): Promise<{ ok: true; data: T | null } | { ok: false; status: number; body: string }> => {
   const response = await fetch(url, options);
+  if (response.status === 429 && attempt < 5) {
+    const retryHeader = response.headers.get("retry-after") ?? "1";
+    const retrySeconds = Number(retryHeader);
+    const waitMs = Number.isFinite(retrySeconds)
+      ? Math.max(1, retrySeconds) * 1000
+      : 1000;
+    await sleep(waitMs);
+    return fetchDiscord<T>(url, options, attempt + 1);
+  }
   const responseText = await response.text().catch(() => "");
   if (!response.ok) {
     return { ok: false, status: response.status, body: responseText };
@@ -463,36 +475,40 @@ serve(async (req) => {
       null;
 
     if (channelConfig.event) {
-      for (const [index, day] of EVENT_DAYS.entries()) {
-        const dayCategory = await ensureChannel(day.label, privateOverwrites, {
-          type: CATEGORY_TYPE,
-          position: index + 1,
-        });
-        const dayInscription = await ensureChannel(
-          EVENT_INSCRIPTION_CHANNEL,
-          privateOverwrites,
-          {
-            parentId: dayCategory.channel.id,
-            position: 0,
-          },
-        );
-        const dayGroup = await ensureChannel(
-          EVENT_GROUP_CHANNEL,
-          privateOverwrites,
-          {
-            parentId: dayCategory.channel.id,
-            position: 1,
-          },
-        );
-        if (index === 0) {
-          planningResult = dayInscription;
-          groupsResult = dayGroup;
-        }
+      const dayResults = await Promise.all(
+        EVENT_DAYS.map(async (day, index) => {
+          const dayCategory = await ensureChannel(day.label, privateOverwrites, {
+            type: CATEGORY_TYPE,
+            position: index + 1,
+          });
+          const dayInscription = await ensureChannel(
+            EVENT_INSCRIPTION_CHANNEL,
+            privateOverwrites,
+            {
+              parentId: dayCategory.channel.id,
+              position: 0,
+            },
+          );
+          const dayGroup = await ensureChannel(
+            EVENT_GROUP_CHANNEL,
+            privateOverwrites,
+            {
+              parentId: dayCategory.channel.id,
+              position: 1,
+            },
+          );
+          return { index, dayInscription, dayGroup };
+        }),
+      );
+      const first = dayResults.find((result) => result.index === 0);
+      if (first) {
+        planningResult = first.dayInscription;
+        groupsResult = first.dayGroup;
       }
     } else {
-      for (const day of EVENT_DAYS) {
-        await deleteCategoryAndChildren(day.label);
-      }
+      await Promise.all(
+        EVENT_DAYS.map((day) => deleteCategoryAndChildren(day.label)),
+      );
       await deleteChannelsByName(EVENT_INSCRIPTION_CHANNEL);
       await deleteChannelsByName(EVENT_GROUP_CHANNEL);
     }
