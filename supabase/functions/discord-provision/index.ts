@@ -227,6 +227,8 @@ serve(async (req) => {
           channel.name === name && (type === undefined || channel.type === type),
       );
 
+    const warnings: string[] = [];
+
     const ensureChannel = async (
       name: string,
       overwrites?: typeof privateOverwrites,
@@ -249,7 +251,7 @@ serve(async (req) => {
           );
           if (!patchResult.ok) {
             console.error("discord-provision: channel patch failed", patchResult);
-            throw new Error(`Impossible de mettre à jour le salon ${name}.`);
+            warnings.push(`Impossible de mettre à jour le salon ${name}.`);
           }
         }
         return { channel: existing, created: false };
@@ -581,12 +583,17 @@ serve(async (req) => {
 
     if (updateError) {
       console.error("discord-provision: db update failed", updateError);
-      return respondJson(500, { error: "Impossible de sauvegarder la config." });
+      return respondJson(500, {
+        error: "Impossible de sauvegarder la config.",
+        detail: updateError.message ?? null,
+        warnings,
+      });
     }
 
     return respondJson(200, {
       success: true,
       role_id: memberRole.id,
+      warnings,
       channels: [
         inscriptionResult.channel,
         planningResult?.channel ?? null,
