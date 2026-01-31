@@ -249,7 +249,7 @@ serve(async (req) => {
           );
           if (!patchResult.ok) {
             console.error("discord-provision: channel patch failed", patchResult);
-            throw new Error("Impossible de mettre à jour les permissions.");
+            throw new Error(`Impossible de mettre à jour le salon ${name}.`);
           }
         }
         return { channel: existing, created: false };
@@ -272,7 +272,7 @@ serve(async (req) => {
 
       if (!createResult.ok || !createResult.data) {
         console.error("discord-provision: channel create failed", createResult);
-        throw new Error("Impossible de créer un salon Discord.");
+        throw new Error(`Impossible de créer le salon ${name}.`);
       }
 
       channelsByName.set(name, createResult.data);
@@ -296,12 +296,36 @@ serve(async (req) => {
       }
     };
 
+    const deleteChannelsByName = async (name: string, type?: number) => {
+      const matches = channels.filter(
+        (channel) =>
+          channel.name === name && (type === undefined || channel.type === type),
+      );
+      for (const channel of matches) {
+        const deleteResult = await fetchDiscord(
+          `${DISCORD_API_BASE}/channels/${channel.id}`,
+          {
+            method: "DELETE",
+            headers: discordHeaders,
+          },
+        );
+        if (!deleteResult.ok) {
+          console.error("discord-provision: delete failed", deleteResult);
+        }
+      }
+    };
+
     const deleteCategoryAndChildren = async (name: string) => {
-      const category = findChannel(name, CATEGORY_TYPE);
-      if (!category) {
+      const categories = channels.filter(
+        (channel) => channel.name === name && channel.type === CATEGORY_TYPE,
+      );
+      if (categories.length === 0) {
         return;
       }
-      const children = channels.filter((channel) => channel.parent_id === category.id);
+      const categoryIds = new Set(categories.map((category) => category.id));
+      const children = channels.filter(
+        (channel) => channel.parent_id && categoryIds.has(channel.parent_id),
+      );
       for (const child of children) {
         const deleteResult = await fetchDiscord(
           `${DISCORD_API_BASE}/channels/${child.id}`,
@@ -314,7 +338,18 @@ serve(async (req) => {
           console.error("discord-provision: delete child failed", deleteResult);
         }
       }
-      await deleteChannel(name, CATEGORY_TYPE);
+      for (const category of categories) {
+        const deleteResult = await fetchDiscord(
+          `${DISCORD_API_BASE}/channels/${category.id}`,
+          {
+            method: "DELETE",
+            headers: discordHeaders,
+          },
+        );
+        if (!deleteResult.ok) {
+          console.error("discord-provision: delete failed", deleteResult);
+        }
+      }
     };
 
     const legacyCleanup = async () => {
@@ -359,8 +394,8 @@ serve(async (req) => {
       await deleteChannel(DPS_CHANNEL);
       await deleteChannel(ACTIVITY_CHANNEL);
       await deleteChannel(POLL_CHANNEL);
-      await deleteChannel(EVENT_INSCRIPTION_CHANNEL);
-      await deleteChannel(EVENT_GROUP_CHANNEL);
+      await deleteChannelsByName(EVENT_INSCRIPTION_CHANNEL);
+      await deleteChannelsByName(EVENT_GROUP_CHANNEL);
       for (const day of EVENT_DAYS) {
         await deleteCategoryAndChildren(day.label);
       }
@@ -456,8 +491,8 @@ serve(async (req) => {
       for (const day of EVENT_DAYS) {
         await deleteCategoryAndChildren(day.label);
       }
-      await deleteChannel(EVENT_INSCRIPTION_CHANNEL);
-      await deleteChannel(EVENT_GROUP_CHANNEL);
+      await deleteChannelsByName(EVENT_INSCRIPTION_CHANNEL);
+      await deleteChannelsByName(EVENT_GROUP_CHANNEL);
     }
 
     let lootCategory: { channel: DiscordChannel } | null = null;
