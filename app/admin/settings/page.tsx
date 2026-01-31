@@ -118,6 +118,11 @@ export default async function AdminSettingsPage() {
               <DiscordChannelManager
                 ownerId={ownerId}
                 guildId={effectiveGuildConfig.discord_guild_id}
+                allowActivityChannel={Boolean(
+                  (effectiveGuildConfig?.eligibility_criteria as string[])?.includes(
+                    "activity_points",
+                  ),
+                )}
                 initialConfig={
                   (effectiveGuildConfig.discord_channel_config as Record<
                     string,

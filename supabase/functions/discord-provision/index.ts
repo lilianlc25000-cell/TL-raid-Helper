@@ -227,7 +227,7 @@ serve(async (req) => {
       return respondJson(502, { error: "Impossible de lire les salons." });
     }
 
-    const channels = channelsResult.data ?? [];
+    let channels = channelsResult.data ?? [];
     const channelsByName = new Map(
       channels.map((channel) => [channel.name, channel]),
     );
@@ -373,6 +373,20 @@ serve(async (req) => {
       }
     };
 
+    const refreshChannels = async () => {
+      const refreshed = await fetchDiscord<DiscordChannel[]>(
+        `${DISCORD_API_BASE}/guilds/${guildId}/channels`,
+        { headers: { Authorization: `Bot ${botToken}` } },
+      );
+      if (!refreshed.ok) {
+        console.error("discord-provision: channels refresh failed", refreshed);
+        return;
+      }
+      channels = refreshed.data ?? [];
+      channelsByName.clear();
+      channels.forEach((channel) => channelsByName.set(channel.name, channel));
+    };
+
     const purgeManagedChannels = async () => {
       const categoryNames = [
         ROOT_CATEGORY_NAME,
@@ -434,6 +448,7 @@ serve(async (req) => {
     if (!hasAnyChannel && body.mode !== "reset") {
       await legacyCleanup();
       await purgeManagedChannels();
+      await refreshChannels();
       return respondJson(200, { success: true, channels: [] });
     }
 
@@ -474,6 +489,7 @@ serve(async (req) => {
 
     await legacyCleanup();
     await purgeManagedChannels();
+    await refreshChannels();
 
     const rootCategory = await ensureChannel(ROOT_CATEGORY_NAME, undefined, {
       type: CATEGORY_TYPE,

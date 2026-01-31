@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type ChannelConfig = {
@@ -16,6 +16,7 @@ type DiscordChannelManagerProps = {
   ownerId: string | null;
   guildId: string | null;
   initialConfig: Record<string, boolean> | null;
+  allowActivityChannel: boolean;
 };
 
 const DEFAULT_CONFIG: ChannelConfig = {
@@ -71,6 +72,7 @@ export default function DiscordChannelManager({
   ownerId,
   guildId,
   initialConfig,
+  allowActivityChannel,
 }: DiscordChannelManagerProps) {
   const [config, setConfig] = useState<ChannelConfig>(
     getInitialConfig(initialConfig),
@@ -81,6 +83,12 @@ export default function DiscordChannelManager({
   const [message, setMessage] = useState<string | null>(null);
 
   const hasConnection = Boolean(ownerId && guildId);
+
+  useEffect(() => {
+    if (!allowActivityChannel && config.activity_points) {
+      setConfig((prev) => ({ ...prev, activity_points: false }));
+    }
+  }, [allowActivityChannel, config.activity_points]);
   const handleToggle = (key: keyof ChannelConfig) => {
     setConfig((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -94,9 +102,13 @@ export default function DiscordChannelManager({
     setStatus("saving");
     setMessage(null);
     const supabase = createClient();
+    const payload = {
+      ...config,
+      activity_points: allowActivityChannel ? config.activity_points : false,
+    };
     const { error } = await supabase
       .from("guild_configs")
-      .update({ discord_channel_config: config })
+      .update({ discord_channel_config: payload })
       .eq("owner_id", ownerId);
     if (error) {
       setStatus("error");
@@ -106,7 +118,7 @@ export default function DiscordChannelManager({
     const { error: provisionError } = await supabase.functions.invoke(
       "discord-provision",
       {
-        body: { guild_id: guildId, channel_config: config, mode: "custom" },
+        body: { guild_id: guildId, channel_config: payload, mode: "custom" },
       },
     );
     if (provisionError) {
@@ -130,7 +142,9 @@ export default function DiscordChannelManager({
         Choisissez les salons a creer ou retirer sur votre serveur Discord.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {CHANNEL_OPTIONS.map((option) => (
+        {CHANNEL_OPTIONS.filter((option) =>
+          option.key === "activity_points" ? allowActivityChannel : true,
+        ).map((option) => (
           <button
             key={option.key}
             type="button"
