@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 
 import ManageClient from "../manage/ManageClient";
+import CloseImmediateClient from "./CloseImmediateClient";
 import { createClient } from "@/lib/supabase/server";
 import { PARTICIPATION_POINTS_PER_RAID } from "@/lib/game-constants";
 import { notifyDiscordWithResilience } from "@/lib/discord/resilience";
@@ -183,25 +184,41 @@ export default async function CloseEventPage({ params }: PageProps) {
           image: imageUrl ? { url: imageUrl } : undefined,
         },
         replace: {
-          match_title_prefix: `⚔️ **${event.title.toUpperCase()}`,
+          match_title_prefix: "⚔️",
           limit: 25,
         },
       },
     });
   }
 
-  async function closeEventWithoutPoints() {
+  async function closeEventWithoutPoints(eventId: string) {
+    const supabaseServer = await createClient();
+    if (!supabaseServer) {
+      return {
+        ok: false,
+        message: "Supabase n'est pas configuré (URL / ANON KEY).",
+      };
+    }
+    const { data: currentEvent } = await supabaseServer
+      .from("events")
+      .select("id,title,event_type,start_time")
+      .eq("id", eventId)
+      .single();
+    if (!currentEvent) {
+      return { ok: false, message: "Événement introuvable." };
+    }
     await notifyEventClosed();
-    await supabase
+    await supabaseServer
       .from("events")
       .update({ status: "completed", is_points_distributed: true })
-      .eq("id", event.id);
-    await supabase.from("event_signups").delete().eq("event_id", event.id);
-    await supabase.from("events").delete().eq("id", event.id);
+      .eq("id", eventId);
+    await supabaseServer.from("event_signups").delete().eq("event_id", eventId);
+    await supabaseServer.from("events").delete().eq("id", eventId);
     revalidatePath("/calendar");
     revalidatePath("/groups");
     revalidatePath("/admin/events");
-    revalidatePath(`/admin/events/${event.id}/close`);
+    revalidatePath(`/admin/events/${eventId}/close`);
+    return { ok: true, message: "L'événement a été clôturé." };
   }
 
   async function distributePoints(
@@ -317,19 +334,21 @@ export default async function CloseEventPage({ params }: PageProps) {
     };
   }
 
+  async function closeEventDirect(
+    _prevState: ActionState,
+    formData: FormData,
+  ): Promise<ActionState> {
+    "use server";
+    const eventId = String(formData.get("eventId") ?? "");
+    return closeEventWithoutPoints(eventId);
+  }
+
   if (!participationEnabled) {
-    await closeEventWithoutPoints();
     return (
-      <div className="min-h-screen text-zinc-100">
-        <div className="mx-auto max-w-3xl rounded-3xl border border-emerald-400/60 bg-emerald-500/10 px-6 py-10 text-center shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-          <p className="text-xs uppercase tracking-[0.4em] text-emerald-200/80">
-            Événement terminé
-          </p>
-          <h1 className="mt-4 text-2xl font-semibold text-emerald-100">
-            L&apos;événement a été clôturé.
-          </h1>
-        </div>
-      </div>
+      <CloseImmediateClient
+        eventId={resolvedParams.id}
+        action={closeEventDirect}
+      />
     );
   }
 

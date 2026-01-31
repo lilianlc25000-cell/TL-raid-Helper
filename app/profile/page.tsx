@@ -286,6 +286,10 @@ export default function ProfilePage() {
   const [participationPoints, setParticipationPoints] = useState<number>(0);
   const [activityPoints, setActivityPoints] = useState<number>(0);
   const [eligibilityCriteria, setEligibilityCriteria] = useState<string[]>([]);
+  const [activityScreenshotUrl, setActivityScreenshotUrl] = useState<string | null>(null);
+  const [activityScreenshotDate, setActivityScreenshotDate] = useState<string | null>(
+    null,
+  );
   const [activityFile, setActivityFile] = useState<File | null>(null);
   const [activityStatus, setActivityStatus] = useState<
     "idle" | "loading" | "success" | "error"
@@ -377,6 +381,16 @@ export default function ProfilePage() {
             );
           }
         }
+
+        const { data: lastActivity } = await supabase
+          .from("activity_points_history")
+          .select("image_url,created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        setActivityScreenshotUrl(lastActivity?.image_url ?? null);
+        setActivityScreenshotDate(lastActivity?.created_at ?? null);
       }
       setIsProfileLoaded(true);
     };
@@ -1067,6 +1081,28 @@ export default function ProfilePage() {
                 >
                   {activityMessage}
                 </p>
+              ) : null}
+              {activityScreenshotUrl ? (
+                <div className="mt-4 rounded-2xl border border-white/10 bg-black/40 p-3">
+                  <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+                    Derniere capture
+                  </p>
+                  {activityScreenshotDate ? (
+                    <p className="mt-1 text-xs text-text/60">
+                      {new Date(activityScreenshotDate).toLocaleString("fr-FR")}
+                    </p>
+                  ) : null}
+                  <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/50">
+                    <Image
+                      src={activityScreenshotUrl}
+                      alt="Capture points d'activite"
+                      width={460}
+                      height={260}
+                      className="h-auto w-full object-cover"
+                      unoptimized
+                    />
+                  </div>
+                </div>
               ) : null}
             </div>
           ) : null}
