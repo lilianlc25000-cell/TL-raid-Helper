@@ -373,6 +373,29 @@ serve(async (req) => {
       }
     };
 
+    const purgeManagedChannels = async () => {
+      const categoryNames = [
+        ROOT_CATEGORY_NAME,
+        LOOT_CATEGORY_NAME,
+        MISC_CATEGORY_NAME,
+        ...EVENT_DAYS.map((day) => day.label),
+      ];
+      const channelNames = [
+        INSCRIPTION_CHANNEL,
+        EVENT_INSCRIPTION_CHANNEL,
+        EVENT_GROUP_CHANNEL,
+        WISHLIST_CHANNEL,
+        LOOT_CHANNEL,
+        DPS_CHANNEL,
+        ACTIVITY_CHANNEL,
+        POLL_CHANNEL,
+      ];
+      await Promise.all(
+        categoryNames.map((name) => deleteCategoryAndChildren(name)),
+      );
+      await Promise.all(channelNames.map((name) => deleteChannelsByName(name)));
+    };
+
     const legacyCleanup = async () => {
       await deleteChannel("📅-tl-planning");
       await deleteChannel("🎁-tl-loots");
@@ -410,19 +433,7 @@ serve(async (req) => {
     const hasAnyChannel = Object.values(channelConfig).some(Boolean);
     if (!hasAnyChannel && body.mode !== "reset") {
       await legacyCleanup();
-      await deleteChannel(WISHLIST_CHANNEL);
-      await deleteChannel(LOOT_CHANNEL);
-      await deleteChannel(DPS_CHANNEL);
-      await deleteChannel(ACTIVITY_CHANNEL);
-      await deleteChannel(POLL_CHANNEL);
-      await deleteChannelsByName(EVENT_INSCRIPTION_CHANNEL);
-      await deleteChannelsByName(EVENT_GROUP_CHANNEL);
-      for (const day of EVENT_DAYS) {
-        await deleteCategoryAndChildren(day.label);
-      }
-      await deleteCategoryAndChildren(LOOT_CATEGORY_NAME);
-      await deleteCategoryAndChildren(MISC_CATEGORY_NAME);
-      await deleteCategoryAndChildren(ROOT_CATEGORY_NAME);
+      await purgeManagedChannels();
       return respondJson(200, { success: true, channels: [] });
     }
 
@@ -462,6 +473,7 @@ serve(async (req) => {
     };
 
     await legacyCleanup();
+    await purgeManagedChannels();
 
     const rootCategory = await ensureChannel(ROOT_CATEGORY_NAME, undefined, {
       type: CATEGORY_TYPE,
