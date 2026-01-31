@@ -148,7 +148,6 @@ serve(async (req) => {
     const guildId = guildConfig.discord_guild_id;
     const baseConfig = {
       event: false,
-      group: false,
       loot: false,
       wishlist: false,
       dps_meter: false,
@@ -162,7 +161,6 @@ serve(async (req) => {
         ? {
             ...baseConfig,
             event: true,
-            group: true,
             loot: true,
           }
         : {
@@ -233,10 +231,13 @@ serve(async (req) => {
     const channelsByName = new Map(
       channels.map((channel) => [channel.name, channel]),
     );
-    const findChannel = (name: string, type?: number) =>
+    const findChannel = (name: string, type?: number, parentId?: string | null) =>
       channels.find(
         (channel) =>
-          channel.name === name && (type === undefined || channel.type === type),
+          channel.name === name &&
+          (type === undefined || channel.type === type) &&
+          (parentId === undefined ||
+            (channel.parent_id ?? null) === parentId),
       );
 
     const warnings: string[] = [];
@@ -246,9 +247,15 @@ serve(async (req) => {
       overwrites?: typeof privateOverwrites,
       options?: { type?: number; parentId?: string | null; position?: number },
     ): Promise<{ channel: DiscordChannel; created: boolean }> => {
-      const existing = findChannel(name, options?.type);
+      const existing = findChannel(name, options?.type, options?.parentId);
       if (existing) {
-        if (overwrites || options?.parentId !== undefined || options?.position !== undefined) {
+        if (
+          overwrites ||
+          options?.parentId !== undefined ||
+          options?.position !== undefined
+        ) {
+          const parentId =
+            options?.parentId !== undefined ? options.parentId : existing.parent_id ?? null;
           const patchResult = await fetchDiscord(
             `${DISCORD_API_BASE}/channels/${existing.id}`,
             {
@@ -256,7 +263,7 @@ serve(async (req) => {
               headers: discordHeaders,
               body: JSON.stringify({
                 permission_overwrites: overwrites,
-                parent_id: options?.parentId ?? null,
+                parent_id: parentId,
                 position: options?.position,
               }),
             },

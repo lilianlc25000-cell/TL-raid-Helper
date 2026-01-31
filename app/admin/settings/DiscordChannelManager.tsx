@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 
 type ChannelConfig = {
   event: boolean;
-  group: boolean;
   loot: boolean;
   wishlist: boolean;
   dps_meter: boolean;
@@ -21,7 +20,6 @@ type DiscordChannelManagerProps = {
 
 const DEFAULT_CONFIG: ChannelConfig = {
   event: false,
-  group: false,
   loot: false,
   wishlist: false,
   dps_meter: false,
@@ -39,7 +37,6 @@ const CHANNEL_OPTIONS: Array<{
     label: "Event",
     description: "Categorie Event avec salons: lundi -> dimanche.",
   },
-  { key: "group", label: "Groupe", description: "Salon pour les groupes." },
   { key: "loot", label: "Loot", description: "Salon pour les loots." },
   {
     key: "wishlist",
