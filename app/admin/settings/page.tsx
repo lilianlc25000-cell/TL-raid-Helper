@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import DiscordChannelManager from "@/app/admin/settings/DiscordChannelManager";
-import EligibilityCriteriaSettingsClient from "@/app/admin/settings/EligibilityCriteriaSettingsClient";
+import EligibilityAndDiscordClient from "@/app/admin/settings/EligibilityAndDiscordClient";
 import LootSystemSettingsClient from "@/app/admin/settings/LootSystemSettingsClient";
 
 export const dynamic = "force-dynamic";
@@ -86,7 +85,7 @@ export default async function AdminSettingsPage() {
           hasGuildConfig={Boolean(effectiveGuildConfig?.discord_guild_id)}
         />
 
-        <EligibilityCriteriaSettingsClient
+        <EligibilityAndDiscordClient
           ownerId={ownerId}
           guildId={guildId}
           initialCriteria={(effectiveGuildConfig?.eligibility_criteria as string[]) ?? []}
@@ -94,56 +93,16 @@ export default async function AdminSettingsPage() {
             guildSettings?.participation_threshold ?? 1
           }
           initialActivityThreshold={guildSettings?.activity_threshold ?? 1}
+          discordGuildId={effectiveGuildConfig?.discord_guild_id ?? null}
+          discordGuildName={effectiveGuildConfig?.discord_guild_name ?? null}
+          discordChannelConfig={
+            (effectiveGuildConfig?.discord_channel_config as Record<
+              string,
+              boolean
+            >) ?? null
+          }
+          oauthUrl={oauthUrl}
         />
-
-        <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
-          <p className="text-xs uppercase tracking-[0.25em] text-text/50">
-            Configuration Discord
-          </p>
-          <h2 className="mt-2 text-xl font-semibold text-text">
-            Connecter votre serveur
-          </h2>
-          <p className="mt-2 text-sm text-text/70">
-            Autorise le bot à rejoindre votre Discord pour créer les salons.
-          </p>
-
-          {effectiveGuildConfig?.discord_guild_id ? (
-            <div className="mt-6 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <span>
-                  ✅ Connecté au serveur :{" "}
-                  {effectiveGuildConfig.discord_guild_name ?? "Serveur Discord"}
-                </span>
-              </div>
-              <DiscordChannelManager
-                ownerId={ownerId}
-                guildId={effectiveGuildConfig.discord_guild_id}
-                allowActivityChannel={Boolean(
-                  (effectiveGuildConfig?.eligibility_criteria as string[])?.includes(
-                    "activity_points",
-                  ),
-                )}
-                initialConfig={
-                  (effectiveGuildConfig.discord_channel_config as Record<
-                    string,
-                    boolean
-                  >) ?? null
-                }
-              />
-            </div>
-          ) : oauthUrl ? (
-            <a
-              href={oauthUrl}
-              className="mt-5 inline-flex items-center rounded-full border border-sky-400/60 bg-sky-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-sky-200 transition hover:border-sky-300"
-            >
-              Connecter mon Serveur Discord
-            </a>
-          ) : (
-            <p className="mt-5 text-xs text-amber-200">
-              Configure DISCORD_CLIENT_ID et NEXT_PUBLIC_APP_URL.
-            </p>
-          )}
-        </div>
       </section>
     </div>
   );

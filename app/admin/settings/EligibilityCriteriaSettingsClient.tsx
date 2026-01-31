@@ -14,6 +14,7 @@ type EligibilityCriteriaSettingsClientProps = {
   initialCriteria: string[];
   initialParticipationThreshold: number;
   initialActivityThreshold: number;
+  onSaved?: (criteria: EligibilityCriteria[]) => void;
 };
 
 const CRITERIA_OPTIONS: Array<{
@@ -44,6 +45,7 @@ export default function EligibilityCriteriaSettingsClient({
   initialCriteria,
   initialParticipationThreshold,
   initialActivityThreshold,
+  onSaved,
 }: EligibilityCriteriaSettingsClientProps) {
   const [criteria, setCriteria] = useState<EligibilityCriteria[]>(
     (initialCriteria.filter(Boolean) as EligibilityCriteria[]) ?? [],
@@ -108,6 +110,7 @@ export default function EligibilityCriteriaSettingsClient({
     }
     setStatus("success");
     setMessage("Criteres mis a jour.");
+    onSaved?.(criteria);
   };
 
   return (

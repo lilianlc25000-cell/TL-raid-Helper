@@ -297,6 +297,9 @@ export default function ProfilePage() {
   const [activityMessage, setActivityMessage] = useState<string | null>(null);
   const [roleRank, setRoleRank] = useState<string>("soldat");
   const [profileGuildId, setProfileGuildId] = useState<string | null>(null);
+  const [profileGuildOwnerId, setProfileGuildOwnerId] = useState<string | null>(
+    null,
+  );
   const rollChannelRef = useRef<BroadcastChannel | null>(null);
   const didAutoApplyMainBuild = useRef(false);
   const playerName = name || "Mozorh";
@@ -371,6 +374,7 @@ export default function ProfilePage() {
             .eq("id", data.guild_id)
             .maybeSingle();
           if (guild?.owner_id) {
+            setProfileGuildOwnerId(guild.owner_id);
             const { data: config } = await supabase
               .from("guild_configs")
               .select("eligibility_criteria")
@@ -400,6 +404,35 @@ export default function ProfilePage() {
       isMounted = false;
     };
   }, [userId]);
+
+  useEffect(() => {
+    if (!profileGuildOwnerId) {
+      return;
+    }
+    const supabase = createClient();
+    const channel = supabase
+      .channel("guild-configs-profile")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "guild_configs",
+          filter: `owner_id=eq.${profileGuildOwnerId}`,
+        },
+        (payload) => {
+          const nextCriteria = (payload.new as { eligibility_criteria?: string[] })
+            ?.eligibility_criteria;
+          if (nextCriteria) {
+            setEligibilityCriteria(nextCriteria as string[]);
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profileGuildOwnerId]);
 
   const showParticipationPoints = useMemo(
     () =>
