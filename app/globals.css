@@ -88,6 +88,69 @@ h6 {
   animation: spin-slow 6s linear infinite;
 }
 
+@keyframes cinematic-fade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cinematic-glow {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes cinematic-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(12px, -8px, 0);
+  }
+}
+
+@keyframes cinematic-scan {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 100%;
+  }
+}
+
+.animate-cinematic-fade {
+  animation: cinematic-fade 0.55s ease-out;
+}
+
+.cinematic-glow {
+  animation: cinematic-glow 6s ease-in-out infinite;
+}
+
+.cinematic-drift {
+  animation: cinematic-drift 10s ease-in-out infinite;
+}
+
+.cinematic-scan {
+  background-image: linear-gradient(
+    rgba(255, 255, 255, 0.05) 1px,
+    transparent 1px
+  );
+  background-size: 100% 7px;
+  animation: cinematic-scan 12s linear infinite;
+  opacity: 0.15;
+  mix-blend-mode: screen;
+}
+
 @keyframes page-enter {
   0% {
     opacity: 0;

@@ -141,6 +141,18 @@ const getRoleStyle = (role: string | null) => {
   return "border-zinc-700 bg-zinc-900/60 text-zinc-300";
 };
 
+const getRoleAccent = (role: string | null) => {
+  if (!role) return "from-zinc-500/30 via-transparent to-transparent";
+  const normalized = role.toLowerCase();
+  if (normalized.includes("tank"))
+    return "from-sky-500/40 via-sky-500/10 to-transparent";
+  if (normalized.includes("heal") || normalized.includes("soin"))
+    return "from-emerald-500/40 via-emerald-500/10 to-transparent";
+  if (normalized.includes("dps"))
+    return "from-red-500/40 via-red-500/10 to-transparent";
+  return "from-zinc-500/30 via-transparent to-transparent";
+};
+
 const getStatusLabel = (status: PlayerCard["status"]) => {
   if (status === "present") return "Présent";
   if (status === "tentative") return "Tentative";
@@ -276,6 +288,27 @@ export default function RaidGroupsPage() {
     ],
     [reserve, groups],
   );
+  const assignedCount = useMemo(
+    () => groups.reduce((sum, group) => sum + group.players.length, 0),
+    [groups],
+  );
+  const reserveCount = reserve.length;
+  const statusCounts = useMemo(
+    () =>
+      allPlayers.reduce(
+        (acc, player) => {
+          acc[player.status] += 1;
+          return acc;
+        },
+        {
+          present: 0,
+          tentative: 0,
+          bench: 0,
+          absent: 0,
+        },
+      ),
+    [allPlayers],
+  );
 
   const formattedEventDate = useMemo(() => {
     if (!eventStartTime) {
@@ -292,6 +325,11 @@ export default function RaidGroupsPage() {
     () => getEventImageUrl(eventType),
     [eventType],
   );
+  const eventTagClasses = isPvpEvent
+    ? "border-amber-400/60 bg-amber-400/10 text-amber-200"
+    : isPveEvent
+      ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-200"
+      : "border-white/10 bg-black/40 text-text/70";
 
   const getPlayerById = (playerId: string) =>
     allPlayers.find((player) => player.userId === playerId) ?? null;
@@ -902,51 +940,130 @@ export default function RaidGroupsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 px-6 py-10 text-zinc-100">
-      <section className="mx-auto w-full max-w-6xl space-y-6">
-        <header className="rounded-3xl border border-white/10 bg-surface/70 px-6 py-6 shadow-[0_0_35px_rgba(0,0,0,0.35)] backdrop-blur sm:px-10">
-          <p className="text-xs uppercase tracking-[0.35em] text-text/50">
-            Squad Builder
-          </p>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-            <h1 className="font-display text-3xl tracking-[0.15em] text-text">
-              Construction des groupes — {eventTitle}
-            </h1>
-            <button
-              type="button"
-              onClick={() => {
-                setRoleEditMode((prev) => !prev);
-                setRoleEditPlayer(null);
-                setSelectedPlayer(null);
-              }}
-              className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.25em] transition ${
-                roleEditMode
-                  ? "border-amber-400/60 bg-amber-400/10 text-amber-200"
-                  : "border-white/10 bg-black/40 text-text/70 hover:border-white/30"
-              }`}
-            >
-              Modifier le rôle
-            </button>
-          </div>
-          {eventImageUrl ? (
-            <div className="mt-4 flex justify-end">
-              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-1">
-                <Image
-                  src={eventImageUrl}
-                  alt={`Illustration ${eventType ?? "événement"}`}
-                  width={220}
-                  height={120}
-                  className="h-24 w-auto rounded-xl object-cover"
-                  unoptimized
-                />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute left-1/2 top-[-20%] h-[540px] w-[540px] -translate-x-1/2 rounded-full bg-emerald-500/10 blur-[120px] cinematic-glow" />
+        <div className="absolute right-[-10%] top-[10%] h-[420px] w-[420px] rounded-full bg-amber-400/10 blur-[140px] cinematic-glow" />
+        <div className="absolute left-[-10%] bottom-[-20%] h-[480px] w-[480px] rounded-full bg-sky-500/10 blur-[150px] cinematic-glow" />
+      </div>
+      <section className="relative mx-auto w-full max-w-6xl space-y-6">
+        <header className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.18),_rgba(0,0,0,0.8))] px-6 py-6 shadow-[0_0_45px_rgba(0,0,0,0.45)] backdrop-blur sm:px-10">
+          <div className="pointer-events-none absolute inset-0 border border-white/10 opacity-60" />
+          <div className="pointer-events-none absolute -right-24 top-[-120px] h-64 w-64 rounded-full bg-amber-400/10 blur-[110px] cinematic-glow" />
+          <div className="pointer-events-none absolute -left-16 bottom-[-120px] h-56 w-56 rounded-full bg-emerald-400/10 blur-[90px] cinematic-drift" />
+          <div className="pointer-events-none absolute inset-0 cinematic-scan" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_55%,_rgba(0,0,0,0.85))]" />
+          <div className="flex flex-wrap items-start justify-between gap-6">
+            <div className="space-y-3">
+              <p className="text-xs uppercase tracking-[0.35em] text-emerald-300/70">
+                Centre de commandement
+              </p>
+              <h1 className="font-display text-3xl tracking-[0.12em] text-text">
+                Créer les groupes — {eventTitle}
+              </h1>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-text/70">
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] ${eventTagClasses}`}
+                >
+                  {eventType ?? "Type inconnu"}
+                </span>
+                <span className="text-xs uppercase tracking-[0.2em] text-text/50">
+                  {formattedEventDate}
+                </span>
+              </div>
+              <p className="text-sm text-text/60">
+                {roleEditMode
+                  ? "Cliquez sur un joueur pour ajuster son rôle."
+                  : "Glissez les joueurs pour composer des escouades équilibrées."}
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoleEditMode((prev) => !prev);
+                    setRoleEditPlayer(null);
+                    setSelectedPlayer(null);
+                  }}
+                  className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.25em] transition ${
+                    roleEditMode
+                      ? "border-amber-400/70 bg-amber-400/10 text-amber-200"
+                      : "border-white/10 bg-black/40 text-text/70 hover:border-white/30"
+                  }`}
+                >
+                  Modifier le rôle
+                </button>
+                <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-emerald-200">
+                  {assignedCount}/{allPlayers.length} assignés
+                </span>
               </div>
             </div>
-          ) : null}
-          <p className="mt-2 text-sm text-text/70">
-            {roleEditMode
-              ? "Cliquez sur un joueur pour modifier son rôle."
-              : "Glissez les joueurs pour composer les groupes."}
-          </p>
+              {eventImageUrl ? (
+                <div className="flex justify-end">
+                  <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/40 p-1 transition duration-700 hover:scale-[1.02] hover:border-white/30">
+                    <Image
+                      src={eventImageUrl}
+                      alt={`Illustration ${eventType ?? "événement"}`}
+                      width={240}
+                      height={140}
+                      className="h-28 w-auto rounded-2xl object-cover"
+                      unoptimized
+                    />
+                  </div>
+                </div>
+              ) : null}
+          </div>
         </header>
+
+        <div className="grid gap-4 md:grid-cols-4 animate-cinematic-fade">
+          {[
+            {
+              label: "Participants",
+              value: allPlayers.length.toString().padStart(2, "0"),
+              detail: "Tous statuts",
+            },
+            {
+              label: "Assignés",
+              value: assignedCount.toString().padStart(2, "0"),
+              detail: "Dans un groupe",
+            },
+            {
+              label: "Réserve",
+              value: reserveCount.toString().padStart(2, "0"),
+              detail: "En attente",
+            },
+            {
+              label: "Présents",
+              value: statusCounts.present.toString().padStart(2, "0"),
+              detail: "Validés",
+            },
+          ].map((card) => (
+            <div
+              key={card.label}
+              className="group rounded-3xl border border-white/10 bg-surface/60 px-4 py-4 shadow-[0_0_18px_rgba(0,0,0,0.3)] backdrop-blur transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-black/50 hover:shadow-[0_0_24px_rgba(0,0,0,0.4)]"
+            >
+              <div className="text-xs uppercase tracking-[0.3em] text-text/50">
+                {card.label}
+              </div>
+              <div className="mt-2 text-2xl font-semibold text-text">
+                {card.value}
+              </div>
+              <div className="mt-1 text-xs text-text/50">{card.detail}</div>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-text/50">
+          <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-sky-200">
+            Tank
+          </span>
+          <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-emerald-200">
+            Heal
+          </span>
+          <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-red-200">
+            DPS
+          </span>
+          <span className="ml-2 text-[10px] text-text/40">
+            Drag & drop pour équilibrer
+          </span>
+        </div>
 
         {actionError ? (
           <div className="rounded-2xl border border-red-500/40 bg-red-950/30 px-6 py-4 text-sm text-red-200">
@@ -957,7 +1074,7 @@ export default function RaidGroupsPage() {
         <div className="grid gap-6 lg:grid-cols-[1fr_1.8fr]">
           <div
             className={[
-              "rounded-3xl border bg-surface/60 px-5 py-5 shadow-[0_0_20px_rgba(0,0,0,0.35)] backdrop-blur transition",
+              "relative rounded-[28px] border bg-surface/60 px-5 py-5 shadow-[0_0_24px_rgba(0,0,0,0.35)] backdrop-blur transition",
               dragOverReserve
                 ? "border-sky-400/70 bg-sky-400/10 shadow-[0_0_25px_rgba(56,189,248,0.35)]"
                 : "border-white/10",
@@ -969,53 +1086,72 @@ export default function RaidGroupsPage() {
             onDragLeave={() => setDragOverReserve(false)}
             onDrop={handleDropOnReserve}
           >
-            <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-text/50">
-              <span>Réserve / Banc</span>
-              <span className="font-mono text-text/50">
+            <div
+              className={[
+                "pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.2),_transparent_65%)] opacity-0 transition duration-300",
+                dragOverReserve ? "opacity-100" : "",
+              ].join(" ")}
+            />
+            <div className="relative z-10 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-xs uppercase tracking-[0.3em] text-text/50">
+                  Réserve / Banc
+                </div>
+                <p className="mt-1 text-xs text-text/50">
+                  Glissez un joueur vers un groupe.
+                </p>
+              </div>
+              <div className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs text-text/60">
                 {reserve
                   .filter((player) => player.status === statusFilter)
                   .length.toString()
-                  .padStart(2, "0")}
-              </span>
+                  .padStart(2, "0")}{" "}
+                joueurs
+              </div>
             </div>
-            <div className="mt-3">
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[
+                { value: "present", label: "Présents", count: statusCounts.present },
+                {
+                  value: "tentative",
+                  label: "Tentatives",
+                  count: statusCounts.tentative,
+                },
+                { value: "bench", label: "Banc", count: statusCounts.bench },
+                { value: "absent", label: "Absents", count: statusCounts.absent },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() =>
+                    setStatusFilter(
+                      option.value as "present" | "tentative" | "bench" | "absent",
+                    )
+                  }
+                  className={[
+                    "rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] transition",
+                    statusFilter === option.value
+                      ? "border-amber-400/70 bg-amber-400/10 text-amber-100"
+                      : "border-white/10 bg-black/40 text-text/60 hover:border-white/20 hover:text-text",
+                  ].join(" ")}
+                >
+                  {option.label} · {option.count}
+                </button>
+              ))}
               <button
                 type="button"
                 onClick={() => setIsFilterOpen((prev) => !prev)}
-                className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-text/70 transition hover:border-white/20 hover:text-text"
+                className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-text/60 transition hover:border-white/20 hover:text-text"
               >
-                Filtrer les inscrits
+                {isFilterOpen ? "Masquer options" : "Options"}
               </button>
-              {isFilterOpen ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {[
-                    { value: "present", label: "Présents" },
-                    { value: "tentative", label: "Tentatives" },
-                    { value: "bench", label: "Banc" },
-                    { value: "absent", label: "Absents" },
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        setStatusFilter(
-                          option.value as "present" | "tentative" | "bench" | "absent",
-                        );
-                        setIsFilterOpen(false);
-                      }}
-                      className={[
-                        "rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] transition",
-                        statusFilter === option.value
-                          ? "border-amber-400/70 bg-amber-400/10 text-amber-100"
-                          : "border-white/10 bg-black/40 text-text/60 hover:border-white/20 hover:text-text",
-                      ].join(" ")}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </div>
+            {isFilterOpen ? (
+              <div className="mt-3 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-xs text-text/60">
+                Conseil : basculez les statuts pour équilibrer tanks, heals et DPS
+                avant de publier.
+              </div>
+            ) : null}
             <div className="mt-4 space-y-3">
               {reserve.filter((player) => player.status === statusFilter).length ===
               0 ? (
@@ -1049,59 +1185,183 @@ export default function RaidGroupsPage() {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {groups.map((group) => (
-              <div
-                key={group.id}
-                className={[
-                  "rounded-3xl border bg-surface/60 px-4 py-4 shadow-[0_0_18px_rgba(0,0,0,0.3)] backdrop-blur transition",
-                  dragOverGroupId === group.id
-                    ? "border-amber-400/70 bg-amber-400/10 shadow-[0_0_22px_rgba(251,191,36,0.35)]"
-                    : "border-white/10",
-                ].join(" ")}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDragOverGroupId(group.id);
-                }}
-                onDragLeave={() =>
-                  setDragOverGroupId((prev) => (prev === group.id ? null : prev))
-                }
-                onDrop={handleDropOnGroup(group.id)}
-              >
-                <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-text/50">
-                  <span>Groupe {group.id}</span>
-                  <span className="font-mono text-text/50">
-                    {group.players.length}/{GROUP_SIZE}
-                  </span>
+          <div className="space-y-4">
+            <div className="rounded-[26px] border border-white/10 bg-surface/60 px-4 py-4 shadow-[0_0_20px_rgba(0,0,0,0.3)] backdrop-blur">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.3em] text-text/50">
+                    Sélection active
+                  </div>
+                  <div className="mt-1 text-sm text-text/70">
+                    {selectedPlayer ? selectedPlayer.ingameName : "Aucun joueur"}
+                  </div>
                 </div>
-                <div className="mt-4 space-y-3">
-                  {group.players.length === 0 ? (
-                    <div className="rounded-2xl border border-white/10 bg-black/40 px-3 py-4 text-xs text-text/60">
-                      Aucun joueur assigné.
-                    </div>
-                  ) : (
-                    group.players.map((player) => (
-                      <PlayerCard
-                        key={player.userId}
-                        player={player}
-                        selected={selectedPlayer?.userId === player.userId}
-                        onSelect={() => handleSelect(player)}
-                        onDragStart={(event) => {
-                          event.dataTransfer.setData("text/plain", player.userId);
-                          setDraggedPlayerId(player.userId);
-                        }}
-                        onDragEnd={() => setDraggedPlayerId(null)}
-                      />
-                    ))
-                  )}
-                </div>
+                {selectedPlayer ? (
+                  <button
+                    type="button"
+                    onClick={() => moveToReserve(selectedPlayer)}
+                    className="rounded-full border border-sky-400/50 bg-sky-400/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-sky-200 transition hover:border-sky-300"
+                  >
+                    Mettre en réserve
+                  </button>
+                ) : null}
               </div>
-            ))}
+              {selectedPlayer ? (
+                <div className="mt-3 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-text/60">
+                    <span
+                      className={`rounded-full border px-2 py-0.5 ${getRoleStyle(
+                        getEffectiveRole(selectedPlayer),
+                      )}`}
+                    >
+                      {getRoleLabel(getEffectiveRole(selectedPlayer))}
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-black/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-text/50">
+                      {getStatusLabel(selectedPlayer.status)}
+                    </span>
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-text/40">
+                      {selectedPlayer.mainWeapon ?? "Arme principale ?"} ·{" "}
+                      {selectedPlayer.offWeapon ?? "Arme secondaire ?"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from({ length: 6 }, (_, index) => index + 1).map(
+                      (groupId) => (
+                        <button
+                          key={groupId}
+                          type="button"
+                          onClick={() => moveToGroup(groupId)}
+                          className="rounded-full border border-amber-400/50 bg-amber-400/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300"
+                        >
+                          Placer en G{groupId}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-text/50">
+                  Cliquez sur un joueur pour afficher les actions rapides.
+                </p>
+              )}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {groups.map((group) => (
+                <div
+                  key={group.id}
+                  className={[
+                    "group relative rounded-[26px] border bg-surface/60 px-4 py-4 shadow-[0_0_20px_rgba(0,0,0,0.35)] backdrop-blur transition hover:-translate-y-0.5 hover:border-white/20 animate-cinematic-fade",
+                    dragOverGroupId === group.id
+                      ? "border-amber-400/70 bg-amber-400/10 shadow-[0_0_22px_rgba(251,191,36,0.35)]"
+                      : "border-white/10",
+                  ].join(" ")}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setDragOverGroupId(group.id);
+                  }}
+                  onDragLeave={() =>
+                    setDragOverGroupId((prev) => (prev === group.id ? null : prev))
+                  }
+                  onDrop={handleDropOnGroup(group.id)}
+                >
+                  <div
+                    className={[
+                      "pointer-events-none absolute inset-0 rounded-[26px] bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.2),_transparent_70%)] opacity-0 transition duration-300",
+                      dragOverGroupId === group.id ? "opacity-100" : "",
+                    ].join(" ")}
+                  />
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.3em] text-text/50">
+                        Groupe {group.id}
+                      </div>
+                      <div className="mt-1 text-xs text-text/40">
+                        Capacité {GROUP_SIZE} joueurs
+                      </div>
+                    </div>
+                    <div className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs text-text/60">
+                      {group.players.length}/{GROUP_SIZE}
+                    </div>
+                  </div>
+                  <div className="mt-3 h-2 w-full overflow-hidden rounded-full border border-white/10 bg-black/40">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-400/80 to-emerald-400/80"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          (group.players.length / GROUP_SIZE) * 100,
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-text/50">
+                    {(() => {
+                      const counts = group.players.reduce(
+                        (acc, player) => {
+                          const bucket = getRoleBucket(getEffectiveRole(player));
+                          acc[bucket] += 1;
+                          return acc;
+                        },
+                        { tank: 0, heal: 0, dps: 0 },
+                      );
+                      return [
+                        {
+                          label: `Tank ${counts.tank}`,
+                          className:
+                            "border-sky-500/40 bg-sky-500/10 text-sky-200",
+                        },
+                        {
+                          label: `Heal ${counts.heal}`,
+                          className:
+                            "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
+                        },
+                        {
+                          label: `DPS ${counts.dps}`,
+                          className:
+                            "border-red-500/40 bg-red-500/10 text-red-200",
+                        },
+                      ];
+                    })().map((chip) => (
+                      <span
+                        key={chip.label}
+                        className={`rounded-full border px-2 py-0.5 ${chip.className}`}
+                      >
+                        {chip.label}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {group.players.length === 0 ? (
+                      <div className="rounded-2xl border border-white/10 bg-black/40 px-3 py-4 text-xs text-text/60">
+                        Aucun joueur assigné.
+                      </div>
+                    ) : (
+                      group.players.map((player) => (
+                        <PlayerCard
+                          key={player.userId}
+                          player={player}
+                          selected={selectedPlayer?.userId === player.userId}
+                          onSelect={() => handleSelect(player)}
+                          onDragStart={(event) => {
+                            event.dataTransfer.setData(
+                              "text/plain",
+                              player.userId,
+                            );
+                            setDraggedPlayerId(player.userId);
+                          }}
+                          onDragEnd={() => setDraggedPlayerId(null)}
+                        />
+                      ))
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
         {isDirty || !isPublished ? (
-          <div className="flex flex-wrap items-center justify-end gap-3">
+          <div className="sticky bottom-6 z-20 flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-white/10 bg-gradient-to-r from-black/80 via-zinc-950/80 to-black/80 px-4 py-3 shadow-[0_0_20px_rgba(0,0,0,0.35)] backdrop-blur">
             {!permissionsReady ? (
               <div className="rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.25em] text-text/60">
                 Chargement des permissions...
@@ -1253,10 +1513,10 @@ function PlayerCard({
   return (
     <div
       className={[
-        "flex flex-col gap-3 rounded-2xl border bg-black/40 px-3 py-3 text-sm transition sm:flex-row sm:items-center sm:justify-between",
+        "relative flex cursor-grab flex-col gap-3 rounded-2xl border bg-black/40 px-3 py-3 text-sm transition duration-200 hover:-translate-y-0.5 hover:bg-black/60 sm:flex-row sm:items-center sm:justify-between active:cursor-grabbing animate-cinematic-fade",
         selected
           ? "border-amber-400/70 shadow-[0_0_16px_rgba(251,191,36,0.25)]"
-          : "border-white/10",
+          : "border-white/10 hover:border-white/20",
       ].join(" ")}
       onClick={onSelect}
       role="button"
@@ -1270,7 +1530,12 @@ function PlayerCard({
         }
       }}
     >
-      <div>
+      <span
+        className={`absolute left-0 top-0 h-full w-1 rounded-l-2xl bg-gradient-to-b ${getRoleAccent(
+          effectiveRole,
+        )}`}
+      />
+      <div className="relative">
         <div className="font-semibold text-zinc-100">{player.ingameName}</div>
         <div className="mt-1 flex items-center gap-2 text-xs text-zinc-400">
           <span className={`rounded-full border px-2 py-0.5 ${RoleBadgeStyle}`}>
