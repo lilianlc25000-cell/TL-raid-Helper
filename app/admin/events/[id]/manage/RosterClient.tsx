@@ -32,6 +32,7 @@ type RosterClientProps = {
   eventTitle: string;
   eventStartTime: string;
   eventType: string | null;
+  eventDescription: string;
   signups: SignupEntry[];
 };
 
@@ -224,6 +225,7 @@ export default function RosterClient({
   eventTitle,
   eventStartTime,
   eventType,
+  eventDescription,
   signups,
 }: RosterClientProps) {
   const [isPublishing, setIsPublishing] = useState(false);
@@ -238,6 +240,8 @@ export default function RosterClient({
   const [localEventType, setLocalEventType] = useState<string | null>(eventType);
   const [localEventStartTime, setLocalEventStartTime] =
     useState(eventStartTime);
+  const [localEventDescription, setLocalEventDescription] =
+    useState(eventDescription);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(eventTitle);
   const [editDateTime, setEditDateTime] = useState(
@@ -250,6 +254,7 @@ export default function RosterClient({
     eventType ??
       EVENT_TYPES_BY_CONTENT[getContentTypeFromEvent(eventType) ?? "PVE"][0],
   );
+  const [editComment, setEditComment] = useState(eventDescription ?? "");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const managePve = usePermission("manage_pve");
   const managePvp = usePermission("manage_pvp");
@@ -274,11 +279,13 @@ export default function RosterClient({
     setLocalEventTitle(eventTitle);
     setLocalEventType(eventType);
     setLocalEventStartTime(eventStartTime);
-  }, [eventTitle, eventType, eventStartTime]);
+    setLocalEventDescription(eventDescription ?? "");
+  }, [eventTitle, eventType, eventStartTime, eventDescription]);
 
   const openEditModal = () => {
     setEditTitle(localEventTitle);
     setEditDateTime(formatParisInput(localEventStartTime));
+    setEditComment(localEventDescription ?? "");
     const contentType = getContentTypeFromEvent(localEventType);
     setEditContentType(contentType);
     const fallbackContent = contentType ?? "PVE";
@@ -306,6 +313,7 @@ export default function RosterClient({
         title: editTitle.trim(),
         event_type: editEventType,
         start_time: startTime,
+        description: editComment.trim() || null,
       })
       .eq("id", eventId);
     setIsSavingEdit(false);
@@ -316,6 +324,7 @@ export default function RosterClient({
     setLocalEventTitle(editTitle.trim());
     setLocalEventType(editEventType);
     setLocalEventStartTime(startTime);
+    setLocalEventDescription(editComment.trim());
     setIsEditOpen(false);
   };
 
@@ -894,6 +903,17 @@ export default function RosterClient({
                   value={editDateTime}
                   onChange={(event) => setEditDateTime(event.target.value)}
                   className="bg-transparent text-sm text-text outline-none"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                <span className="text-xs uppercase tracking-[0.25em] text-text/50">
+                  Commentaire
+                </span>
+                <textarea
+                  value={editComment}
+                  onChange={(event) => setEditComment(event.target.value)}
+                  className="min-h-[90px] resize-none bg-transparent text-sm text-text outline-none"
                 />
               </label>
             </div>

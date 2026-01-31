@@ -855,7 +855,7 @@ export default function RaidGroupsPage() {
         const tanks: string[] = [];
         const dps: string[] = [];
         const heals: string[] = [];
-        group.players.forEach((player) => {
+        sortPlayersByRole(group.players).forEach((player) => {
           const effectiveRole = getEffectiveRole(player);
           const bucket = getRoleBucket(effectiveRole);
           const mainEmoji = getWeaponEmoji(player.mainWeapon);
@@ -871,11 +871,8 @@ export default function RaidGroupsPage() {
             dps.push(line);
           }
         });
-        const tableSeparator = "────────────────";
         const formatTableEntries = (entries: string[]) =>
-          entries.length <= 1
-            ? entries.join("\n")
-            : entries.join(`\n${tableSeparator}\n`);
+          entries.length === 0 ? "" : entries.join("\n");
         const sections = [
           { title: "🛡️ Tanks", entries: tanks },
           { title: "⚔️ DPS", entries: dps },
@@ -896,23 +893,21 @@ export default function RaidGroupsPage() {
 
       const fields = groups.flatMap((group, index) => {
         const groupField = buildGroupField(group);
-        const colIndex = index % 3;
-        const isRowEnd = colIndex === 2;
+        const colIndex = index % 2;
+        const isRowEnd = colIndex === 1;
         const isLast = index === groups.length - 1;
-        const columnGaps = isRowEnd
-          ? []
-          : [
-              { name: "\u200B", value: "\u200B", inline: true },
-              { name: "\u200B", value: "\u200B", inline: true },
-            ];
         const rowGap =
           isRowEnd && !isLast
             ? [{ name: "\u200B", value: "\u200B", inline: false }]
             : [];
-        return [groupField, ...columnGaps, ...rowGap];
+        return [groupField, ...rowGap];
       });
 
       const imageUrl = getEventImageUrl(eventType);
+      const normalizedEventType = eventType ? normalizeEventType(eventType) : "";
+      const useThumbnail = Boolean(
+        imageUrl && normalizedEventType.includes("pierredefaille"),
+      );
       const { error: discordError } = await supabase.functions.invoke(
         "discord-notify",
         {
@@ -929,7 +924,10 @@ export default function RaidGroupsPage() {
                 : `Événement : ${formattedEventDate}\nLes groupes sont publiés. Préparez-vous !`,
               fields,
               color: 0xffa600,
-              image: imageUrl ? { url: imageUrl } : undefined,
+              image:
+                imageUrl && !useThumbnail ? { url: imageUrl } : undefined,
+              thumbnail:
+                imageUrl && useThumbnail ? { url: imageUrl } : undefined,
             },
             replace: {
               match_title_prefix: "⚔️",
@@ -1243,6 +1241,13 @@ export default function RaidGroupsPage() {
                       >
                         Mettre en réserve
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsGroupMenuOpen((prev) => !prev)}
+                        className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-300"
+                      >
+                        Changer de groupe
+                      </button>
                     </>
                   ) : null}
                 </div>
@@ -1276,15 +1281,7 @@ export default function RaidGroupsPage() {
                       Stuff: {selectedPlayer.contentType?.toUpperCase() ?? "?"}
                     </span>
                   </div>
-                  {!isGroupMenuOpen ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsGroupMenuOpen(true)}
-                      className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-300"
-                    >
-                      Changer de groupe
-                    </button>
-                  ) : (
+                  {isGroupMenuOpen ? (
                     <div className="space-y-2">
                       <div className="flex flex-wrap gap-2">
                         {Array.from({ length: groups.length }, (_, index) => index + 1).map(
@@ -1320,7 +1317,7 @@ export default function RaidGroupsPage() {
                         Retour
                       </button>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               ) : (
                 <p className="mt-3 text-xs text-text/50">

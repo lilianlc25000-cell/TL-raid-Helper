@@ -16,8 +16,11 @@ const respondJson = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: jsonHeaders });
 
 const parsePoints = (value: string) => {
-  const match = value.match(/\\d{1,6}/);
-  return match ? Number(match[0]) : null;
+  const cleaned = value.replace(/[^0-9]/g, "");
+  if (!cleaned) {
+    return null;
+  }
+  return Number(cleaned);
 };
 
 serve(async (req) => {
@@ -96,13 +99,23 @@ serve(async (req) => {
     }
 
     const result = await response.json();
+    const outputParts =
+      result?.output?.[0]?.content ??
+      result?.output?.[0]?.content_parts ??
+      [];
     const outputText =
-      result?.output?.[0]?.content?.[0]?.text ??
-      result?.output_text ??
+      outputParts
+        .map((part: { text?: string }) => part?.text ?? "")
+        .join(" ")
+        .trim() ||
+      result?.output_text ||
       "";
     const points = parsePoints(String(outputText));
     if (points === null) {
-      return respondJson(422, { error: "No points detected." });
+      return respondJson(422, {
+        error: "No points detected.",
+        raw: outputText,
+      });
     }
 
     let resolvedUserId = body.user_id ?? null;

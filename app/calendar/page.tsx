@@ -394,7 +394,6 @@ export default function CalendarPage() {
           const eventDate = new Date(event.startTime);
           const status = statusByEvent[event.id];
           const countdownLabel = formatCountdown(eventDate);
-          const eventImageUrl = getEventImageUrl(event.eventType);
           return (
             <div
               key={event.id}
@@ -415,30 +414,14 @@ export default function CalendarPage() {
                     })}
                   </p>
                 </div>
-                {eventImageUrl || countdownLabel ? (
-                  <div className="flex flex-wrap items-start justify-end gap-3">
-                    {eventImageUrl ? (
-                      <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-1">
-                        <Image
-                          src={eventImageUrl}
-                          alt={`Illustration ${event.eventType}`}
-                          width={200}
-                          height={110}
-                          className="h-24 w-auto rounded-xl object-cover"
-                          unoptimized
-                        />
-                      </div>
-                    ) : null}
-                    {countdownLabel ? (
-                      <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-right">
-                        <p className="text-xs uppercase tracking-[0.25em] text-text/50">
-                          Compte à rebours
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-gold">
-                          {countdownLabel}
-                        </p>
-                      </div>
-                    ) : null}
+                {countdownLabel ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-right">
+                    <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+                      Compte à rebours
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-gold">
+                      {countdownLabel}
+                    </p>
                   </div>
                 ) : null}
               </div>

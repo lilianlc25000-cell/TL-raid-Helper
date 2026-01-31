@@ -51,39 +51,39 @@ const archetypes: Record<string, string[]> = {
 };
 
 const comboNames: Record<string, string> = {
-  "Arbalète|Baguette": "Colère",
-  "Arbalète|Bâton": "Tisse-Guerre",
-  "Arbalète|Dagues": "Scorpion",
+  "Arbalète|Baguette": "Fury",
+  "Arbalète|Bâton": "Battleweaver",
+  "Arbalète|Dagues": "Ravager",
   "Arbalète|Épée et Bouclier": "Bandit",
-  "Arbalète|Espadon": "Guide",
+  "Arbalète|Espadon": "Outrider",
   "Arbalète|Lance": "Cavalier",
-  "Arc Long|Arbalète": "Éclaireur",
-  "Arc Long|Bâton": "Libérateur",
-  "Arc Long|Baguette": "Chercheur",
-  "Arc Long|Dagues": "Infiltré",
-  "Arc Long|Épée et Bouclier": "Gardien",
-  "Arc Long|Espadon": "Rôdeur",
-  "Arc Long|Lance": "Empaleur",
+  "Arc Long|Arbalète": "Scorpion",
+  "Arc Long|Bâton": "Liberator",
+  "Arc Long|Baguette": "Scout",
+  "Arc Long|Dagues": "Infiltrator",
+  "Arc Long|Épée et Bouclier": "Warden",
+  "Arc Long|Espadon": "Raider",
+  "Arc Long|Lance": "Impaler",
   "Arc Long|Orbe": "Voyant",
-  "Bâton|Baguette": "Invocateur",
-  "Bâton|Dagues": "Sorcelame",
+  "Bâton|Baguette": "Invocator",
+  "Bâton|Dagues": "Spellblade",
   "Bâton|Épée et Bouclier": "Disciple",
-  "Bâton|Espadon": "Sentinelle",
-  "Bâton|Lance": "Éradicateur",
+  "Bâton|Espadon": "Seeker",
+  "Bâton|Lance": "Eradicator",
   "Bâton|Orbe": "Énigme",
-  "Dagues|Baguette": "Sombrepeste",
+  "Dagues|Baguette": "Darkblighter",
   "Dagues|Épée et Bouclier": "Berserker",
-  "Dagues|Espadon": "Écorcheur",
-  "Dagues|Lance": "Danse-Ombre",
+  "Dagues|Espadon": "Ranger",
+  "Dagues|Lance": "Sentinel",
   "Dagues|Orbe": "Lunarch",
   "Espadon|Baguette": "Paladin",
-  "Espadon|Épée et Bouclier": "Croisé",
-  "Espadon|Lance": "Gladiateur",
+  "Espadon|Épée et Bouclier": "Crusader",
+  "Espadon|Lance": "Gladiator",
   "Espadon|Orbe": "Justicier",
-  "Épée et Bouclier|Baguette": "Templier",
-  "Épée et Bouclier|Lance": "Coeur-Acier",
+  "Épée et Bouclier|Baguette": "Templar",
+  "Épée et Bouclier|Lance": "Steelheart",
   "Épée et Bouclier|Orbe": "Gardien",
-  "Lance|Baguette": "Lance du Vide",
+  "Lance|Baguette": "Voidlance",
   "Lance|Orbe": "Polaris",
   "Orbe|Arbalète": "Crucifère",
   "Orbe|Baguette": "Oracle",
@@ -285,6 +285,7 @@ export default function ProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [participationPoints, setParticipationPoints] = useState<number>(0);
   const [activityPoints, setActivityPoints] = useState<number>(0);
+  const [eligibilityCriteria, setEligibilityCriteria] = useState<string[]>([]);
   const [activityFile, setActivityFile] = useState<File | null>(null);
   const [activityStatus, setActivityStatus] = useState<
     "idle" | "loading" | "success" | "error"
@@ -359,6 +360,23 @@ export default function ProfilePage() {
         setActivityPoints(data.activity_points ?? 0);
         setProfileGuildId(data.guild_id ?? null);
         setRoleRank(data.role_rank ?? "soldat");
+        if (data.guild_id) {
+          const { data: guild } = await supabase
+            .from("guilds")
+            .select("owner_id")
+            .eq("id", data.guild_id)
+            .maybeSingle();
+          if (guild?.owner_id) {
+            const { data: config } = await supabase
+              .from("guild_configs")
+              .select("eligibility_criteria")
+              .eq("owner_id", guild.owner_id)
+              .maybeSingle();
+            setEligibilityCriteria(
+              (config?.eligibility_criteria ?? []) as string[],
+            );
+          }
+        }
       }
       setIsProfileLoaded(true);
     };
@@ -368,6 +386,19 @@ export default function ProfilePage() {
       isMounted = false;
     };
   }, [userId]);
+
+  const showParticipationPoints = useMemo(
+    () =>
+      eligibilityCriteria.length === 0 ||
+      eligibilityCriteria.includes("participation_points"),
+    [eligibilityCriteria],
+  );
+  const showActivityPoints = useMemo(
+    () =>
+      eligibilityCriteria.length === 0 ||
+      eligibilityCriteria.includes("activity_points"),
+    [eligibilityCriteria],
+  );
 
   const fileToBase64 = (file: File) =>
     new Promise<string>((resolve, reject) => {
@@ -962,14 +993,18 @@ export default function ProfilePage() {
                   ? "Conseiller"
                   : "Soldat"}
             </p>
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-emerald-200">
-              <Sparkles className="h-3.5 w-3.5" />
-              {participationPoints} points de participation
-            </div>
-            <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-amber-200">
-              <Sparkles className="h-3.5 w-3.5" />
-              {activityPoints} points d&apos;activité
-            </div>
+            {showParticipationPoints ? (
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-emerald-200">
+                <Sparkles className="h-3.5 w-3.5" />
+                {participationPoints} points de participation
+              </div>
+            ) : null}
+            {showActivityPoints ? (
+              <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-amber-200">
+                <Sparkles className="h-3.5 w-3.5" />
+                {activityPoints} points d&apos;activité
+              </div>
+            ) : null}
             <div className="mt-4 flex flex-wrap items-center justify-start gap-3 sm:justify-end">
               <button
                 type="button"
@@ -991,46 +1026,50 @@ export default function ProfilePage() {
 
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
-          <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
-            <h2 className="text-sm uppercase tracking-[0.3em] text-text/50">
-              Points d&apos;activité
-            </h2>
-            <p className="mt-2 text-sm text-text/70">
-              Importez une capture de vos points d&apos;activité pour mise à jour automatique.
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_200px]">
-              <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/70">
-                <span className="text-xs uppercase tracking-[0.25em] text-text/50">
-                  Capture d&apos;écran
-                </span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) =>
-                    setActivityFile(event.target.files?.[0] ?? null)
-                  }
-                  className="text-xs text-text/70"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={handleActivityUpload}
-                disabled={!activityFile || activityStatus === "loading"}
-                className="rounded-2xl border border-amber-400/60 bg-amber-400/10 px-4 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {activityStatus === "loading" ? "Analyse..." : "Analyser"}
-              </button>
-            </div>
-            {activityMessage ? (
-              <p
-                className={`mt-3 text-xs ${
-                  activityStatus === "error" ? "text-red-300" : "text-emerald-200"
-                }`}
-              >
-                {activityMessage}
+          {showActivityPoints ? (
+            <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
+              <h2 className="text-sm uppercase tracking-[0.3em] text-text/50">
+                Points d&apos;activité
+              </h2>
+              <p className="mt-2 text-sm text-text/70">
+                Importez une capture de vos points d&apos;activité pour mise à jour automatique.
               </p>
-            ) : null}
-          </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_200px]">
+                <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-text/70">
+                  <span className="text-xs uppercase tracking-[0.25em] text-text/50">
+                    Capture d&apos;écran
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) =>
+                      setActivityFile(event.target.files?.[0] ?? null)
+                    }
+                    className="text-xs text-text/70"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleActivityUpload}
+                  disabled={!activityFile || activityStatus === "loading"}
+                  className="rounded-2xl border border-amber-400/60 bg-amber-400/10 px-4 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {activityStatus === "loading" ? "Analyse..." : "Analyser"}
+                </button>
+              </div>
+              {activityMessage ? (
+                <p
+                  className={`mt-3 text-xs ${
+                    activityStatus === "error"
+                      ? "text-red-300"
+                      : "text-emerald-200"
+                  }`}
+                >
+                  {activityMessage}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="relative z-20 rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">
             <h2 className="text-sm uppercase tracking-[0.3em] text-text/50">
               Identité

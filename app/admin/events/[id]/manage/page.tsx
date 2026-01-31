@@ -20,7 +20,7 @@ export default async function ManageEventPage({ params }: PageProps) {
 
   const { data: event } = await supabase
     .from("events")
-    .select("id,title,start_time,event_type")
+    .select("id,title,start_time,event_type,description")
     .eq("id", resolvedParams.id)
     .single();
 
@@ -67,6 +67,7 @@ export default async function ManageEventPage({ params }: PageProps) {
       eventTitle={event.title}
       eventStartTime={event.start_time}
       eventType={event.event_type}
+      eventDescription={event.description ?? ""}
       signups={mappedSignups}
     />
   );

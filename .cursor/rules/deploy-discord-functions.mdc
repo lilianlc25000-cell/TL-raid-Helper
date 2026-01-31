@@ -1,0 +1,18 @@
+---
+description: Déployer automatiquement les fonctions Discord/Edge après un commit pertinent
+alwaysApply: true
+---
+
+# Déploiement Edge Functions Discord
+
+Quand un commit concerne Discord, le bot, les Edge Functions Supabase, ou les secrets associés,
+exécuter automatiquement après le commit ces 4 commandes dans le terminal (PowerShell) :
+
+```
+npx supabase functions deploy discord-grant-role --no-verify-jwt
+npx supabase functions deploy discord-provision --no-verify-jwt
+npx supabase functions deploy discord-notify --no-verify-jwt
+npx supabase functions deploy activity-ocr --no-verify-jwt
+```
+
+Utiliser `;` pour chaîner les commandes en PowerShell (pas `&&`).
