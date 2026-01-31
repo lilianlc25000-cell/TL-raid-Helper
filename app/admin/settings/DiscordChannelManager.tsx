@@ -109,7 +109,7 @@ export default function DiscordChannelManager({
     const { error: provisionError } = await supabase.functions.invoke(
       "discord-provision",
       {
-        body: { guild_id: guildId, channel_config: config },
+        body: { guild_id: guildId, channel_config: config, mode: "custom" },
       },
     );
     if (provisionError) {

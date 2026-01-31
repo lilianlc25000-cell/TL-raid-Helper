@@ -143,6 +143,8 @@ serve(async (req) => {
       polls: false,
       activity_points: false,
     };
+    const hasBodyConfig =
+      body.channel_config && Object.keys(body.channel_config).length > 0;
     const channelConfig =
       body.mode === "reset"
         ? {
@@ -153,8 +155,9 @@ serve(async (req) => {
           }
         : {
             ...baseConfig,
-            ...(guildConfig.discord_channel_config ?? {}),
-            ...(body.channel_config ?? {}),
+            ...(hasBodyConfig
+              ? body.channel_config
+              : (guildConfig.discord_channel_config ?? {})),
           };
 
     const discordHeaders = {
