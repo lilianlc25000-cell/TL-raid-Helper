@@ -82,7 +82,16 @@ client.on("messageCreate", async (message) => {
       console.error("OCR ingest failed:", errorText);
       return;
     }
-
+    const payload = (await response.json().catch(() => ({}))) as {
+      points?: number | null;
+    };
+    const pointsLabel =
+      typeof payload.points === "number"
+        ? `${payload.points} point${payload.points > 1 ? "s" : ""}`
+        : "points analysés";
+    await message.channel.send({
+      content: `✅ Analyse validée pour <@${message.author.id}> : ${pointsLabel}.`,
+    });
     await message.delete();
   } catch (error) {
     console.error("OCR ingest error:", error);

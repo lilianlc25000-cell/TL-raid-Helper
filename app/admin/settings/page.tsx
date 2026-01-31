@@ -41,6 +41,13 @@ export default async function AdminSettingsPage() {
         .eq("owner_id", ownerId)
         .maybeSingle()
     : { data: null };
+  const { data: guildSettings } = guildId
+    ? await supabase
+        .from("guild_settings")
+        .select("participation_threshold,activity_threshold")
+        .eq("guild_id", guildId)
+        .maybeSingle()
+    : { data: null };
 
   let effectiveGuildConfig = guildConfig;
   if (guildConfig?.discord_guild_id && discordBotToken) {
@@ -82,7 +89,12 @@ export default async function AdminSettingsPage() {
 
         <EligibilityCriteriaSettingsClient
           ownerId={ownerId}
+          guildId={guildId}
           initialCriteria={(effectiveGuildConfig?.eligibility_criteria as string[]) ?? []}
+          initialParticipationThreshold={
+            guildSettings?.participation_threshold ?? 1
+          }
+          initialActivityThreshold={guildSettings?.activity_threshold ?? 1}
         />
 
         <div className="rounded-3xl border border-white/10 bg-surface/70 p-6 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur">

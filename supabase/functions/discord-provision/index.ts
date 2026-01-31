@@ -293,6 +293,27 @@ serve(async (req) => {
       }
     };
 
+    const deleteCategoryAndChildren = async (name: string) => {
+      const category = findChannel(name, CATEGORY_TYPE);
+      if (!category) {
+        return;
+      }
+      const children = channels.filter((channel) => channel.parent_id === category.id);
+      for (const child of children) {
+        const deleteResult = await fetchDiscord(
+          `${DISCORD_API_BASE}/channels/${child.id}`,
+          {
+            method: "DELETE",
+            headers: discordHeaders,
+          },
+        );
+        if (!deleteResult.ok) {
+          console.error("discord-provision: delete child failed", deleteResult);
+        }
+      }
+      await deleteChannel(name, CATEGORY_TYPE);
+    };
+
     const legacyCleanup = async () => {
       await deleteChannel("📅-tl-planning");
       await deleteChannel("🎁-tl-loots");
@@ -335,6 +356,12 @@ serve(async (req) => {
       await deleteChannel(DPS_CHANNEL);
       await deleteChannel(ACTIVITY_CHANNEL);
       await deleteChannel(POLL_CHANNEL);
+      for (const day of EVENT_DAYS) {
+        await deleteCategoryAndChildren(day.label);
+      }
+      await deleteCategoryAndChildren(LOOT_CATEGORY_NAME);
+      await deleteCategoryAndChildren(MISC_CATEGORY_NAME);
+      await deleteCategoryAndChildren(ROOT_CATEGORY_NAME);
       return respondJson(200, { success: true, channels: [] });
     }
 
@@ -422,7 +449,7 @@ serve(async (req) => {
       }
     } else {
       for (const day of EVENT_DAYS) {
-        await deleteChannel(day.label, CATEGORY_TYPE);
+        await deleteCategoryAndChildren(day.label);
       }
     }
 
@@ -433,7 +460,7 @@ serve(async (req) => {
         position: 8,
       });
     } else {
-      await deleteChannel(LOOT_CATEGORY_NAME, CATEGORY_TYPE);
+      await deleteCategoryAndChildren(LOOT_CATEGORY_NAME);
     }
 
     if (lootCategory) {
@@ -468,7 +495,7 @@ serve(async (req) => {
         position: 9,
       });
     } else {
-      await deleteChannel(MISC_CATEGORY_NAME, CATEGORY_TYPE);
+      await deleteCategoryAndChildren(MISC_CATEGORY_NAME);
     }
 
     if (miscCategory) {

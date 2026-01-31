@@ -10,7 +10,10 @@ type EligibilityCriteria =
 
 type EligibilityCriteriaSettingsClientProps = {
   ownerId: string | null;
+  guildId: string | null;
   initialCriteria: string[];
+  initialParticipationThreshold: number;
+  initialActivityThreshold: number;
 };
 
 const CRITERIA_OPTIONS: Array<{
@@ -37,10 +40,19 @@ const CRITERIA_OPTIONS: Array<{
 
 export default function EligibilityCriteriaSettingsClient({
   ownerId,
+  guildId,
   initialCriteria,
+  initialParticipationThreshold,
+  initialActivityThreshold,
 }: EligibilityCriteriaSettingsClientProps) {
   const [criteria, setCriteria] = useState<EligibilityCriteria[]>(
     (initialCriteria.filter(Boolean) as EligibilityCriteria[]) ?? [],
+  );
+  const [participationThreshold, setParticipationThreshold] = useState<number>(
+    initialParticipationThreshold ?? 1,
+  );
+  const [activityThreshold, setActivityThreshold] = useState<number>(
+    initialActivityThreshold ?? 1,
   );
   const [status, setStatus] = useState<
     "idle" | "saving" | "success" | "error"
@@ -62,7 +74,7 @@ export default function EligibilityCriteriaSettingsClient({
   };
 
   const handleSave = async () => {
-    if (!ownerId) {
+    if (!ownerId || !guildId) {
       setStatus("error");
       setMessage("Aucune guilde active.");
       return;
@@ -77,6 +89,21 @@ export default function EligibilityCriteriaSettingsClient({
     if (error) {
       setStatus("error");
       setMessage(error.message || "Impossible de sauvegarder.");
+      return;
+    }
+    const { error: settingsError } = await supabase
+      .from("guild_settings")
+      .upsert(
+        {
+          guild_id: guildId,
+          participation_threshold: Math.max(0, participationThreshold || 0),
+          activity_threshold: Math.max(0, activityThreshold || 0),
+        },
+        { onConflict: "guild_id" },
+      );
+    if (settingsError) {
+      setStatus("error");
+      setMessage(settingsError.message || "Impossible de sauvegarder.");
       return;
     }
     setStatus("success");
@@ -95,27 +122,57 @@ export default function EligibilityCriteriaSettingsClient({
         Les admins peuvent activer 1, 2 ou 3 conditions.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {CRITERIA_OPTIONS.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => handleToggle(option.key)}
-            className={[
-              "rounded-xl border px-4 py-3 text-left text-sm transition",
-              criteria.includes(option.key)
-                ? "border-amber-400/60 bg-amber-400/10 text-amber-200"
-                : "border-white/10 bg-black/40 text-text/70 hover:border-white/20",
-            ].join(" ")}
-          >
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-text">{option.label}</span>
-              <span className="text-xs uppercase tracking-[0.2em]">
-                {criteria.includes(option.key) ? "Actif" : "Inactif"}
-              </span>
+        {CRITERIA_OPTIONS.map((option) => {
+          const isActive = criteria.includes(option.key);
+          const isParticipation = option.key === "participation_points";
+          const isActivity = option.key === "activity_points";
+          return (
+            <div
+              key={option.key}
+              className={[
+                "rounded-xl border px-4 py-3 text-left text-sm transition",
+                isActive
+                  ? "border-amber-400/60 bg-amber-400/10 text-amber-200"
+                  : "border-white/10 bg-black/40 text-text/70",
+              ].join(" ")}
+            >
+              <button
+                type="button"
+                onClick={() => handleToggle(option.key)}
+                className="flex w-full items-center justify-between"
+              >
+                <span className="font-semibold text-text">{option.label}</span>
+                <span className="text-xs uppercase tracking-[0.2em]">
+                  {isActive ? "Actif" : "Inactif"}
+                </span>
+              </button>
+              <p className="mt-1 text-xs text-text/60">{option.description}</p>
+              {(isParticipation || isActivity) && isActive ? (
+                <div className="mt-3 flex items-center justify-between gap-3 text-xs text-text/70">
+                  <span>
+                    Minimum pour etre eligible
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={
+                      isParticipation ? participationThreshold : activityThreshold
+                    }
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      if (isParticipation) {
+                        setParticipationThreshold(Number.isNaN(value) ? 0 : value);
+                      } else {
+                        setActivityThreshold(Number.isNaN(value) ? 0 : value);
+                      }
+                    }}
+                    className="w-24 rounded-full border border-white/10 bg-black/40 px-3 py-1 text-right text-xs text-text"
+                  />
+                </div>
+              ) : null}
             </div>
-            <p className="mt-1 text-xs text-text/60">{option.description}</p>
-          </button>
-        ))}
+          );
+        })}
       </div>
       <div className="mt-4 flex items-center justify-between">
         <span className="text-xs text-text/60">{message}</span>

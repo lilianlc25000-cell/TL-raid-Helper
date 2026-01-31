@@ -114,9 +114,14 @@ export default function PlayerLootPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [guildId, setGuildId] = useState<string | null>(null);
   const [participationPoints, setParticipationPoints] = useState<number>(0);
+  const [activityPoints, setActivityPoints] = useState<number>(0);
   const [participationThreshold, setParticipationThreshold] = useState<number>(
     DEFAULT_PARTICIPATION_THRESHOLD,
   );
+  const [activityThreshold, setActivityThreshold] = useState<number>(1);
+  const [eligibilityCriteria, setEligibilityCriteria] = useState<
+    Array<"loot_received" | "participation_points" | "activity_points">
+  >([]);
   const [selectedTraitByItem, setSelectedTraitByItem] = useState<
     Record<string, string>
   >({});
@@ -175,13 +180,18 @@ export default function PlayerLootPage() {
       }
       const { data: profile } = (await supabase
         .from("profiles")
-        .select("guild_id,cohesion_points")
+        .select("guild_id,cohesion_points,activity_points")
         .eq("user_id", userId)
         .maybeSingle()) as {
-        data: { guild_id?: string | null; cohesion_points?: number | null } | null;
+        data: {
+          guild_id?: string | null;
+          cohesion_points?: number | null;
+          activity_points?: number | null;
+        } | null;
       };
       setGuildId(profile?.guild_id ?? null);
       setParticipationPoints(profile?.cohesion_points ?? 0);
+      setActivityPoints(profile?.activity_points ?? 0);
       setParticipationThreshold(DEFAULT_PARTICIPATION_THRESHOLD);
     };
     void loadGuildId();
@@ -292,12 +302,13 @@ export default function PlayerLootPage() {
       }
       const { data } = await supabase
         .from("guild_settings")
-        .select("participation_threshold")
+        .select("participation_threshold,activity_threshold")
         .eq("guild_id", guildId)
         .maybeSingle();
       setParticipationThreshold(
         data?.participation_threshold ?? DEFAULT_PARTICIPATION_THRESHOLD,
       );
+      setActivityThreshold(data?.activity_threshold ?? 1);
     };
     void loadThreshold();
   }, [guildId]);
@@ -328,9 +339,14 @@ export default function PlayerLootPage() {
       }
       const { data: config } = await supabase
         .from("guild_configs")
-        .select("loot_system")
+        .select("loot_system,eligibility_criteria")
         .eq("owner_id", guild.owner_id)
         .maybeSingle();
+      setEligibilityCriteria(
+        (config?.eligibility_criteria as Array<
+          "loot_received" | "participation_points" | "activity_points"
+        >) ?? [],
+      );
       const system =
         (config?.loot_system as LootSystemValue | null) ?? "council";
       setLootSystem(system);
@@ -400,12 +416,19 @@ export default function PlayerLootPage() {
     const session = sessions.find((item) => item.id === selectedItem.id);
     const isBrocante = session?.category === "brocante";
     const hasWishlist = eligibleItems.has(selectedItem.name);
-    const hasEnoughPoints = participationPoints >= participationThreshold;
-    if (!isBrocante && (!hasWishlist || !hasEnoughPoints)) {
+    const requireParticipation = eligibilityCriteria.includes("participation_points");
+    const requireActivity = eligibilityCriteria.includes("activity_points");
+    const hasEnoughParticipation =
+      !requireParticipation || participationPoints >= participationThreshold;
+    const hasEnoughActivity =
+      !requireActivity || activityPoints >= activityThreshold;
+    if (!isBrocante && (!hasWishlist || !hasEnoughParticipation || !hasEnoughActivity)) {
       setError(
         !hasWishlist
           ? "Non éligible : l'objet n'est pas dans votre wishlist."
-          : "Non éligible : pas assez de points de participation.",
+          : !hasEnoughParticipation
+            ? "Non éligible : pas assez de points de participation."
+            : "Non éligible : pas assez de points d'activite.",
       );
       setSelectedItem(null);
       return;
@@ -437,12 +460,19 @@ export default function PlayerLootPage() {
     }
     const isBrocante = session.category === "brocante";
     const hasWishlist = eligibleItems.has(session.itemName);
-    const hasEnoughPoints = participationPoints >= participationThreshold;
-    if (!isBrocante && (!hasWishlist || !hasEnoughPoints)) {
+    const requireParticipation = eligibilityCriteria.includes("participation_points");
+    const requireActivity = eligibilityCriteria.includes("activity_points");
+    const hasEnoughParticipation =
+      !requireParticipation || participationPoints >= participationThreshold;
+    const hasEnoughActivity =
+      !requireActivity || activityPoints >= activityThreshold;
+    if (!isBrocante && (!hasWishlist || !hasEnoughParticipation || !hasEnoughActivity)) {
       setError(
         !hasWishlist
           ? "Non éligible : l'objet n'est pas dans votre wishlist."
-          : "Non éligible : pas assez de points de participation.",
+          : !hasEnoughParticipation
+            ? "Non éligible : pas assez de points de participation."
+            : "Non éligible : pas assez de points d'activite.",
       );
       return;
     }
@@ -703,10 +733,18 @@ export default function PlayerLootPage() {
         ) : (
           activeItems.map((session) => {
             const isBrocante = session.category === "brocante";
-            const hasEnoughPoints = participationPoints >= participationThreshold;
+            const requireParticipation =
+              eligibilityCriteria.includes("participation_points");
+            const requireActivity = eligibilityCriteria.includes("activity_points");
+            const hasEnoughParticipation =
+              !requireParticipation || participationPoints >= participationThreshold;
+            const hasEnoughActivity =
+              !requireActivity || activityPoints >= activityThreshold;
             const isEligible = isBrocante
               ? true
-              : eligibleItems.has(session.itemName) && hasEnoughPoints;
+              : eligibleItems.has(session.itemName) &&
+                hasEnoughParticipation &&
+                hasEnoughActivity;
             const rollResult = rollsByItem[session.id];
             const hasRequest = requestsByItem[session.id];
             const title = session.customName?.trim() || session.itemName;

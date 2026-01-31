@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type ChannelConfig = {
@@ -84,15 +84,6 @@ export default function DiscordChannelManager({
   const [message, setMessage] = useState<string | null>(null);
 
   const hasConnection = Boolean(ownerId && guildId);
-  const hasChanges = useMemo(() => {
-    const base = getInitialConfig(initialConfig);
-    return Object.keys(base).some(
-      (key) =>
-        base[key as keyof ChannelConfig] !==
-        config[key as keyof ChannelConfig],
-    );
-  }, [config, initialConfig]);
-
   const handleToggle = (key: keyof ChannelConfig) => {
     setConfig((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -173,7 +164,7 @@ export default function DiscordChannelManager({
         <button
           type="button"
           onClick={handleSave}
-          disabled={!hasConnection || status === "saving" || !hasChanges}
+          disabled={!hasConnection || status === "saving"}
           className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {status === "saving" ? "Sauvegarde..." : "Sauvegarder"}

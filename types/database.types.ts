@@ -130,18 +130,21 @@ export type Database = {
         Row: {
           guild_id: string;
           participation_threshold: number;
+          activity_threshold: number;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           guild_id: string;
           participation_threshold?: number;
+          activity_threshold?: number;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           guild_id?: string;
           participation_threshold?: number;
+          activity_threshold?: number;
           created_at?: string;
           updated_at?: string;
         };
