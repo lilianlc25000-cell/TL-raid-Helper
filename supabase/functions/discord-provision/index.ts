@@ -231,6 +231,9 @@ serve(async (req) => {
     const channelsByName = new Map(
       channels.map((channel) => [channel.name, channel]),
     );
+    const channelsById = new Map(
+      channels.map((channel) => [channel.id, channel]),
+    );
     const findChannel = (name: string, type?: number, parentId?: string | null) =>
       channels.find(
         (channel) =>
@@ -239,6 +242,23 @@ serve(async (req) => {
           (parentId === undefined ||
             (channel.parent_id ?? null) === parentId),
       );
+
+    const { data: managedRows, error: managedError } = await supabase
+      .from("discord_channels")
+      .select("kind,day_key,channel_id")
+      .eq("owner_id", authData.user.id);
+
+    if (managedError) {
+      console.error("discord-provision: managed channels error", managedError);
+      return respondJson(500, { error: "Impossible de lire les salons gérés." });
+    }
+
+    const managedByKey = new Map(
+      (managedRows ?? []).map((row) => [
+        `${row.kind}:${row.day_key ?? ""}`,
+        row as { kind: string; day_key: string | null; channel_id: string },
+      ]),
+    );
 
     const warnings: string[] = [];
 
@@ -336,6 +356,125 @@ serve(async (req) => {
       }
     };
 
+    const deleteManagedChannel = async (kind: string, dayKey?: string | null) => {
+      const key = `${kind}:${dayKey ?? ""}`;
+      const managed = managedByKey.get(key);
+      if (!managed) {
+        return;
+      }
+      const existing = channelsById.get(managed.channel_id);
+      if (existing) {
+        await fetchDiscord(`${DISCORD_API_BASE}/channels/${existing.id}`, {
+          method: "DELETE",
+          headers: discordHeaders,
+        });
+      }
+      const deleteQuery = supabase
+        .from("discord_channels")
+        .delete()
+        .eq("owner_id", authData.user.id)
+        .eq("kind", kind);
+      if (dayKey === null || dayKey === undefined) {
+        await deleteQuery.is("day_key", null);
+      } else {
+        await deleteQuery.eq("day_key", dayKey);
+      }
+      managedByKey.delete(key);
+    };
+
+    const upsertManagedChannel = async (
+      kind: string,
+      dayKey: string | null,
+      channelId: string,
+    ) => {
+      await supabase.from("discord_channels").upsert(
+        {
+          owner_id: authData.user.id,
+          kind,
+          day_key: dayKey,
+          channel_id: channelId,
+        },
+        { onConflict: "owner_id,kind,day_key" },
+      );
+      managedByKey.set(`${kind}:${dayKey ?? ""}`, {
+        kind,
+        day_key: dayKey,
+        channel_id: channelId,
+      });
+    };
+
+    const ensureManagedChannel = async (
+      kind: string,
+      dayKey: string | null,
+      name: string,
+      overwrites?: typeof privateOverwrites,
+      options?: { type?: number; parentId?: string | null; position?: number },
+    ) => {
+      const key = `${kind}:${dayKey ?? ""}`;
+      const managed = managedByKey.get(key);
+      let existing = managed ? channelsById.get(managed.channel_id) : undefined;
+      if (!existing) {
+        const byName = findChannel(name, options?.type, options?.parentId);
+        if (byName) {
+          existing = byName;
+          await upsertManagedChannel(kind, dayKey, byName.id);
+        }
+      }
+      if (existing) {
+        if (
+          overwrites ||
+          options?.parentId !== undefined ||
+          options?.position !== undefined
+        ) {
+          const parentId =
+            options?.parentId !== undefined
+              ? options.parentId
+              : existing.parent_id ?? null;
+          const patchResult = await fetchDiscord(
+            `${DISCORD_API_BASE}/channels/${existing.id}`,
+            {
+              method: "PATCH",
+              headers: discordHeaders,
+              body: JSON.stringify({
+                name,
+                permission_overwrites: overwrites,
+                parent_id: parentId,
+                position: options?.position,
+              }),
+            },
+          );
+          if (!patchResult.ok) {
+            console.error("discord-provision: channel patch failed", patchResult);
+            warnings.push(`Impossible de mettre à jour le salon ${name}.`);
+          }
+        }
+        return { channel: existing, created: false };
+      }
+
+      const createResult = await fetchDiscord<DiscordChannel>(
+        `${DISCORD_API_BASE}/guilds/${guildId}/channels`,
+        {
+          method: "POST",
+          headers: discordHeaders,
+          body: JSON.stringify({
+            name,
+            type: options?.type ?? TEXT_CHANNEL_TYPE,
+            parent_id: options?.parentId ?? null,
+            position: options?.position,
+            permission_overwrites: overwrites,
+          }),
+        },
+      );
+      if (!createResult.ok || !createResult.data) {
+        console.error("discord-provision: channel create failed", createResult);
+        throw new Error(`Impossible de créer le salon ${name}.`);
+      }
+      channelsByName.set(name, createResult.data);
+      channelsById.set(createResult.data.id, createResult.data);
+      await upsertManagedChannel(kind, dayKey, createResult.data.id);
+      return { channel: createResult.data, created: true };
+    };
+
     const deleteCategoryAndChildren = async (name: string) => {
       const categories = channels.filter(
         (channel) => channel.name === name && channel.type === CATEGORY_TYPE,
@@ -385,6 +524,26 @@ serve(async (req) => {
       channels = refreshed.data ?? [];
       channelsByName.clear();
       channels.forEach((channel) => channelsByName.set(channel.name, channel));
+    };
+
+    const reconcileCategory = async (
+      parentId: string,
+      expectedIds: string[],
+    ) => {
+      const expectedSet = new Set(expectedIds);
+      const orphans = channels.filter(
+        (channel) =>
+          (channel.parent_id ?? null) === parentId &&
+          !expectedSet.has(channel.id),
+      );
+      await Promise.all(
+        orphans.map((channel) =>
+          fetchDiscord(`${DISCORD_API_BASE}/channels/${channel.id}`, {
+            method: "DELETE",
+            headers: discordHeaders,
+          }),
+        ),
+      );
     };
 
     const purgeManagedChannels = async () => {
@@ -447,8 +606,11 @@ serve(async (req) => {
     const hasAnyChannel = Object.values(channelConfig).some(Boolean);
     if (!hasAnyChannel && body.mode !== "reset") {
       await legacyCleanup();
-      await purgeManagedChannels();
-      await refreshChannels();
+      await Promise.all(
+        (managedRows ?? []).map((row) =>
+          deleteManagedChannel(row.kind, row.day_key),
+        ),
+      );
       return respondJson(200, { success: true, channels: [] });
     }
 
@@ -488,18 +650,28 @@ serve(async (req) => {
     };
 
     await legacyCleanup();
-    await purgeManagedChannels();
-    await refreshChannels();
 
-    const rootCategory = await ensureChannel(ROOT_CATEGORY_NAME, undefined, {
-      type: CATEGORY_TYPE,
-      position: 0,
-    });
+    const rootCategory = await ensureManagedChannel(
+      "root_category",
+      null,
+      ROOT_CATEGORY_NAME,
+      undefined,
+      {
+        type: CATEGORY_TYPE,
+        position: 0,
+      },
+    );
 
-    const inscriptionResult = await ensureChannel(INSCRIPTION_CHANNEL, undefined, {
-      parentId: rootCategory.channel.id,
-      position: 0,
-    });
+    const inscriptionResult = await ensureManagedChannel(
+      "inscription_channel",
+      null,
+      INSCRIPTION_CHANNEL,
+      undefined,
+      {
+        parentId: rootCategory.channel.id,
+        position: 0,
+      },
+    );
     if (inscriptionResult.created) {
       await postWelcomeMessage(inscriptionResult.channel.id);
     }
@@ -512,11 +684,19 @@ serve(async (req) => {
     if (channelConfig.event) {
       const dayResults = await Promise.all(
         EVENT_DAYS.map(async (day, index) => {
-          const dayCategory = await ensureChannel(day.label, privateOverwrites, {
-            type: CATEGORY_TYPE,
-            position: index + 1,
-          });
-          const dayInscription = await ensureChannel(
+          const dayCategory = await ensureManagedChannel(
+            "event_day_category",
+            day.key,
+            day.label,
+            privateOverwrites,
+            {
+              type: CATEGORY_TYPE,
+              position: index + 1,
+            },
+          );
+          const dayInscription = await ensureManagedChannel(
+            "event_inscription_channel",
+            day.key,
             EVENT_INSCRIPTION_CHANNEL,
             privateOverwrites,
             {
@@ -524,7 +704,9 @@ serve(async (req) => {
               position: 0,
             },
           );
-          const dayGroup = await ensureChannel(
+          const dayGroup = await ensureManagedChannel(
+            "event_group_channel",
+            day.key,
             EVENT_GROUP_CHANNEL,
             privateOverwrites,
             {
@@ -532,7 +714,7 @@ serve(async (req) => {
               position: 1,
             },
           );
-          return { index, dayInscription, dayGroup };
+          return { index, dayCategory, dayInscription, dayGroup };
         }),
       );
       const first = dayResults.find((result) => result.index === 0);
@@ -540,42 +722,82 @@ serve(async (req) => {
         planningResult = first.dayInscription;
         groupsResult = first.dayGroup;
       }
+      await refreshChannels();
+      await Promise.all(
+        dayResults.map((result) =>
+          reconcileCategory(result.dayCategory.channel.id, [
+            result.dayInscription.channel.id,
+            result.dayGroup.channel.id,
+          ]),
+        ),
+      );
     } else {
       await Promise.all(
-        EVENT_DAYS.map((day) => deleteCategoryAndChildren(day.label)),
+        EVENT_DAYS.map((day) => deleteManagedChannel("event_day_category", day.key)),
       );
-      await deleteChannelsByName(EVENT_INSCRIPTION_CHANNEL);
-      await deleteChannelsByName(EVENT_GROUP_CHANNEL);
+      await Promise.all(
+        EVENT_DAYS.map((day) =>
+          deleteManagedChannel("event_inscription_channel", day.key),
+        ),
+      );
+      await Promise.all(
+        EVENT_DAYS.map((day) =>
+          deleteManagedChannel("event_group_channel", day.key),
+        ),
+      );
     }
 
     let lootCategory: { channel: DiscordChannel } | null = null;
     if (channelConfig.loot || channelConfig.wishlist) {
-      lootCategory = await ensureChannel(LOOT_CATEGORY_NAME, privateOverwrites, {
-        type: CATEGORY_TYPE,
-        position: 8,
-      });
+      lootCategory = await ensureManagedChannel(
+        "loot_category",
+        null,
+        LOOT_CATEGORY_NAME,
+        privateOverwrites,
+        {
+          type: CATEGORY_TYPE,
+          position: 8,
+        },
+      );
     } else {
-      await deleteCategoryAndChildren(LOOT_CATEGORY_NAME);
+      await deleteManagedChannel("loot_category", null);
     }
 
     if (lootCategory) {
       let lootPosition = 0;
+      const expectedLootIds: string[] = [];
       if (channelConfig.wishlist) {
-        await ensureChannel(WISHLIST_CHANNEL, privateOverwrites, {
-          parentId: lootCategory.channel.id,
-          position: lootPosition++,
-        });
+        const wishlist = await ensureManagedChannel(
+          "wishlist_channel",
+          null,
+          WISHLIST_CHANNEL,
+          privateOverwrites,
+          {
+            parentId: lootCategory.channel.id,
+            position: lootPosition++,
+          },
+        );
+        expectedLootIds.push(wishlist.channel.id);
       } else {
-        await deleteChannel(WISHLIST_CHANNEL);
+        await deleteManagedChannel("wishlist_channel", null);
       }
       if (channelConfig.loot) {
-        await ensureChannel(LOOT_CHANNEL, privateOverwrites, {
-          parentId: lootCategory.channel.id,
-          position: lootPosition++,
-        });
+        const loot = await ensureManagedChannel(
+          "loot_channel",
+          null,
+          LOOT_CHANNEL,
+          privateOverwrites,
+          {
+            parentId: lootCategory.channel.id,
+            position: lootPosition++,
+          },
+        );
+        expectedLootIds.push(loot.channel.id);
       } else {
-        await deleteChannel(LOOT_CHANNEL);
+        await deleteManagedChannel("loot_channel", null);
       }
+      await refreshChannels();
+      await reconcileCategory(lootCategory.channel.id, expectedLootIds);
     }
 
     let miscCategory: { channel: DiscordChannel } | null = null;
@@ -585,41 +807,71 @@ serve(async (req) => {
       channelConfig.activity_points ||
       channelConfig.polls
     ) {
-      miscCategory = await ensureChannel(MISC_CATEGORY_NAME, privateOverwrites, {
-        type: CATEGORY_TYPE,
-        position: 9,
-      });
+      miscCategory = await ensureManagedChannel(
+        "misc_category",
+        null,
+        MISC_CATEGORY_NAME,
+        privateOverwrites,
+        {
+          type: CATEGORY_TYPE,
+          position: 9,
+        },
+      );
     } else {
-      await deleteCategoryAndChildren(MISC_CATEGORY_NAME);
+      await deleteManagedChannel("misc_category", null);
     }
 
     if (miscCategory) {
       let miscPosition = 0;
+      const expectedMiscIds: string[] = [];
       if (channelConfig.dps_meter) {
-        await ensureChannel(DPS_CHANNEL, privateOverwrites, {
-          parentId: miscCategory.channel.id,
-          position: miscPosition++,
-        });
+        const dps = await ensureManagedChannel(
+          "dps_channel",
+          null,
+          DPS_CHANNEL,
+          privateOverwrites,
+          {
+            parentId: miscCategory.channel.id,
+            position: miscPosition++,
+          },
+        );
+        expectedMiscIds.push(dps.channel.id);
       } else {
-        await deleteChannel(DPS_CHANNEL);
+        await deleteManagedChannel("dps_channel", null);
       }
       if (channelConfig.activity_points) {
-        activityChannel = await ensureChannel(ACTIVITY_CHANNEL, privateOverwrites, {
-          parentId: miscCategory.channel.id,
-          position: miscPosition++,
-        });
+        activityChannel = await ensureManagedChannel(
+          "activity_channel",
+          null,
+          ACTIVITY_CHANNEL,
+          privateOverwrites,
+          {
+            parentId: miscCategory.channel.id,
+            position: miscPosition++,
+          },
+        );
+        expectedMiscIds.push(activityChannel.channel.id);
       } else {
-        await deleteChannel(ACTIVITY_CHANNEL);
+        await deleteManagedChannel("activity_channel", null);
         activityChannel = null;
       }
       if (channelConfig.polls) {
-        await ensureChannel(POLL_CHANNEL, privateOverwrites, {
-          parentId: miscCategory.channel.id,
-          position: miscPosition++,
-        });
+        const poll = await ensureManagedChannel(
+          "poll_channel",
+          null,
+          POLL_CHANNEL,
+          privateOverwrites,
+          {
+            parentId: miscCategory.channel.id,
+            position: miscPosition++,
+          },
+        );
+        expectedMiscIds.push(poll.channel.id);
       } else {
-        await deleteChannel(POLL_CHANNEL);
+        await deleteManagedChannel("poll_channel", null);
       }
+      await refreshChannels();
+      await reconcileCategory(miscCategory.channel.id, expectedMiscIds);
     }
 
     const updatePayload = {

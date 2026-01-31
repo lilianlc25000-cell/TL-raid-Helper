@@ -18,6 +18,21 @@ let activityChannelIds = new Set<string>();
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+const ACTIVITY_CHANNEL_NAME = "⭐-points-activite";
+
+const resolveFallbackChannels = (guildIds: Set<string>) => {
+  const fallbackIds = new Set<string>();
+  client.guilds.cache.forEach((guild) => {
+    if (!guildIds.has(guild.id)) return;
+    const channel = guild.channels.cache.find(
+      (item) => item.name === ACTIVITY_CHANNEL_NAME,
+    );
+    if (channel && "id" in channel) {
+      fallbackIds.add(channel.id);
+    }
+  });
+  return fallbackIds;
+};
 
 const refreshActivityChannels = async (guildIds: Set<string>) => {
   try {
@@ -27,15 +42,18 @@ const refreshActivityChannels = async (guildIds: Set<string>) => {
       .not("activity_channel_id", "is", null);
     if (error) {
       console.error("Unable to load activity channels:", error.message);
+      activityChannelIds = resolveFallbackChannels(guildIds);
       return;
     }
     const allowed = (data ?? [])
       .filter((row) => row.discord_guild_id && guildIds.has(row.discord_guild_id))
       .map((row) => row.activity_channel_id)
       .filter(Boolean) as string[];
-    activityChannelIds = new Set(allowed);
+    activityChannelIds =
+      allowed.length > 0 ? new Set(allowed) : resolveFallbackChannels(guildIds);
   } catch (error) {
     console.error("Load activity channels error:", error);
+    activityChannelIds = resolveFallbackChannels(guildIds);
   }
 };
 
