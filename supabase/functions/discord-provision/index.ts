@@ -587,15 +587,34 @@ serve(async (req) => {
       }
     }
 
-    const { error: updateError } = await supabase
-      .from("guild_configs")
-      .update({
-        raid_channel_id: planningResult?.channel.id ?? null,
-        group_channel_id: groupsResult?.channel.id ?? null,
-        discord_member_role_id: memberRole.id,
-        activity_channel_id: activityChannel?.channel.id ?? null,
-      })
-      .eq("owner_id", authData.user.id);
+    const updatePayload = {
+      raid_channel_id: planningResult?.channel.id ?? null,
+      group_channel_id: groupsResult?.channel.id ?? null,
+      discord_member_role_id: memberRole.id,
+      activity_channel_id: activityChannel?.channel.id ?? null,
+    };
+    let updateError = (
+      await supabase
+        .from("guild_configs")
+        .update(updatePayload)
+        .eq("owner_id", authData.user.id)
+    ).error;
+    if (updateError?.code === "PGRST204") {
+      warnings.push(
+        "activity_channel_id manquant dans le schema cache, update sans ce champ.",
+      );
+      const fallbackPayload = {
+        raid_channel_id: updatePayload.raid_channel_id,
+        group_channel_id: updatePayload.group_channel_id,
+        discord_member_role_id: updatePayload.discord_member_role_id,
+      };
+      updateError = (
+        await supabase
+          .from("guild_configs")
+          .update(fallbackPayload)
+          .eq("owner_id", authData.user.id)
+      ).error;
+    }
 
     if (updateError) {
       console.error("discord-provision: db update failed", updateError);
