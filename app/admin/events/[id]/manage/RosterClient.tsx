@@ -501,7 +501,20 @@ export default function RosterClient({
     }
 
     const { data: authData } = await supabase.auth.getUser();
-    const ownerId = authData.user?.id ?? null;
+    let ownerId = authData.user?.id ?? null;
+    const { data: eventRow } = await supabase
+      .from("events")
+      .select("guild_id")
+      .eq("id", eventId)
+      .maybeSingle();
+    if (eventRow?.guild_id) {
+      const { data: guild } = await supabase
+        .from("guilds")
+        .select("owner_id")
+        .eq("id", eventRow.guild_id)
+        .maybeSingle();
+      ownerId = guild?.owner_id ?? ownerId;
+    }
     if (ownerId) {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;

@@ -248,6 +248,7 @@ export default function RaidGroupsPage() {
   const [eventTitle, setEventTitle] = useState<string>("Événement");
   const [eventStartTime, setEventStartTime] = useState<string | null>(null);
   const [eventType, setEventType] = useState<string | null>(null);
+  const [eventOwnerId, setEventOwnerId] = useState<string | null>(null);
   const [reserve, setReserve] = useState<PlayerCard[]>([]);
   const [groups, setGroups] = useState<GroupState[]>(
     Array.from({ length: 6 }, (_, index) => ({
@@ -357,12 +358,21 @@ export default function RaidGroupsPage() {
 
       const { data: event } = await supabase
         .from("events")
-        .select("title,are_groups_published,event_type,start_time")
+        .select("title,are_groups_published,event_type,start_time,guild_id")
         .eq("id", eventId)
         .maybeSingle();
       setEventTitle(event?.title ?? "Événement");
       setEventStartTime(event?.start_time ?? null);
       setEventType(event?.event_type ?? null);
+      if (event?.guild_id) {
+        const { data: guild } = await supabase
+          .from("guilds")
+          .select("owner_id")
+          .eq("id", event.guild_id)
+          .maybeSingle();
+        setEventOwnerId(guild?.owner_id ?? null);
+      }
+
       const published = Boolean(event?.are_groups_published);
       setIsPublished(published);
       setIsDirty(false);
@@ -815,7 +825,7 @@ export default function RaidGroupsPage() {
     }
 
     const { data: authData } = await supabase.auth.getUser();
-    const ownerId = authData.user?.id ?? null;
+    const ownerId = eventOwnerId ?? authData.user?.id ?? null;
     if (ownerId) {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
