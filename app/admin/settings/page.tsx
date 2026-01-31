@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import DiscordProvisionButton from "@/app/admin/settings/DiscordProvisionButton";
 import DiscordChannelManager from "@/app/admin/settings/DiscordChannelManager";
 import EligibilityCriteriaSettingsClient from "@/app/admin/settings/EligibilityCriteriaSettingsClient";
 import LootSystemSettingsClient from "@/app/admin/settings/LootSystemSettingsClient";
@@ -116,15 +115,6 @@ export default async function AdminSettingsPage() {
                   {effectiveGuildConfig.discord_guild_name ?? "Serveur Discord"}
                 </span>
               </div>
-              <DiscordProvisionButton
-                guildId={effectiveGuildConfig.discord_guild_id}
-                channelConfig={
-                  (effectiveGuildConfig.discord_channel_config as Record<
-                    string,
-                    boolean
-                  >) ?? null
-                }
-              />
               <DiscordChannelManager
                 ownerId={ownerId}
                 guildId={effectiveGuildConfig.discord_guild_id}

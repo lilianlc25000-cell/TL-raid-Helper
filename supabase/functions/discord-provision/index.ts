@@ -359,6 +359,8 @@ serve(async (req) => {
       await deleteChannel(DPS_CHANNEL);
       await deleteChannel(ACTIVITY_CHANNEL);
       await deleteChannel(POLL_CHANNEL);
+      await deleteChannel(EVENT_INSCRIPTION_CHANNEL);
+      await deleteChannel(EVENT_GROUP_CHANNEL);
       for (const day of EVENT_DAYS) {
         await deleteCategoryAndChildren(day.label);
       }
@@ -454,6 +456,8 @@ serve(async (req) => {
       for (const day of EVENT_DAYS) {
         await deleteCategoryAndChildren(day.label);
       }
+      await deleteChannel(EVENT_INSCRIPTION_CHANNEL);
+      await deleteChannel(EVENT_GROUP_CHANNEL);
     }
 
     let lootCategory: { channel: DiscordChannel } | null = null;
