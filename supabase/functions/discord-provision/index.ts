@@ -62,17 +62,27 @@ const fetchDiscord = async <T>(
 ): Promise<{ ok: true; data: T | null } | { ok: false; status: number; body: string }> => {
   const response = await fetch(url, options);
   if (response.status === 429 && attempt < 5) {
-    const retryHeader = response.headers.get("retry-after") ?? "1";
-    const retrySeconds = Number(retryHeader);
+    const retryHeader = response.headers.get("retry-after");
+    const responseText = await response.text().catch(() => "");
+    let retrySeconds = Number(retryHeader);
+    if (!Number.isFinite(retrySeconds) && responseText) {
+      try {
+        const parsed = JSON.parse(responseText) as { retry_after?: number };
+        retrySeconds = Number(parsed.retry_after);
+      } catch {
+        retrySeconds = Number.NaN;
+      }
+    }
     const waitMs = Number.isFinite(retrySeconds)
       ? Math.max(1, retrySeconds) * 1000
       : 1000;
+    console.log(`Rate Limit hit! Waiting ${waitMs}ms`);
     await sleep(waitMs);
     return fetchDiscord<T>(url, options, attempt + 1);
   }
   const responseText = await response.text().catch(() => "");
   if (!response.ok) {
-    return { ok: false, status: response.status, body: responseText };
+    throw new Error(`Discord API error ${response.status}: ${responseText}`);
   }
   if (!responseText) {
     return { ok: true, data: null };
@@ -409,7 +419,7 @@ serve(async (req) => {
       const key = `${kind}:${dayKey ?? ""}`;
       const managed = managedByKey.get(key);
       if (!managed) {
-        return;
+        return false;
       }
       const existing = channelsById.get(managed.channel_id);
       if (existing) {
@@ -429,6 +439,7 @@ serve(async (req) => {
         await deleteQuery.eq("day_key", dayKey);
       }
       managedByKey.delete(key);
+      return true;
     };
 
     const upsertManagedChannel = async (
@@ -789,17 +800,31 @@ serve(async (req) => {
       );
     } else {
       await Promise.all(
-        EVENT_DAYS.map((day) => deleteManagedChannel("event_day_category", day.key)),
+        EVENT_DAYS.map(async (day) => {
+          const deleted = await deleteManagedChannel("event_day_category", day.key);
+          if (!deleted) {
+            await deleteCategoryAndChildren(day.label);
+          }
+        }),
       );
       await Promise.all(
-        EVENT_DAYS.map((day) =>
-          deleteManagedChannel("event_inscription_channel", day.key),
-        ),
+        EVENT_DAYS.map(async (day) => {
+          const deleted = await deleteManagedChannel(
+            "event_inscription_channel",
+            day.key,
+          );
+          if (!deleted) {
+            await deleteChannelsByName(EVENT_INSCRIPTION_CHANNEL);
+          }
+        }),
       );
       await Promise.all(
-        EVENT_DAYS.map((day) =>
-          deleteManagedChannel("event_group_channel", day.key),
-        ),
+        EVENT_DAYS.map(async (day) => {
+          const deleted = await deleteManagedChannel("event_group_channel", day.key);
+          if (!deleted) {
+            await deleteChannelsByName(EVENT_GROUP_CHANNEL);
+          }
+        }),
       );
     }
 
@@ -813,7 +838,10 @@ serve(async (req) => {
         privateOverwrites,
       );
     } else {
-      await deleteManagedChannel("loot_category", null);
+      const deleted = await deleteManagedChannel("loot_category", null);
+      if (!deleted) {
+        await deleteCategoryAndChildren(LOOT_CATEGORY_NAME);
+      }
     }
 
     if (lootCategory) {
@@ -832,7 +860,14 @@ serve(async (req) => {
           ).then((res) => ({ id: res.channel.id })),
         );
       } else {
-        lootOps.push(deleteManagedChannel("wishlist_channel", null).then(() => ({})));
+        lootOps.push(
+          deleteManagedChannel("wishlist_channel", null).then((deleted) => {
+            if (!deleted) {
+              return deleteChannelsByName(WISHLIST_CHANNEL).then(() => ({}));
+            }
+            return {};
+          }),
+        );
       }
       if (channelConfig.loot) {
         lootOps.push(
@@ -848,7 +883,14 @@ serve(async (req) => {
           ).then((res) => ({ id: res.channel.id })),
         );
       } else {
-        lootOps.push(deleteManagedChannel("loot_channel", null).then(() => ({})));
+        lootOps.push(
+          deleteManagedChannel("loot_channel", null).then((deleted) => {
+            if (!deleted) {
+              return deleteChannelsByName(LOOT_CHANNEL).then(() => ({}));
+            }
+            return {};
+          }),
+        );
       }
       const lootResults = await Promise.all(lootOps);
       const expectedLootIds = lootResults
@@ -873,7 +915,10 @@ serve(async (req) => {
         privateOverwrites,
       );
     } else {
-      await deleteManagedChannel("misc_category", null);
+      const deleted = await deleteManagedChannel("misc_category", null);
+      if (!deleted) {
+        await deleteCategoryAndChildren(MISC_CATEGORY_NAME);
+      }
     }
 
     if (miscCategory) {
@@ -892,7 +937,14 @@ serve(async (req) => {
           ).then((res) => ({ id: res.channel.id, kind: "dps" })),
         );
       } else {
-        miscOps.push(deleteManagedChannel("dps_channel", null).then(() => ({})));
+        miscOps.push(
+          deleteManagedChannel("dps_channel", null).then((deleted) => {
+            if (!deleted) {
+              return deleteChannelsByName(DPS_CHANNEL).then(() => ({}));
+            }
+            return {};
+          }),
+        );
       }
       if (channelConfig.activity_points) {
         miscOps.push(
@@ -909,7 +961,12 @@ serve(async (req) => {
         );
       } else {
         miscOps.push(
-          deleteManagedChannel("activity_channel", null).then(() => ({})),
+          deleteManagedChannel("activity_channel", null).then((deleted) => {
+            if (!deleted) {
+              return deleteChannelsByName(ACTIVITY_CHANNEL).then(() => ({}));
+            }
+            return {};
+          }),
         );
       }
       if (channelConfig.polls) {
@@ -929,7 +986,14 @@ serve(async (req) => {
           ).then((res) => ({ id: res.channel.id, kind: "poll" })),
         );
       } else {
-        miscOps.push(deleteManagedChannel("poll_channel", null).then(() => ({})));
+        miscOps.push(
+          deleteManagedChannel("poll_channel", null).then((deleted) => {
+            if (!deleted) {
+              return deleteChannelsByName(POLL_CHANNEL).then(() => ({}));
+            }
+            return {};
+          }),
+        );
       }
       const miscResults = await Promise.all(miscOps);
       const expectedMiscIds = miscResults
