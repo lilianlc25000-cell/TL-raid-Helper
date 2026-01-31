@@ -262,6 +262,55 @@ serve(async (req) => {
 
     const warnings: string[] = [];
 
+    const ensureCategory = async (
+      name: string,
+      position?: number,
+      overwrites?: typeof privateOverwrites,
+    ) => {
+      const existing = channels.find(
+        (channel) => channel.name === name && channel.type === CATEGORY_TYPE,
+      );
+      if (existing?.id) {
+        return existing.id;
+      }
+      const createResult = await fetchDiscord<DiscordChannel>(
+        `${DISCORD_API_BASE}/guilds/${guildId}/channels`,
+        {
+          method: "POST",
+          headers: discordHeaders,
+          body: JSON.stringify({
+            name,
+            type: CATEGORY_TYPE,
+            position,
+            permission_overwrites: overwrites,
+          }),
+        },
+      );
+      if (!createResult.ok || !createResult.data?.id) {
+        throw new Error("CRITICAL: Category ID is missing during update loop");
+      }
+      channels.push(createResult.data);
+      channelsById.set(createResult.data.id, createResult.data);
+      channelsByName.set(createResult.data.name, createResult.data);
+      return createResult.data.id;
+    };
+
+    const ensureManagedCategory = async (
+      kind: string,
+      dayKey: string | null,
+      name: string,
+      position?: number,
+      overwrites?: typeof privateOverwrites,
+    ) => {
+      const categoryId = await ensureCategory(name, position, overwrites);
+      if (!categoryId) {
+        throw new Error("CRITICAL: Category ID is missing during update loop");
+      }
+      await upsertManagedChannel(kind, dayKey, categoryId);
+      const channel = channelsById.get(categoryId) ?? { id: categoryId, name };
+      return { channel, created: false };
+    };
+
     const ensureChannel = async (
       name: string,
       overwrites?: typeof privateOverwrites,
@@ -436,6 +485,12 @@ serve(async (req) => {
           ) {
             throw new Error("Category ID missing");
           }
+          console.log(
+            "Updating channel",
+            existing.id,
+            "into parent",
+            parentId,
+          );
           const patchResult = await fetchDiscord(
             `${DISCORD_API_BASE}/channels/${existing.id}`,
             {
@@ -657,15 +712,11 @@ serve(async (req) => {
 
     await legacyCleanup();
 
-    const rootCategory = await ensureManagedChannel(
+    const rootCategory = await ensureManagedCategory(
       "root_category",
       null,
       ROOT_CATEGORY_NAME,
-      undefined,
-      {
-        type: CATEGORY_TYPE,
-        position: 0,
-      },
+      0,
     );
 
     const inscriptionResult = await ensureManagedChannel(
@@ -690,15 +741,12 @@ serve(async (req) => {
     if (channelConfig.event) {
       const dayResults = await Promise.all(
         EVENT_DAYS.map(async (day, index) => {
-          const dayCategory = await ensureManagedChannel(
+          const dayCategory = await ensureManagedCategory(
             "event_day_category",
             day.key,
             day.label,
+            index + 1,
             privateOverwrites,
-            {
-              type: CATEGORY_TYPE,
-              position: index + 1,
-            },
           );
           const dayInscription = await ensureManagedChannel(
             "event_inscription_channel",
@@ -755,15 +803,12 @@ serve(async (req) => {
 
     let lootCategory: { channel: DiscordChannel } | null = null;
     if (channelConfig.loot || channelConfig.wishlist) {
-      lootCategory = await ensureManagedChannel(
+      lootCategory = await ensureManagedCategory(
         "loot_category",
         null,
         LOOT_CATEGORY_NAME,
+        8,
         privateOverwrites,
-        {
-          type: CATEGORY_TYPE,
-          position: 8,
-        },
       );
     } else {
       await deleteManagedChannel("loot_category", null);
@@ -813,15 +858,12 @@ serve(async (req) => {
       channelConfig.activity_points ||
       channelConfig.polls
     ) {
-      miscCategory = await ensureManagedChannel(
+      miscCategory = await ensureManagedCategory(
         "misc_category",
         null,
         MISC_CATEGORY_NAME,
+        9,
         privateOverwrites,
-        {
-          type: CATEGORY_TYPE,
-          position: 9,
-        },
       );
     } else {
       await deleteManagedChannel("misc_category", null);
