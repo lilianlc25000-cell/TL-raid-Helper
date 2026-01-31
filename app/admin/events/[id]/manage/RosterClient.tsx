@@ -35,6 +35,8 @@ type RosterClientProps = {
   signups: SignupEntry[];
 };
 
+type ContentType = "PVE" | "PVP";
+
 const roleStyles: Record<string, string> = {
   tank: "border-sky-500/50 bg-sky-500/10 text-sky-200",
   heal: "border-emerald-500/50 bg-emerald-500/10 text-emerald-200",
@@ -154,6 +156,69 @@ const getClassName = (mainWeapon: string | null, offWeapon: string | null) => {
   return `${mainWeapon} / ${offWeapon}`;
 };
 
+const EVENT_TYPES_BY_CONTENT: Record<ContentType, string[]> = {
+  PVE: ["Raid de Guilde", "Calanthia"],
+  PVP: ["Pierre de Faille", "Château", "War Game", "Taxe"],
+};
+
+const getContentTypeFromEvent = (eventType: string | null): ContentType | null => {
+  if (!eventType) return null;
+  if (EVENT_TYPES_BY_CONTENT.PVE.includes(eventType)) return "PVE";
+  if (EVENT_TYPES_BY_CONTENT.PVP.includes(eventType)) return "PVP";
+  return null;
+};
+
+const PARIS_TIME_ZONE = "Europe/Paris";
+
+const getTimeZoneOffsetMinutes = (date: Date, timeZone: string) => {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const parts = formatter.formatToParts(date);
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+  const asUtc = Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour),
+    Number(values.minute),
+    Number(values.second),
+  );
+  return (asUtc - date.getTime()) / 60000;
+};
+
+const parseParisDateTime = (value: string) => {
+  const [datePart, timePart] = value.split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+  const baseUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+  const offsetMinutes = getTimeZoneOffsetMinutes(baseUtc, PARIS_TIME_ZONE);
+  return new Date(baseUtc.getTime() - offsetMinutes * 60000);
+};
+
+const formatParisInput = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const formatter = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: PARIS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return formatter.format(date).replace(" ", "T");
+};
+
 export default function RosterClient({
   eventId,
   eventTitle,
@@ -169,13 +234,30 @@ export default function RosterClient({
   const [roleUpdatingUserId, setRoleUpdatingUserId] = useState<string | null>(
     null,
   );
+  const [localEventTitle, setLocalEventTitle] = useState(eventTitle);
+  const [localEventType, setLocalEventType] = useState<string | null>(eventType);
+  const [localEventStartTime, setLocalEventStartTime] =
+    useState(eventStartTime);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState(eventTitle);
+  const [editDateTime, setEditDateTime] = useState(
+    formatParisInput(eventStartTime),
+  );
+  const [editContentType, setEditContentType] = useState<ContentType | null>(
+    getContentTypeFromEvent(eventType),
+  );
+  const [editEventType, setEditEventType] = useState(
+    eventType ??
+      EVENT_TYPES_BY_CONTENT[getContentTypeFromEvent(eventType) ?? "PVE"][0],
+  );
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const managePve = usePermission("manage_pve");
   const managePvp = usePermission("manage_pvp");
-  const isPveEvent = eventType
-    ? ["Raid de Guilde", "Calanthia"].includes(eventType)
+  const isPveEvent = localEventType
+    ? ["Raid de Guilde", "Calanthia"].includes(localEventType)
     : false;
-  const isPvpEvent = eventType
-    ? ["Pierre de Faille", "Château", "War Game", "Taxe"].includes(eventType)
+  const isPvpEvent = localEventType
+    ? ["Pierre de Faille", "Château", "War Game", "Taxe"].includes(localEventType)
     : false;
   const permissionsReady = !managePve.loading && !managePvp.loading;
   const canManageEvent =
@@ -187,6 +269,55 @@ export default function RosterClient({
   useEffect(() => {
     setLocalSignups(signups);
   }, [signups]);
+
+  useEffect(() => {
+    setLocalEventTitle(eventTitle);
+    setLocalEventType(eventType);
+    setLocalEventStartTime(eventStartTime);
+  }, [eventTitle, eventType, eventStartTime]);
+
+  const openEditModal = () => {
+    setEditTitle(localEventTitle);
+    setEditDateTime(formatParisInput(localEventStartTime));
+    const contentType = getContentTypeFromEvent(localEventType);
+    setEditContentType(contentType);
+    const fallbackContent = contentType ?? "PVE";
+    setEditEventType(
+      localEventType ?? EVENT_TYPES_BY_CONTENT[fallbackContent][0],
+    );
+    setIsEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editTitle.trim() || !editDateTime || !editEventType) {
+      return;
+    }
+    const supabase = createClient();
+    if (!supabase) {
+      setActionError("Supabase n'est pas configuré (URL / ANON KEY).");
+      return;
+    }
+    setIsSavingEdit(true);
+    setActionError(null);
+    const startTime = parseParisDateTime(editDateTime).toISOString();
+    const { error } = await supabase
+      .from("events")
+      .update({
+        title: editTitle.trim(),
+        event_type: editEventType,
+        start_time: startTime,
+      })
+      .eq("id", eventId);
+    setIsSavingEdit(false);
+    if (error) {
+      setActionError(error.message || "Impossible de modifier l'événement.");
+      return;
+    }
+    setLocalEventTitle(editTitle.trim());
+    setLocalEventType(editEventType);
+    setLocalEventStartTime(startTime);
+    setIsEditOpen(false);
+  };
 
   const loadSignups = useCallback(async () => {
     const supabase = createClient();
@@ -241,20 +372,20 @@ export default function RosterClient({
   }, [localSignups]);
 
   const formattedEventDate = useMemo(() => {
-    const date = new Date(eventStartTime);
+    const date = new Date(localEventStartTime);
     if (Number.isNaN(date.getTime())) {
       return "Date inconnue";
     }
     return date.toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
-  }, [eventStartTime]);
+  }, [localEventStartTime]);
 
   const eventTimestamp = useMemo(() => {
-    const date = new Date(eventStartTime);
+    const date = new Date(localEventStartTime);
     if (Number.isNaN(date.getTime())) {
       return null;
     }
     return Math.floor(date.getTime() / 1000);
-  }, [eventStartTime]);
+  }, [localEventStartTime]);
 
   const handleAssignRole = async (userId: string, role: string | null) => {
     const supabase = createClient();
@@ -347,7 +478,7 @@ export default function RosterClient({
         notifyIds.map((player) => ({
           user_id: player.user_id,
           type: "raid_groups_published",
-          message: `Les groupes de "${eventTitle}" sont désormais disponibles.`,
+        message: `Les groupes de "${localEventTitle}" sont désormais disponibles.`,
           is_read: false,
         })),
       );
@@ -442,7 +573,7 @@ export default function RosterClient({
             body: {
               channel_id: targetChannelId,
               embed: {
-                title: `⚔️ Roster Confirmé : ${eventTitle}`,
+                title: `⚔️ Roster Confirmé : ${localEventTitle}`,
                 description: `${
                   eventTimestamp
                     ? `Raid prévu le <t:${eventTimestamp}:F>`
@@ -482,7 +613,7 @@ export default function RosterClient({
           Gérer l&apos;événement
         </p>
         <h1 className="mt-2 font-display text-3xl tracking-[0.15em] text-text">
-          {eventTitle}
+          {localEventTitle}
         </h1>
         <p className="mt-2 text-sm text-text/60">
           Liste complète des inscrits avec classe, rôle et armes.
@@ -646,6 +777,13 @@ export default function RosterClient({
             </div>
           ) : canManageEvent ? (
             <>
+              <button
+                type="button"
+                onClick={openEditModal}
+                className="w-full rounded-full border border-white/10 bg-black/30 px-5 py-3 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:border-white/30 hover:text-text"
+              >
+                Modifier l&apos;événement
+              </button>
               <Link
                 href={`/admin/events/${eventId}/groups`}
                 className="block rounded-full border border-amber-400/60 bg-amber-400/10 px-5 py-3 text-center text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
@@ -658,14 +796,6 @@ export default function RosterClient({
               >
                 Clôturer l&apos;event
               </Link>
-              <button
-                type="button"
-                onClick={handlePublishGroups}
-                disabled={isPublishing}
-                className="w-full rounded-full border border-sky-400/60 bg-sky-500/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-sky-200 transition hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isPublishing ? "Publication..." : "Publier les groupes"}
-              </button>
             </>
           ) : (
             <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
@@ -674,6 +804,120 @@ export default function RosterClient({
           )}
         </div>
       </section>
+      {isEditOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-surface/95 p-6 shadow-[0_0_40px_rgba(0,0,0,0.6)] backdrop-blur">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-text/50">
+                  Modifier l&apos;événement
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-text">
+                  Mettre à jour le raid
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditOpen(false)}
+                className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:text-text"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4">
+              <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-text/50">
+                  Contenu
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {(["PVE", "PVP"] as ContentType[]).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => {
+                        setEditContentType(type);
+                        if (!EVENT_TYPES_BY_CONTENT[type].includes(editEventType)) {
+                          setEditEventType(EVENT_TYPES_BY_CONTENT[type][0]);
+                        }
+                      }}
+                      className={[
+                        "rounded-2xl border px-4 py-4 text-left text-sm uppercase tracking-[0.25em] transition",
+                        editContentType === type
+                          ? "border-amber-400/70 bg-amber-400/10 text-amber-100"
+                          : "border-white/10 bg-black/40 text-text/70 hover:border-white/20",
+                      ].join(" ")}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                <span className="text-xs uppercase tracking-[0.25em] text-text/50">
+                  Type
+                </span>
+                <select
+                  value={editEventType}
+                  onChange={(event) => setEditEventType(event.target.value)}
+                  className="bg-transparent text-sm text-text outline-none"
+                >
+                  {(editContentType
+                    ? EVENT_TYPES_BY_CONTENT[editContentType]
+                    : Object.values(EVENT_TYPES_BY_CONTENT).flat()
+                  ).map((type) => (
+                    <option key={type} value={type} className="text-black">
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                <span className="text-xs uppercase tracking-[0.25em] text-text/50">
+                  Titre
+                </span>
+                <input
+                  value={editTitle}
+                  onChange={(event) => setEditTitle(event.target.value)}
+                  className="bg-transparent text-sm text-text outline-none"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                <span className="text-xs uppercase tracking-[0.25em] text-text/50">
+                  Date &amp; Heure (Paris)
+                </span>
+                <input
+                  type="datetime-local"
+                  value={editDateTime}
+                  onChange={(event) => setEditDateTime(event.target.value)}
+                  className="bg-transparent text-sm text-text outline-none"
+                />
+              </label>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsEditOpen(false)}
+                className="rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:text-text"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit || !editTitle.trim() || !editDateTime}
+                className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-200 transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSavingEdit ? "Enregistrement..." : "Enregistrer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

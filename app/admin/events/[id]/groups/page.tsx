@@ -23,6 +23,9 @@ type PlayerCard = {
   assignedRole: string | null;
   mainWeapon: string | null;
   offWeapon: string | null;
+  archetype: string | null;
+  gearScore: number | null;
+  contentType: string | null;
   status: "present" | "tentative" | "bench" | "absent";
   groupIndex: number | null;
 };
@@ -34,6 +37,8 @@ type PlayerBuild = {
   archetype: string | null;
   mainWeapon: string | null;
   offWeapon: string | null;
+  contentType: string | null;
+  gearScore: number | null;
 };
 
 type GroupState = {
@@ -57,6 +62,8 @@ const EVENT_IMAGE_BY_TYPE: Record<string, string> = {
   chateau:
     "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Chateau.png",
   pierrefaille:
+    "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Pierre_de_faille.png",
+  pierredefaille:
     "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Pierre_de_faille.png",
   raiddeguilde:
     "https://dyfveohlpzjqanhazmet.supabase.co/storage/v1/object/public/discord-assets/Raid_de_guilde.png",
@@ -153,14 +160,6 @@ const getRoleAccent = (role: string | null) => {
   return "from-zinc-500/30 via-transparent to-transparent";
 };
 
-const getStatusLabel = (status: PlayerCard["status"]) => {
-  if (status === "present") return "Présent";
-  if (status === "tentative") return "Tentative";
-  if (status === "bench") return "Banc";
-  if (status === "absent") return "Absent";
-  return "Inconnu";
-};
-
 const getRoleBucket = (role: string | null) => {
   if (!role) return "dps";
   const normalized = role.toLowerCase();
@@ -168,6 +167,17 @@ const getRoleBucket = (role: string | null) => {
   if (normalized.includes("heal") || normalized.includes("soin")) return "heal";
   if (normalized.includes("dps")) return "dps";
   return "dps";
+};
+
+const sortPlayersByRole = (players: PlayerCard[]) => {
+  const order: Record<string, number> = { tank: 0, dps: 1, heal: 2 };
+  return [...players].sort((a, b) => {
+    const aBucket = getRoleBucket(getEffectiveRole(a));
+    const bBucket = getRoleBucket(getEffectiveRole(b));
+    const orderDelta = order[aBucket] - order[bBucket];
+    if (orderDelta !== 0) return orderDelta;
+    return a.ingameName.localeCompare(b.ingameName, "fr");
+  });
 };
 
 const getWeaponIcon = (weaponName?: string | null) => {
@@ -251,12 +261,12 @@ export default function RaidGroupsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [roleEditMode, setRoleEditMode] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<
     "present" | "tentative" | "bench" | "absent"
   >("present");
   const [roleEditPlayer, setRoleEditPlayer] = useState<PlayerCard | null>(null);
+  const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
   const [roleUpdatingUserId, setRoleUpdatingUserId] = useState<string | null>(
     null,
   );
@@ -360,7 +370,7 @@ export default function RaidGroupsPage() {
       const { data, error } = (await supabase
         .from("event_signups")
         .select(
-        "user_id,status,assigned_role,group_index,selected_build_id,profiles(ingame_name,role,main_weapon,off_weapon),player_builds(id,build_name,role,archetype,main_weapon,off_weapon)",
+        "user_id,status,assigned_role,group_index,selected_build_id,profiles(ingame_name,role,archetype,main_weapon,off_weapon,gear_score),player_builds(id,build_name,role,archetype,main_weapon,off_weapon,content_type,gear_score)",
         )
         .eq("event_id", eventId)
         .in("status", ["present", "tentative", "bench", "absent"])) as {
@@ -374,8 +384,10 @@ export default function RaidGroupsPage() {
               profiles: {
                 ingame_name: string;
                 role: string | null;
+                archetype: string | null;
                 main_weapon: string | null;
                 off_weapon: string | null;
+                gear_score: number | null;
               } | null;
               player_builds: {
                 id: string;
@@ -384,6 +396,8 @@ export default function RaidGroupsPage() {
                 archetype: string | null;
                 main_weapon: string | null;
                 off_weapon: string | null;
+                content_type: string | null;
+                gear_score: number | null;
               } | null;
             }>
           | null;
@@ -423,6 +437,9 @@ export default function RaidGroupsPage() {
         assignedRole: entry.assigned_role ?? null,
           mainWeapon: build?.main_weapon ?? profile?.main_weapon ?? null,
           offWeapon: build?.off_weapon ?? profile?.off_weapon ?? null,
+          archetype: build?.archetype ?? profile?.archetype ?? null,
+          gearScore: build?.gear_score ?? profile?.gear_score ?? null,
+          contentType: build?.content_type ?? null,
           status: entry.status,
           groupIndex: entry.group_index,
         };
@@ -437,7 +454,9 @@ export default function RaidGroupsPage() {
     if (userIds.size > 0) {
       const { data: builds } = await supabase
         .from("player_builds")
-        .select("id,user_id,build_name,role,archetype,main_weapon,off_weapon")
+        .select(
+          "id,user_id,build_name,role,archetype,main_weapon,off_weapon,content_type,gear_score",
+        )
         .in("user_id", Array.from(userIds));
       const nextBuilds = new Map<string, PlayerBuild[]>();
       (builds ?? []).forEach((build) => {
@@ -449,6 +468,8 @@ export default function RaidGroupsPage() {
           archetype: build.archetype ?? null,
           mainWeapon: build.main_weapon ?? null,
           offWeapon: build.off_weapon ?? null,
+          contentType: build.content_type ?? null,
+          gearScore: build.gear_score ?? null,
         });
         nextBuilds.set(build.user_id, list);
       });
@@ -539,14 +560,11 @@ export default function RaidGroupsPage() {
   };
 
   const handleSelect = (player: PlayerCard) => {
-    if (roleEditMode) {
-      setRoleEditPlayer(player);
-      return;
-    }
     setSelectedPlayer((current) =>
       current?.userId === player.userId ? null : player,
     );
     setGroupPickerId(null);
+    setIsGroupMenuOpen(false);
     setActionError(null);
   };
 
@@ -559,11 +577,20 @@ export default function RaidGroupsPage() {
     markDirty();
     setSelectedPlayer(null);
     setGroupPickerId(null);
+    setIsGroupMenuOpen(false);
   };
 
   const moveToGroup = (groupId: number) => {
     if (!selectedPlayer) {
       setActionError("Sélectionnez d'abord un joueur.");
+      return;
+    }
+    const targetGroup = groups.find((group) => group.id === groupId);
+    const alreadyInGroup = targetGroup?.players.some(
+      (player) => player.userId === selectedPlayer.userId,
+    );
+    if (targetGroup && targetGroup.players.length >= GROUP_SIZE && !alreadyInGroup) {
+      setActionError("Le groupe est complet (6 joueurs).");
       return;
     }
     setActionError(null);
@@ -588,9 +615,18 @@ export default function RaidGroupsPage() {
     markDirty();
     setSelectedPlayer(null);
     setGroupPickerId(null);
+    setIsGroupMenuOpen(false);
   };
 
   const movePlayerToGroup = (player: PlayerCard, groupId: number) => {
+    const targetGroup = groups.find((group) => group.id === groupId);
+    const alreadyInGroup = targetGroup?.players.some(
+      (member) => member.userId === player.userId,
+    );
+    if (targetGroup && targetGroup.players.length >= GROUP_SIZE && !alreadyInGroup) {
+      setActionError("Le groupe est complet (6 joueurs).");
+      return;
+    }
     setActionError(null);
     removeFromGroups(player.userId);
     setReserve((prev) => prev.filter((item) => item.userId !== player.userId));
@@ -611,6 +647,7 @@ export default function RaidGroupsPage() {
     markDirty();
     setSelectedPlayer(null);
     setGroupPickerId(null);
+    setIsGroupMenuOpen(false);
   };
 
   const handleAssignRole = async (player: PlayerCard, role: string | null) => {
@@ -946,14 +983,14 @@ export default function RaidGroupsPage() {
         <div className="absolute left-[-10%] bottom-[-20%] h-[480px] w-[480px] rounded-full bg-sky-500/10 blur-[150px] cinematic-glow" />
       </div>
       <section className="relative mx-auto w-full max-w-6xl space-y-6">
-        <header className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.18),_rgba(0,0,0,0.8))] px-6 py-6 shadow-[0_0_45px_rgba(0,0,0,0.45)] backdrop-blur sm:px-10">
+        <header className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.18),_rgba(0,0,0,0.8))] px-6 py-6 text-center shadow-[0_0_45px_rgba(0,0,0,0.45)] backdrop-blur sm:px-10">
           <div className="pointer-events-none absolute inset-0 border border-white/10 opacity-60" />
           <div className="pointer-events-none absolute -right-24 top-[-120px] h-64 w-64 rounded-full bg-amber-400/10 blur-[110px] cinematic-glow" />
           <div className="pointer-events-none absolute -left-16 bottom-[-120px] h-56 w-56 rounded-full bg-emerald-400/10 blur-[90px] cinematic-drift" />
           <div className="pointer-events-none absolute inset-0 cinematic-scan" />
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_55%,_rgba(0,0,0,0.85))]" />
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div className="space-y-3">
+          <div className="flex flex-col items-center gap-6">
+            <div className="space-y-3 text-center">
               <p className="text-xs uppercase tracking-[0.35em] text-emerald-300/70">
                 Centre de commandement
               </p>
@@ -971,33 +1008,16 @@ export default function RaidGroupsPage() {
                 </span>
               </div>
               <p className="text-sm text-text/60">
-                {roleEditMode
-                  ? "Cliquez sur un joueur pour ajuster son rôle."
-                  : "Glissez les joueurs pour composer des escouades équilibrées."}
+                Glissez les joueurs pour composer des escouades équilibrées.
               </p>
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRoleEditMode((prev) => !prev);
-                    setRoleEditPlayer(null);
-                    setSelectedPlayer(null);
-                  }}
-                  className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.25em] transition ${
-                    roleEditMode
-                      ? "border-amber-400/70 bg-amber-400/10 text-amber-200"
-                      : "border-white/10 bg-black/40 text-text/70 hover:border-white/30"
-                  }`}
-                >
-                  Modifier le rôle
-                </button>
+              <div className="flex flex-wrap items-center justify-center gap-3">
                 <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-emerald-200">
                   {assignedCount}/{allPlayers.length} assignés
                 </span>
               </div>
             </div>
               {eventImageUrl ? (
-                <div className="flex justify-end">
+                <div className="flex justify-center">
                   <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/40 p-1 transition duration-700 hover:scale-[1.02] hover:border-white/30">
                     <Image
                       src={eventImageUrl}
@@ -1050,17 +1070,26 @@ export default function RaidGroupsPage() {
             </div>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-text/50">
-          <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-sky-200">
+        <div className="flex flex-wrap items-center gap-3 text-[10px] uppercase tracking-[0.2em] text-text/50">
+          <span className="inline-flex items-center gap-2 rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-sky-200">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-500/30 text-[10px] text-sky-100">
+              T
+            </span>
             Tank
           </span>
-          <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-emerald-200">
+          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-emerald-200">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/30 text-[10px] text-emerald-100">
+              H
+            </span>
             Heal
           </span>
-          <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-red-200">
+          <span className="inline-flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1 text-red-200">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500/30 text-[10px] text-red-100">
+              D
+            </span>
             DPS
           </span>
-          <span className="ml-2 text-[10px] text-text/40">
+          <span className="text-[10px] text-text/40">
             Drag & drop pour équilibrer
           </span>
         </div>
@@ -1167,6 +1196,7 @@ export default function RaidGroupsPage() {
                     player={player}
                     selected={selectedPlayer?.userId === player.userId}
                     onSelect={() => handleSelect(player)}
+                    groupCount={groups.length}
                     showGroupPicker={groupPickerId === player.userId}
                     onToggleGroupPicker={() =>
                       setGroupPickerId((prev) =>
@@ -1196,15 +1226,26 @@ export default function RaidGroupsPage() {
                     {selectedPlayer ? selectedPlayer.ingameName : "Aucun joueur"}
                   </div>
                 </div>
-                {selectedPlayer ? (
-                  <button
-                    type="button"
-                    onClick={() => moveToReserve(selectedPlayer)}
-                    className="rounded-full border border-sky-400/50 bg-sky-400/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-sky-200 transition hover:border-sky-300"
-                  >
-                    Mettre en réserve
-                  </button>
-                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  {selectedPlayer ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setRoleEditPlayer(selectedPlayer)}
+                        className="rounded-full border border-amber-400/50 bg-amber-400/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300"
+                      >
+                        Modifier le rôle
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveToReserve(selectedPlayer)}
+                        className="rounded-full border border-sky-400/50 bg-sky-400/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-sky-200 transition hover:border-sky-300"
+                      >
+                        Mettre en réserve
+                      </button>
+                    </>
+                  ) : null}
+                </div>
               </div>
               {selectedPlayer ? (
                 <div className="mt-3 space-y-3">
@@ -1216,34 +1257,93 @@ export default function RaidGroupsPage() {
                     >
                       {getRoleLabel(getEffectiveRole(selectedPlayer))}
                     </span>
-                    <span className="rounded-full border border-white/10 bg-black/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-text/50">
-                      {getStatusLabel(selectedPlayer.status)}
-                    </span>
                     <span className="text-[10px] uppercase tracking-[0.2em] text-text/40">
                       {selectedPlayer.mainWeapon ?? "Arme principale ?"} ·{" "}
                       {selectedPlayer.offWeapon ?? "Arme secondaire ?"}
                     </span>
+                    <span className="rounded-full border border-white/10 bg-black/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-text/50">
+                      Classe: {selectedPlayer.mainWeapon && selectedPlayer.offWeapon
+                        ? `${selectedPlayer.mainWeapon} / ${selectedPlayer.offWeapon}`
+                        : "Inconnue"}
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-black/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-text/50">
+                      GS: {selectedPlayer.gearScore ?? "?"}
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-black/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-text/50">
+                      Sous-classe: {selectedPlayer.archetype ?? "?"}
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-black/40 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-text/50">
+                      Stuff: {selectedPlayer.contentType?.toUpperCase() ?? "?"}
+                    </span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {Array.from({ length: 6 }, (_, index) => index + 1).map(
-                      (groupId) => (
-                        <button
-                          key={groupId}
-                          type="button"
-                          onClick={() => moveToGroup(groupId)}
-                          className="rounded-full border border-amber-400/50 bg-amber-400/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300"
-                        >
-                          Placer en G{groupId}
-                        </button>
-                      ),
-                    )}
-                  </div>
+                  {!isGroupMenuOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsGroupMenuOpen(true)}
+                      className="rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-300"
+                    >
+                      Changer de groupe
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        {Array.from({ length: groups.length }, (_, index) => index + 1).map(
+                          (groupId) => {
+                            const targetGroup = groups.find(
+                              (group) => group.id === groupId,
+                            );
+                            const isFull =
+                              targetGroup &&
+                              targetGroup.players.length >= GROUP_SIZE &&
+                              targetGroup.players.every(
+                                (player) => player.userId !== selectedPlayer.userId,
+                              );
+                            return (
+                              <button
+                                key={groupId}
+                                type="button"
+                                onClick={() => moveToGroup(groupId)}
+                                disabled={isFull}
+                                className="rounded-full border border-amber-400/50 bg-amber-400/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                G{groupId}
+                              </button>
+                            );
+                          },
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsGroupMenuOpen(false)}
+                        className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-text/60 transition hover:border-white/30"
+                      >
+                        Retour
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="mt-3 text-xs text-text/50">
                   Cliquez sur un joueur pour afficher les actions rapides.
                 </p>
               )}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs uppercase tracking-[0.3em] text-text/50">
+                Groupes
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setGroups((prev) => [
+                    ...prev,
+                    { id: prev.length + 1, players: [] },
+                  ])
+                }
+                className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-text/60 transition hover:border-white/30"
+              >
+                Ajouter un groupe
+              </button>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {groups.map((group) => (
@@ -1294,54 +1394,19 @@ export default function RaidGroupsPage() {
                       }}
                     />
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-text/50">
-                    {(() => {
-                      const counts = group.players.reduce(
-                        (acc, player) => {
-                          const bucket = getRoleBucket(getEffectiveRole(player));
-                          acc[bucket] += 1;
-                          return acc;
-                        },
-                        { tank: 0, heal: 0, dps: 0 },
-                      );
-                      return [
-                        {
-                          label: `Tank ${counts.tank}`,
-                          className:
-                            "border-sky-500/40 bg-sky-500/10 text-sky-200",
-                        },
-                        {
-                          label: `Heal ${counts.heal}`,
-                          className:
-                            "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
-                        },
-                        {
-                          label: `DPS ${counts.dps}`,
-                          className:
-                            "border-red-500/40 bg-red-500/10 text-red-200",
-                        },
-                      ];
-                    })().map((chip) => (
-                      <span
-                        key={chip.label}
-                        className={`rounded-full border px-2 py-0.5 ${chip.className}`}
-                      >
-                        {chip.label}
-                      </span>
-                    ))}
-                  </div>
                   <div className="mt-4 space-y-3">
                     {group.players.length === 0 ? (
                       <div className="rounded-2xl border border-white/10 bg-black/40 px-3 py-4 text-xs text-text/60">
                         Aucun joueur assigné.
                       </div>
                     ) : (
-                      group.players.map((player) => (
+                      sortPlayersByRole(group.players).map((player) => (
                         <PlayerCard
                           key={player.userId}
                           player={player}
                           selected={selectedPlayer?.userId === player.userId}
                           onSelect={() => handleSelect(player)}
+                          groupCount={groups.length}
                           onDragStart={(event) => {
                             event.dataTransfer.setData(
                               "text/plain",
@@ -1479,6 +1544,7 @@ type PlayerCardProps = {
   player: PlayerCard;
   selected: boolean;
   onSelect: () => void;
+  groupCount: number;
   showGroupPicker?: boolean;
   onToggleGroupPicker?: () => void;
   onAssignGroup?: (groupId: number) => void;
@@ -1490,6 +1556,7 @@ function PlayerCard({
   player,
   selected,
   onSelect,
+  groupCount,
   showGroupPicker,
   onToggleGroupPicker,
   onAssignGroup,
@@ -1545,9 +1612,6 @@ function PlayerCard({
                 👮
               </span>
             ) : null}
-          </span>
-          <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-            {getStatusLabel(player.status)}
           </span>
         </div>
       </div>
@@ -1606,7 +1670,7 @@ function PlayerCard({
             </button>
             {showGroupPicker ? (
               <div className="absolute right-0 top-full z-10 mt-2 grid w-40 grid-cols-3 gap-2 rounded-xl border border-zinc-800 bg-zinc-950 p-2 shadow-[0_0_20px_rgba(0,0,0,0.4)]">
-                {Array.from({ length: 6 }, (_, index) => index + 1).map(
+                {Array.from({ length: groupCount }, (_, index) => index + 1).map(
                   (groupId) => (
                     <button
                       key={groupId}

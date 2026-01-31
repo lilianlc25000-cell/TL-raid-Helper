@@ -36,8 +36,18 @@ serve(async (req) => {
     const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
     const authHeader = req.headers.get("Authorization") ?? "";
 
-    if (!supabaseUrl || !supabaseAnonKey || !openAiKey) {
-      return respondJson(500, { error: "Missing server configuration." });
+    const missingConfig = [
+      !supabaseUrl ? "SUPABASE_URL" : null,
+      !supabaseAnonKey ? "SUPABASE_ANON_KEY" : null,
+      !serviceRoleKey ? "SUPABASE_SERVICE_ROLE_KEY" : null,
+      !openAiKey ? "OPENAI_API_KEY" : null,
+    ].filter(Boolean);
+    if (missingConfig.length > 0) {
+      console.error("activity-ocr: missing config", missingConfig);
+      return respondJson(500, {
+        error: "Missing server configuration.",
+        missing: missingConfig,
+      });
     }
 
     const body = (await req.json().catch(() => ({}))) as {
@@ -118,8 +128,7 @@ serve(async (req) => {
       return respondJson(401, { error: "Missing user_id." });
     }
 
-    const supabaseWriteKey = serviceRoleKey || supabaseAnonKey;
-    const supabaseWrite = createClient(supabaseUrl, supabaseWriteKey, {
+    const supabaseWrite = createClient(supabaseUrl, serviceRoleKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
@@ -132,7 +141,10 @@ serve(async (req) => {
       .eq("user_id", resolvedUserId);
     if (updateError) {
       console.error("activity-ocr: update error", updateError);
-      return respondJson(500, { error: "Unable to update profile." });
+      return respondJson(500, {
+        error: "Unable to update profile.",
+        details: updateError.message,
+      });
     }
 
     if (resolvedGuildId) {
