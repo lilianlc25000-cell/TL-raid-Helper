@@ -267,6 +267,11 @@ export default function ProfilePage() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastVariant, setToastVariant] = useState<"success" | "error">(
+    "success",
+  );
+  const [toastAction, setToastAction] = useState<"retry_grant" | null>(null);
+  const [isGrantingRole, setIsGrantingRole] = useState(false);
   const [builds, setBuilds] = useState<BuildEntry[]>([]);
   const [buildWeapon1, setBuildWeapon1] = useState("");
   const [buildWeapon2, setBuildWeapon2] = useState("");
@@ -302,6 +307,7 @@ export default function ProfilePage() {
   );
   const rollChannelRef = useRef<BroadcastChannel | null>(null);
   const didAutoApplyMainBuild = useRef(false);
+  const lastProfileSaveRef = useRef(0);
   const playerName = name || "Mozorh";
   const isProfileValid =
     Boolean(name.trim());
@@ -506,7 +512,11 @@ export default function ProfilePage() {
     if (!toastMessage) {
       return;
     }
-    const timer = window.setTimeout(() => setToastMessage(null), 3200);
+    const timer = window.setTimeout(() => {
+      setToastMessage(null);
+      setToastAction(null);
+      setToastVariant("success");
+    }, 3200);
     return () => window.clearTimeout(timer);
   }, [toastMessage]);
 
@@ -562,11 +572,55 @@ export default function ProfilePage() {
     };
   }, [userId, weapon1, weapon2, role]);
 
+  const attemptGrantRole = async () => {
+    const supabase = createClient();
+    if (!supabase) {
+      return false;
+    }
+    setIsGrantingRole(true);
+    let lastError: string | null = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const { error: grantError } = await supabase.functions.invoke(
+        "discord-grant-role",
+        {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        },
+      );
+      if (!grantError) {
+        setIsGrantingRole(false);
+        return true;
+      }
+      lastError = grantError.message;
+      if (grantError.message?.includes("Compte Discord non lié")) {
+        break;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, 1500 * (attempt + 1)),
+      );
+    }
+    setIsGrantingRole(false);
+    if (lastError) {
+      setToastVariant("error");
+      setToastAction("retry_grant");
+      setToastMessage(
+        "Impossible d'attribuer le rôle Discord pour le moment.",
+      );
+    }
+    return false;
+  };
+
   const handleSaveProfile = async () => {
     if (!userId) {
       setProfileError("Veuillez vous connecter pour sauvegarder votre profil.");
       return;
     }
+    const now = Date.now();
+    if (now - lastProfileSaveRef.current < 1500) {
+      return;
+    }
+    lastProfileSaveRef.current = now;
     if (!isProfileValid) {
       setProfileError(
         "Renseigne ton pseudo pour sauvegarder le profil.",
@@ -611,15 +665,10 @@ export default function ProfilePage() {
     }
     setProfileSuccess("Profil sauvegardé.");
     setIsSavingProfile(false);
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-    const { error: grantError } = await supabase.functions.invoke(
-      "discord-grant-role",
-      {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      },
-    );
-    if (!grantError) {
+    const granted = await attemptGrantRole();
+    if (granted) {
+      setToastVariant("success");
+      setToastAction(null);
       setToastMessage(
         "Compte lié ! Vous avez maintenant accès aux salons Discord.",
       );
@@ -1324,8 +1373,36 @@ export default function ProfilePage() {
         }}
       />
       {toastMessage ? (
-        <div className="fixed left-1/2 top-6 z-[60] w-full max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border border-emerald-400/60 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-200 shadow-[0_0_25px_rgba(16,185,129,0.4)] sm:max-w-md">
-          {toastMessage}
+        <div
+          className={`fixed left-1/2 top-6 z-[60] w-full max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border px-4 py-3 text-center text-sm shadow-[0_0_25px_rgba(16,185,129,0.4)] sm:max-w-md ${
+            toastVariant === "error"
+              ? "border-red-500/60 bg-red-500/10 text-red-200 shadow-[0_0_25px_rgba(239,68,68,0.4)]"
+              : "border-emerald-400/60 bg-emerald-500/10 text-emerald-200"
+          }`}
+        >
+          <div>{toastMessage}</div>
+          {toastAction === "retry_grant" ? (
+            <button
+              type="button"
+              onClick={async () => {
+                if (isGrantingRole) {
+                  return;
+                }
+                setToastMessage("Nouvelle tentative en cours...");
+                const granted = await attemptGrantRole();
+                if (granted) {
+                  setToastVariant("success");
+                  setToastAction(null);
+                  setToastMessage(
+                    "Compte lié ! Vous avez maintenant accès aux salons Discord.",
+                  );
+                }
+              }}
+              className="mt-3 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs uppercase tracking-[0.25em] text-text/80 transition hover:border-white/30"
+            >
+              {isGrantingRole ? "Tentative..." : "Réessayer"}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

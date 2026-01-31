@@ -230,12 +230,19 @@ export default function RosterClient({
 }: RosterClientProps) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showDiscordConfigLink, setShowDiscordConfigLink] = useState(false);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [localSignups, setLocalSignups] = useState(signups);
   const [roleMenuUserId, setRoleMenuUserId] = useState<string | null>(null);
   const [roleUpdatingUserId, setRoleUpdatingUserId] = useState<string | null>(
     null,
   );
+  const [visibleCount, setVisibleCount] = useState(50);
+  const [guildOwnerId, setGuildOwnerId] = useState<string | null>(null);
+  const [guildConfigCache, setGuildConfigCache] = useState<{
+    raid_channel_id: string | null;
+    group_channel_id: string | null;
+  } | null>(null);
   const [localEventTitle, setLocalEventTitle] = useState(eventTitle);
   const [localEventType, setLocalEventType] = useState<string | null>(eventType);
   const [localEventStartTime, setLocalEventStartTime] =
@@ -374,11 +381,56 @@ export default function RosterClient({
     `event_id=eq.${eventId}`,
   );
 
+  useEffect(() => {
+    const loadGuildConfig = async () => {
+      const supabase = createClient();
+      if (!supabase) {
+        return;
+      }
+      const { data: eventRow } = await supabase
+        .from("events")
+        .select("guild_id")
+        .eq("id", eventId)
+        .maybeSingle();
+      if (!eventRow?.guild_id) {
+        return;
+      }
+      const { data: guild } = await supabase
+        .from("guilds")
+        .select("owner_id")
+        .eq("id", eventRow.guild_id)
+        .maybeSingle();
+      const ownerId = guild?.owner_id ?? null;
+      setGuildOwnerId(ownerId);
+      if (!ownerId) {
+        return;
+      }
+      const { data: guildConfig } = await supabase
+        .from("guild_configs")
+        .select("raid_channel_id,group_channel_id")
+        .eq("owner_id", ownerId)
+        .maybeSingle();
+      setGuildConfigCache(
+        guildConfig
+          ? {
+              raid_channel_id: guildConfig.raid_channel_id ?? null,
+              group_channel_id: guildConfig.group_channel_id ?? null,
+            }
+          : null,
+      );
+    };
+    void loadGuildConfig();
+  }, [eventId]);
+
   const sortedSignups = useMemo(() => {
     return [...localSignups].sort((a, b) =>
       a.ingameName.localeCompare(b.ingameName),
     );
   }, [localSignups]);
+  const visibleSignups = useMemo(
+    () => sortedSignups.slice(0, visibleCount),
+    [sortedSignups, visibleCount],
+  );
 
   const formattedEventDate = useMemo(() => {
     const date = new Date(localEventStartTime);
@@ -433,6 +485,7 @@ export default function RosterClient({
     }
     setIsPublishing(true);
     setActionError(null);
+    setShowDiscordConfigLink(false);
 
     const { error } = await supabase
       .from("events")
@@ -475,10 +528,6 @@ export default function RosterClient({
           }>
         | null;
     };
-    console.log(
-      "Données participant reçues :",
-      JSON.stringify(participants ?? [], null, 2),
-    );
     const groupedPlayers = participants ?? [];
     const notifyIds =
       groupedPlayers?.filter((player) => player.group_index !== null) ?? [];
@@ -501,28 +550,17 @@ export default function RosterClient({
     }
 
     const { data: authData } = await supabase.auth.getUser();
-    let ownerId = authData.user?.id ?? null;
-    const { data: eventRow } = await supabase
-      .from("events")
-      .select("guild_id")
-      .eq("id", eventId)
-      .maybeSingle();
-    if (eventRow?.guild_id) {
-      const { data: guild } = await supabase
-        .from("guilds")
-        .select("owner_id")
-        .eq("id", eventRow.guild_id)
-        .maybeSingle();
-      ownerId = guild?.owner_id ?? ownerId;
-    }
+    const ownerId = guildOwnerId ?? authData.user?.id ?? null;
     if (ownerId) {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
-      const { data: guildConfig } = await supabase
-        .from("guild_configs")
-        .select("raid_channel_id,group_channel_id")
-        .eq("owner_id", ownerId)
-        .maybeSingle();
+      const guildConfig =
+        guildConfigCache ??
+        (await supabase
+          .from("guild_configs")
+          .select("raid_channel_id,group_channel_id")
+          .eq("owner_id", ownerId)
+          .maybeSingle()).data;
 
       const targetChannelId =
         guildConfig?.group_channel_id ?? guildConfig?.raid_channel_id;
@@ -576,9 +614,6 @@ export default function RosterClient({
                           profile?.off_weapon ??
                           player.offWeapon ??
                           "Unknown";
-                        console.log(
-                          `Joueur: ${profile?.username} - Armes DB: ${rawMain} / ${rawOff}`,
-                        );
                         const effectiveRole = getEffectiveRole(player);
                         const mainEmoji = getWeaponEmoji(rawMain);
                         const offEmoji = getWeaponEmoji(rawOff);
@@ -622,6 +657,11 @@ export default function RosterClient({
             discordError.message || "Impossible d'annoncer les groupes sur Discord.",
           );
         }
+      } else {
+        setActionError(
+          "Aucun salon Discord configuré pour publier les groupes.",
+        );
+        setShowDiscordConfigLink(true);
       }
     }
 
@@ -653,7 +693,7 @@ export default function RosterClient({
             </div>
           ) : (
             <div className="space-y-3">
-              {sortedSignups.map((player) => {
+              {visibleSignups.map((player) => {
                 const effectiveRole = getEffectiveRole(player);
                 const roleLabel = getRoleLabel(effectiveRole);
                 const RoleIcon = getWeaponIcon(player.mainWeapon);
@@ -780,6 +820,15 @@ export default function RosterClient({
                   </div>
                 );
               })}
+              {sortedSignups.length > visibleCount ? (
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount((count) => count + 50)}
+                  className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-xs uppercase tracking-[0.25em] text-text/70 transition hover:border-white/30"
+                >
+                  Afficher plus
+                </button>
+              ) : null}
             </div>
           )}
         </div>
@@ -792,6 +841,14 @@ export default function RosterClient({
             <div className="rounded-2xl border border-red-500/60 bg-red-500/10 px-4 py-3 text-sm text-red-200">
               {actionError}
             </div>
+          ) : null}
+          {showDiscordConfigLink ? (
+            <Link
+              href="/admin/settings"
+              className="inline-flex items-center justify-center rounded-full border border-amber-400/40 bg-amber-500/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+            >
+              Configurer Discord
+            </Link>
           ) : null}
           {!permissionsReady ? (
             <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-text/60">

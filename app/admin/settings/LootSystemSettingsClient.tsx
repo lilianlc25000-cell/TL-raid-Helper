@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { usePermission } from "@/lib/hooks/usePermission";
 
 type LootSystemValue = "fcfs" | "roll" | "council";
 
@@ -44,7 +45,8 @@ export default function LootSystemSettingsClient({
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  const canEdit = Boolean(ownerId && hasGuildConfig);
+  const manageLoot = usePermission("manage_loot");
+  const canEdit = Boolean(ownerId && hasGuildConfig && manageLoot.allowed);
 
   const selectionLabel = useMemo(() => {
     const option = lootOptions.find((item) => item.value === selected);
@@ -91,6 +93,11 @@ export default function LootSystemSettingsClient({
       {!hasGuildConfig ? (
         <div className="mt-4 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           Connectez d'abord votre serveur Discord pour enregistrer ce réglage.
+        </div>
+      ) : null}
+      {hasGuildConfig && !manageLoot.loading && !manageLoot.allowed ? (
+        <div className="mt-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          Vous n'avez pas la permission de modifier ces paramètres.
         </div>
       ) : null}
 

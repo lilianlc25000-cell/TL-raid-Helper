@@ -1,9 +1,10 @@
 "use client";
 
 import type { DragEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Crosshair,
   Shield,
@@ -249,6 +250,11 @@ export default function RaidGroupsPage() {
   const [eventStartTime, setEventStartTime] = useState<string | null>(null);
   const [eventType, setEventType] = useState<string | null>(null);
   const [eventOwnerId, setEventOwnerId] = useState<string | null>(null);
+  const [guildConfigCache, setGuildConfigCache] = useState<{
+    raid_channel_id: string | null;
+    group_channel_id: string | null;
+    discord_guild_id: string | null;
+  } | null>(null);
   const [reserve, setReserve] = useState<PlayerCard[]>([]);
   const [groups, setGroups] = useState<GroupState[]>(
     Array.from({ length: 6 }, (_, index) => ({
@@ -262,6 +268,7 @@ export default function RaidGroupsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showDiscordConfigLink, setShowDiscordConfigLink] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<
     "present" | "tentative" | "bench" | "absent"
@@ -319,6 +326,56 @@ export default function RaidGroupsPage() {
         },
       ),
     [allPlayers],
+  );
+  const buildGroupField = useCallback((group: GroupState) => {
+    if (group.players.length === 0) {
+      return {
+        name: `Groupe ${group.id}`,
+        value: "—",
+        inline: true,
+      };
+    }
+    const tanks: string[] = [];
+    const dps: string[] = [];
+    const heals: string[] = [];
+    sortPlayersByRole(group.players).forEach((player) => {
+      const effectiveRole = getEffectiveRole(player);
+      const bucket = getRoleBucket(effectiveRole);
+      const name = player.ingameName;
+      const mainEmoji = getWeaponEmoji(player.mainWeapon);
+      const offEmoji = getWeaponEmoji(player.offWeapon);
+      const emojis = [mainEmoji, offEmoji].filter(Boolean).join(" ");
+      const emojiPrefix = emojis ? `${emojis} ` : "";
+      const line = `${emojiPrefix}${name}`;
+      if (bucket === "tank") {
+        tanks.push(line);
+      } else if (bucket === "heal") {
+        heals.push(line);
+      } else {
+        dps.push(line);
+      }
+    });
+    const formatTableEntries = (entries: string[]) =>
+      entries.length === 0 ? "" : entries.join("\n");
+    const sections = [
+      { title: "🛡️ Tanks", entries: tanks },
+      { title: "⚔️ DPS", entries: dps },
+      { title: "🌿 Heals", entries: heals },
+    ]
+      .filter((section) => section.entries.length > 0)
+      .map(
+        (section) =>
+          `**${section.title}**\n${formatTableEntries(section.entries)}`,
+      );
+    return {
+      name: `Groupe ${group.id}`,
+      value: sections.join("\n\n") || "—",
+      inline: true,
+    };
+  }, []);
+  const publishFields = useMemo(
+    () => groups.map((group) => buildGroupField(group)),
+    [groups, buildGroupField],
   );
 
   const formattedEventDate = useMemo(() => {
@@ -552,6 +609,30 @@ export default function RaidGroupsPage() {
       loadData();
     }
   }, [eventId]);
+
+  useEffect(() => {
+    const loadGuildConfig = async () => {
+      if (!eventOwnerId) {
+        return;
+      }
+      const supabase = createClient();
+      const { data: guildConfig } = await supabase
+        .from("guild_configs")
+        .select("raid_channel_id,group_channel_id,discord_guild_id")
+        .eq("owner_id", eventOwnerId)
+        .maybeSingle();
+      setGuildConfigCache(
+        guildConfig
+          ? {
+              raid_channel_id: guildConfig.raid_channel_id ?? null,
+              group_channel_id: guildConfig.group_channel_id ?? null,
+              discord_guild_id: guildConfig.discord_guild_id ?? null,
+            }
+          : null,
+      );
+    };
+    void loadGuildConfig();
+  }, [eventOwnerId]);
 
   const removeFromGroups = (playerId: string) => {
     setGroups((prev) =>
@@ -790,6 +871,7 @@ export default function RaidGroupsPage() {
     }
     setIsPublishing(true);
     setActionError(null);
+    setShowDiscordConfigLink(false);
 
     const saved = await persistGroups();
     if (!saved) {
@@ -829,11 +911,13 @@ export default function RaidGroupsPage() {
     if (ownerId) {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
-      const { data: guildConfig } = await supabase
-        .from("guild_configs")
-        .select("raid_channel_id,group_channel_id,discord_guild_id")
-        .eq("owner_id", ownerId)
-        .maybeSingle();
+      const guildConfig =
+        guildConfigCache ??
+        (await supabase
+          .from("guild_configs")
+          .select("raid_channel_id,group_channel_id,discord_guild_id")
+          .eq("owner_id", ownerId)
+          .maybeSingle()).data;
 
       const dayCategory = eventStartTime
         ? weekdayToDiscordCategory(getWeekdayKey(eventStartTime))
@@ -847,6 +931,7 @@ export default function RaidGroupsPage() {
         (dayCategory && !guildConfig?.discord_guild_id)
       ) {
         setActionError("Aucun salon Discord configuré pour publier les groupes.");
+        setShowDiscordConfigLink(true);
         setIsPublishing(false);
         return;
       }
@@ -854,55 +939,7 @@ export default function RaidGroupsPage() {
       const timestamp = eventStartTime
         ? Math.floor(new Date(eventStartTime).getTime() / 1000)
         : null;
-      const buildGroupField = (group: GroupState) => {
-        if (group.players.length === 0) {
-          return {
-            name: `Groupe ${group.id}`,
-            value: "—",
-            inline: true,
-          };
-        }
-        const tanks: string[] = [];
-        const dps: string[] = [];
-        const heals: string[] = [];
-        sortPlayersByRole(group.players).forEach((player) => {
-          const effectiveRole = getEffectiveRole(player);
-          const bucket = getRoleBucket(effectiveRole);
-          const mainEmoji = getWeaponEmoji(player.mainWeapon);
-          const offEmoji = getWeaponEmoji(player.offWeapon);
-          const emojis = [mainEmoji, offEmoji].filter(Boolean).join(" ");
-          const emojiPrefix = emojis ? `${emojis} ` : "";
-          const line = `${emojiPrefix}${player.ingameName}`;
-          if (bucket === "tank") {
-            tanks.push(line);
-          } else if (bucket === "heal") {
-            heals.push(line);
-          } else {
-            dps.push(line);
-          }
-        });
-        const formatTableEntries = (entries: string[]) =>
-          entries.length === 0 ? "" : entries.join("\n");
-        const sections = [
-          { title: "🛡️ Tanks", entries: tanks },
-          { title: "⚔️ DPS", entries: dps },
-          { title: "🌿 Heals", entries: heals },
-        ]
-          .filter((section) => section.entries.length > 0)
-          .map(
-            (section) =>
-              `**${section.title}**\n${formatTableEntries(section.entries)}`,
-          )
-          .join("\n\n");
-        return {
-          name: `Groupe ${group.id}`,
-          value: sections || "—",
-          inline: true,
-        };
-      };
-
-      const fields = groups.flatMap((group, index) => {
-        const groupField = buildGroupField(group);
+      const fields = publishFields.flatMap((groupField, index) => {
         const colIndex = index % 2;
         const isRowEnd = colIndex === 1;
         const isLast = index === groups.length - 1;
@@ -1106,6 +1143,14 @@ export default function RaidGroupsPage() {
           <div className="rounded-2xl border border-red-500/40 bg-red-950/30 px-6 py-4 text-sm text-red-200">
             {actionError}
           </div>
+        ) : null}
+        {showDiscordConfigLink ? (
+          <Link
+            href="/admin/settings"
+            className="inline-flex items-center justify-center rounded-full border border-amber-400/40 bg-amber-500/10 px-5 py-3 text-xs uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+          >
+            Configurer Discord
+          </Link>
         ) : null}
 
         <div className="grid gap-6 lg:grid-cols-[1fr_1.8fr]">

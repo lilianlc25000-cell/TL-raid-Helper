@@ -54,6 +54,8 @@ const respondJson = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: jsonHeaders });
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+let discordErrorCount = 0;
+const MAX_DISCORD_ERRORS = 5;
 
 const fetchDiscord = async <T>(
   url: string,
@@ -76,12 +78,15 @@ const fetchDiscord = async <T>(
     const waitMs = Number.isFinite(retrySeconds)
       ? Math.max(1, retrySeconds) * 1000
       : 1000;
-    console.log(`Rate Limit hit! Waiting ${waitMs}ms`);
     await sleep(waitMs);
     return fetchDiscord<T>(url, options, attempt + 1);
   }
   const responseText = await response.text().catch(() => "");
   if (!response.ok) {
+    discordErrorCount += 1;
+    if (discordErrorCount >= MAX_DISCORD_ERRORS) {
+      throw new Error("Discord API circuit breaker tripped");
+    }
     throw new Error(`Discord API error ${response.status}: ${responseText}`);
   }
   if (!responseText) {
@@ -107,6 +112,7 @@ serve(async (req) => {
   }
 
   try {
+    discordErrorCount = 0;
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const botToken = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
@@ -252,25 +258,73 @@ serve(async (req) => {
           (parentId === undefined ||
             (channel.parent_id ?? null) === parentId),
       );
+    const removeChannelById = (channelId: string) => {
+      channels = channels.filter((channel) => channel.id !== channelId);
+      channelsById.delete(channelId);
+      for (const [name, channel] of channelsByName) {
+        if (channel.id === channelId) {
+          channelsByName.delete(name);
+        }
+      }
+    };
+    const parseDiscordStatus = (error: unknown) => {
+      if (!(error instanceof Error)) {
+        return null;
+      }
+      const match = error.message.match(/Discord API error (\d+)/);
+      return match ? Number(match[1]) : null;
+    };
+    const deleteDiscordChannel = async (channelId: string) => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          await fetchDiscord(`${DISCORD_API_BASE}/channels/${channelId}`, {
+            method: "DELETE",
+            headers: discordHeaders,
+          });
+          removeChannelById(channelId);
+          return true;
+        } catch (error) {
+          const status = parseDiscordStatus(error);
+          if (status === 429 || (status !== null && status >= 500)) {
+            await sleep(1000 * (attempt + 1));
+            continue;
+          }
+          throw error;
+        }
+      }
+      return false;
+    };
 
-    const { data: managedRows, error: managedError } = await supabase
+    const warnings: string[] = [];
+    let managedRows: Array<{
+      kind: string;
+      day_key: string | null;
+      channel_id: string;
+    }> = [];
+    const { data: managedData, error: managedError } = await supabase
       .from("discord_channels")
       .select("kind,day_key,channel_id")
       .eq("owner_id", authData.user.id);
 
     if (managedError) {
       console.error("discord-provision: managed channels error", managedError);
-      return respondJson(500, { error: "Impossible de lire les salons gérés." });
+      warnings.push(
+        "Table discord_channels indisponible, fallback par nom.",
+      );
+    } else {
+      managedRows = (managedData ?? []) as Array<{
+        kind: string;
+        day_key: string | null;
+        channel_id: string;
+      }>;
     }
 
     const managedByKey = new Map(
-      (managedRows ?? []).map((row) => [
+      managedRows.map((row) => [
         `${row.kind}:${row.day_key ?? ""}`,
         row as { kind: string; day_key: string | null; channel_id: string },
       ]),
     );
-
-    const warnings: string[] = [];
 
     const ensureCategory = async (
       name: string,
@@ -384,15 +438,9 @@ serve(async (req) => {
       if (!existing) {
         return;
       }
-      const deleteResult = await fetchDiscord(
-        `${DISCORD_API_BASE}/channels/${existing.id}`,
-        {
-          method: "DELETE",
-          headers: discordHeaders,
-        },
-      );
-      if (!deleteResult.ok) {
-        console.error("discord-provision: delete failed", deleteResult);
+      const deleted = await deleteDiscordChannel(existing.id);
+      if (!deleted) {
+        console.error("discord-provision: delete failed", existing.id);
       }
     };
 
@@ -402,15 +450,9 @@ serve(async (req) => {
           channel.name === name && (type === undefined || channel.type === type),
       );
       for (const channel of matches) {
-        const deleteResult = await fetchDiscord(
-          `${DISCORD_API_BASE}/channels/${channel.id}`,
-          {
-            method: "DELETE",
-            headers: discordHeaders,
-          },
-        );
-        if (!deleteResult.ok) {
-          console.error("discord-provision: delete failed", deleteResult);
+        const deleted = await deleteDiscordChannel(channel.id);
+        if (!deleted) {
+          console.error("discord-provision: delete failed", channel.id);
         }
       }
     };
@@ -423,10 +465,7 @@ serve(async (req) => {
       }
       const existing = channelsById.get(managed.channel_id);
       if (existing) {
-        await fetchDiscord(`${DISCORD_API_BASE}/channels/${existing.id}`, {
-          method: "DELETE",
-          headers: discordHeaders,
-        });
+        await deleteDiscordChannel(existing.id);
       }
       const deleteQuery = supabase
         .from("discord_channels")
@@ -496,12 +535,6 @@ serve(async (req) => {
           ) {
             throw new Error("Category ID missing");
           }
-          console.log(
-            "Updating channel",
-            existing.id,
-            "into parent",
-            parentId,
-          );
           const patchResult = await fetchDiscord(
             `${DISCORD_API_BASE}/channels/${existing.id}`,
             {
@@ -518,6 +551,15 @@ serve(async (req) => {
           if (!patchResult.ok) {
             console.error("discord-provision: channel patch failed", patchResult);
             warnings.push(`Impossible de mettre à jour le salon ${name}.`);
+          } else {
+            const previousName = existing.name;
+            existing.name = name;
+            existing.parent_id = parentId;
+            channelsById.set(existing.id, existing);
+            if (previousName !== name) {
+              channelsByName.delete(previousName);
+            }
+            channelsByName.set(name, existing);
           }
         }
         return { channel: existing, created: false };
@@ -541,6 +583,7 @@ serve(async (req) => {
         console.error("discord-provision: channel create failed", createResult);
         throw new Error(`Impossible de créer le salon ${name}.`);
       }
+      channels.push(createResult.data);
       channelsByName.set(name, createResult.data);
       channelsById.set(createResult.data.id, createResult.data);
       await upsertManagedChannel(kind, dayKey, createResult.data.id);
@@ -559,43 +602,17 @@ serve(async (req) => {
         (channel) => channel.parent_id && categoryIds.has(channel.parent_id),
       );
       for (const child of children) {
-        const deleteResult = await fetchDiscord(
-          `${DISCORD_API_BASE}/channels/${child.id}`,
-          {
-            method: "DELETE",
-            headers: discordHeaders,
-          },
-        );
-        if (!deleteResult.ok) {
-          console.error("discord-provision: delete child failed", deleteResult);
+        const deleted = await deleteDiscordChannel(child.id);
+        if (!deleted) {
+          console.error("discord-provision: delete child failed", child.id);
         }
       }
       for (const category of categories) {
-        const deleteResult = await fetchDiscord(
-          `${DISCORD_API_BASE}/channels/${category.id}`,
-          {
-            method: "DELETE",
-            headers: discordHeaders,
-          },
-        );
-        if (!deleteResult.ok) {
-          console.error("discord-provision: delete failed", deleteResult);
+        const deleted = await deleteDiscordChannel(category.id);
+        if (!deleted) {
+          console.error("discord-provision: delete failed", category.id);
         }
       }
-    };
-
-    const refreshChannels = async () => {
-      const refreshed = await fetchDiscord<DiscordChannel[]>(
-        `${DISCORD_API_BASE}/guilds/${guildId}/channels`,
-        { headers: { Authorization: `Bot ${botToken}` } },
-      );
-      if (!refreshed.ok) {
-        console.error("discord-provision: channels refresh failed", refreshed);
-        return;
-      }
-      channels = refreshed.data ?? [];
-      channelsByName.clear();
-      channels.forEach((channel) => channelsByName.set(channel.name, channel));
     };
 
     const reconcileCategory = async (
@@ -609,12 +626,7 @@ serve(async (req) => {
           !expectedSet.has(channel.id),
       );
       await Promise.all(
-        orphans.map((channel) =>
-          fetchDiscord(`${DISCORD_API_BASE}/channels/${channel.id}`, {
-            method: "DELETE",
-            headers: discordHeaders,
-          }),
-        ),
+        orphans.map((channel) => deleteDiscordChannel(channel.id)),
       );
     };
 
@@ -743,7 +755,6 @@ serve(async (req) => {
     if (inscriptionResult.created) {
       await postWelcomeMessage(inscriptionResult.channel.id);
     }
-    await refreshChannels();
     await reconcileCategory(rootCategory.channel.id, [inscriptionResult.channel.id]);
 
     let planningResult: { channel: DiscordChannel; created: boolean } | null =
@@ -789,7 +800,6 @@ serve(async (req) => {
         planningResult = first.dayInscription;
         groupsResult = first.dayGroup;
       }
-      await refreshChannels();
       await Promise.all(
         dayResults.map((result) =>
           reconcileCategory(result.dayCategory.channel.id, [
@@ -896,7 +906,6 @@ serve(async (req) => {
       const expectedLootIds = lootResults
         .map((result) => result.id)
         .filter((id): id is string => Boolean(id));
-      await refreshChannels();
       await reconcileCategory(lootCategory.channel.id, expectedLootIds);
     }
 
@@ -1003,7 +1012,6 @@ serve(async (req) => {
       activityChannel = activityResult?.id
         ? { channel: { id: activityResult.id, name: ACTIVITY_CHANNEL } }
         : null;
-      await refreshChannels();
       await reconcileCategory(miscCategory.channel.id, expectedMiscIds);
     }
 
