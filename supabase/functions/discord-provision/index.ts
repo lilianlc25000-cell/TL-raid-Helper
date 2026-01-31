@@ -732,6 +732,8 @@ serve(async (req) => {
     if (inscriptionResult.created) {
       await postWelcomeMessage(inscriptionResult.channel.id);
     }
+    await refreshChannels();
+    await reconcileCategory(rootCategory.channel.id, [inscriptionResult.channel.id]);
 
     let planningResult: { channel: DiscordChannel; created: boolean } | null =
       null;
@@ -815,38 +817,43 @@ serve(async (req) => {
     }
 
     if (lootCategory) {
-      let lootPosition = 0;
-      const expectedLootIds: string[] = [];
+      const lootOps: Array<Promise<{ id?: string }>> = [];
       if (channelConfig.wishlist) {
-        const wishlist = await ensureManagedChannel(
-          "wishlist_channel",
-          null,
-          WISHLIST_CHANNEL,
-          privateOverwrites,
-          {
-            parentId: lootCategory.channel.id,
-            position: lootPosition++,
-          },
+        lootOps.push(
+          ensureManagedChannel(
+            "wishlist_channel",
+            null,
+            WISHLIST_CHANNEL,
+            privateOverwrites,
+            {
+              parentId: lootCategory.channel.id,
+              position: 0,
+            },
+          ).then((res) => ({ id: res.channel.id })),
         );
-        expectedLootIds.push(wishlist.channel.id);
       } else {
-        await deleteManagedChannel("wishlist_channel", null);
+        lootOps.push(deleteManagedChannel("wishlist_channel", null).then(() => ({})));
       }
       if (channelConfig.loot) {
-        const loot = await ensureManagedChannel(
-          "loot_channel",
-          null,
-          LOOT_CHANNEL,
-          privateOverwrites,
-          {
-            parentId: lootCategory.channel.id,
-            position: lootPosition++,
-          },
+        lootOps.push(
+          ensureManagedChannel(
+            "loot_channel",
+            null,
+            LOOT_CHANNEL,
+            privateOverwrites,
+            {
+              parentId: lootCategory.channel.id,
+              position: channelConfig.wishlist ? 1 : 0,
+            },
+          ).then((res) => ({ id: res.channel.id })),
         );
-        expectedLootIds.push(loot.channel.id);
       } else {
-        await deleteManagedChannel("loot_channel", null);
+        lootOps.push(deleteManagedChannel("loot_channel", null).then(() => ({})));
       }
+      const lootResults = await Promise.all(lootOps);
+      const expectedLootIds = lootResults
+        .map((result) => result.id)
+        .filter((id): id is string => Boolean(id));
       await refreshChannels();
       await reconcileCategory(lootCategory.channel.id, expectedLootIds);
     }
@@ -870,54 +877,68 @@ serve(async (req) => {
     }
 
     if (miscCategory) {
-      let miscPosition = 0;
-      const expectedMiscIds: string[] = [];
+      const miscOps: Array<Promise<{ id?: string; kind?: string }>> = [];
       if (channelConfig.dps_meter) {
-        const dps = await ensureManagedChannel(
-          "dps_channel",
-          null,
-          DPS_CHANNEL,
-          privateOverwrites,
-          {
-            parentId: miscCategory.channel.id,
-            position: miscPosition++,
-          },
+        miscOps.push(
+          ensureManagedChannel(
+            "dps_channel",
+            null,
+            DPS_CHANNEL,
+            privateOverwrites,
+            {
+              parentId: miscCategory.channel.id,
+              position: 0,
+            },
+          ).then((res) => ({ id: res.channel.id, kind: "dps" })),
         );
-        expectedMiscIds.push(dps.channel.id);
       } else {
-        await deleteManagedChannel("dps_channel", null);
+        miscOps.push(deleteManagedChannel("dps_channel", null).then(() => ({})));
       }
       if (channelConfig.activity_points) {
-        activityChannel = await ensureManagedChannel(
-          "activity_channel",
-          null,
-          ACTIVITY_CHANNEL,
-          privateOverwrites,
-          {
-            parentId: miscCategory.channel.id,
-            position: miscPosition++,
-          },
+        miscOps.push(
+          ensureManagedChannel(
+            "activity_channel",
+            null,
+            ACTIVITY_CHANNEL,
+            privateOverwrites,
+            {
+              parentId: miscCategory.channel.id,
+              position: channelConfig.dps_meter ? 1 : 0,
+            },
+          ).then((res) => ({ id: res.channel.id, kind: "activity" })),
         );
-        expectedMiscIds.push(activityChannel.channel.id);
       } else {
-        await deleteManagedChannel("activity_channel", null);
-        activityChannel = null;
+        miscOps.push(
+          deleteManagedChannel("activity_channel", null).then(() => ({})),
+        );
       }
       if (channelConfig.polls) {
-        const poll = await ensureManagedChannel(
-          "poll_channel",
-          null,
-          POLL_CHANNEL,
-          privateOverwrites,
-          {
-            parentId: miscCategory.channel.id,
-            position: miscPosition++,
-          },
+        const position =
+          (channelConfig.dps_meter ? 1 : 0) +
+          (channelConfig.activity_points ? 1 : 0);
+        miscOps.push(
+          ensureManagedChannel(
+            "poll_channel",
+            null,
+            POLL_CHANNEL,
+            privateOverwrites,
+            {
+              parentId: miscCategory.channel.id,
+              position,
+            },
+          ).then((res) => ({ id: res.channel.id, kind: "poll" })),
         );
-        expectedMiscIds.push(poll.channel.id);
       } else {
-        await deleteManagedChannel("poll_channel", null);
+        miscOps.push(deleteManagedChannel("poll_channel", null).then(() => ({})));
       }
+      const miscResults = await Promise.all(miscOps);
+      const expectedMiscIds = miscResults
+        .map((result) => result.id)
+        .filter((id): id is string => Boolean(id));
+      const activityResult = miscResults.find((result) => result.kind === "activity");
+      activityChannel = activityResult?.id
+        ? { channel: { id: activityResult.id, name: ACTIVITY_CHANNEL } }
+        : null;
       await refreshChannels();
       await reconcileCategory(miscCategory.channel.id, expectedMiscIds);
     }
