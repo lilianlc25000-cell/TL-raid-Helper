@@ -430,6 +430,12 @@ serve(async (req) => {
             options?.parentId !== undefined
               ? options.parentId
               : existing.parent_id ?? null;
+          if (
+            options?.type !== CATEGORY_TYPE &&
+            options?.parentId === undefined
+          ) {
+            throw new Error("Category ID missing");
+          }
           const patchResult = await fetchDiscord(
             `${DISCORD_API_BASE}/channels/${existing.id}`,
             {
