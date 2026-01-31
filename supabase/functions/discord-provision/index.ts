@@ -457,6 +457,7 @@ serve(async (req) => {
     }
 
     let miscCategory: { channel: DiscordChannel } | null = null;
+    let activityChannel: { channel: DiscordChannel } | null = null;
     if (
       channelConfig.dps_meter ||
       channelConfig.activity_points ||
@@ -481,12 +482,13 @@ serve(async (req) => {
         await deleteChannel(DPS_CHANNEL);
       }
       if (channelConfig.activity_points) {
-        await ensureChannel(ACTIVITY_CHANNEL, privateOverwrites, {
+        activityChannel = await ensureChannel(ACTIVITY_CHANNEL, privateOverwrites, {
           parentId: miscCategory.channel.id,
           position: miscPosition++,
         });
       } else {
         await deleteChannel(ACTIVITY_CHANNEL);
+        activityChannel = null;
       }
       if (channelConfig.polls) {
         await ensureChannel(POLL_CHANNEL, privateOverwrites, {
@@ -504,6 +506,7 @@ serve(async (req) => {
         raid_channel_id: planningResult?.channel.id ?? null,
         group_channel_id: groupsResult?.channel.id ?? null,
         discord_member_role_id: memberRole.id,
+        activity_channel_id: activityChannel?.channel.id ?? null,
       })
       .eq("owner_id", authData.user.id);
 

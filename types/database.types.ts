@@ -14,6 +14,7 @@ export type Database = {
           id: string;
           user_id: string;
           guild_id: string | null;
+          discord_user_id: string | null;
           ingame_name: string;
           main_weapon: string | null;
           off_weapon: string | null;
@@ -30,6 +31,7 @@ export type Database = {
           id?: string;
           user_id: string;
           guild_id?: string | null;
+          discord_user_id?: string | null;
           ingame_name: string;
           main_weapon?: string | null;
           off_weapon?: string | null;
@@ -46,6 +48,7 @@ export type Database = {
           id?: string;
           user_id?: string;
           guild_id?: string | null;
+          discord_user_id?: string | null;
           ingame_name?: string;
           main_weapon?: string | null;
           off_weapon?: string | null;
@@ -150,6 +153,7 @@ export type Database = {
           discord_guild_id: string;
           discord_guild_name: string | null;
           discord_member_role_id: string | null;
+          activity_channel_id: string | null;
           group_channel_id: string | null;
           raid_channel_id: string | null;
           loot_system: string | null;
@@ -163,6 +167,7 @@ export type Database = {
           discord_guild_id: string;
           discord_guild_name?: string | null;
           discord_member_role_id?: string | null;
+          activity_channel_id?: string | null;
           group_channel_id?: string | null;
           raid_channel_id?: string | null;
           loot_system?: string | null;
@@ -176,6 +181,7 @@ export type Database = {
           discord_guild_id?: string;
           discord_guild_name?: string | null;
           discord_member_role_id?: string | null;
+          activity_channel_id?: string | null;
           group_channel_id?: string | null;
           raid_channel_id?: string | null;
           loot_system?: string | null;
@@ -191,6 +197,7 @@ export type Database = {
           user_id: string | null;
           points: number;
           source: string;
+          image_url: string | null;
           created_at: string;
         };
         Insert: {
@@ -199,6 +206,7 @@ export type Database = {
           user_id?: string | null;
           points: number;
           source?: string;
+          image_url?: string | null;
           created_at?: string;
         };
         Update: {
@@ -207,6 +215,7 @@ export type Database = {
           user_id?: string | null;
           points?: number;
           source?: string;
+          image_url?: string | null;
           created_at?: string;
         };
       };

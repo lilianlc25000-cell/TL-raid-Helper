@@ -821,12 +821,20 @@ export default function RaidGroupsPage() {
 
       const fields = groups.flatMap((group, index) => {
         const groupField = buildGroupField(group);
-        const isRowEnd = (index + 1) % 3 === 0;
+        const colIndex = index % 3;
+        const isRowEnd = colIndex === 2;
         const isLast = index === groups.length - 1;
-        if (isRowEnd && !isLast) {
-          return [groupField, { name: "\u200B", value: "\u200B", inline: false }];
-        }
-        return [groupField];
+        const columnGaps = isRowEnd
+          ? []
+          : [
+              { name: "\u200B", value: "\u200B", inline: true },
+              { name: "\u200B", value: "\u200B", inline: true },
+            ];
+        const rowGap =
+          isRowEnd && !isLast
+            ? [{ name: "\u200B", value: "\u200B", inline: false }]
+            : [];
+        return [groupField, ...columnGaps, ...rowGap];
       });
 
       const imageUrl = getEventImageUrl(eventType);

@@ -63,6 +63,15 @@ serve(async (req) => {
       throw new Error("Aucune guilde associée au profil")
     }
 
+    const { error: discordLinkError } = await adminClient
+      .from('profiles')
+      .update({ discord_user_id: discordUserId })
+      .eq('user_id', user.id)
+
+    if (discordLinkError) {
+      throw new Error("Impossible d'enregistrer l'ID Discord")
+    }
+
     const { data: guild, error: guildError } = await adminClient
       .from('guilds')
       .select('owner_id')

@@ -45,6 +45,7 @@ serve(async (req) => {
       user_id?: string;
       guild_id?: string;
       source?: string;
+      image_url?: string;
     };
 
     if (!body.image_base64) {
@@ -140,6 +141,7 @@ serve(async (req) => {
         user_id: resolvedUserId,
         points,
         source: body.source ?? "app",
+        image_url: body.image_url ?? null,
       });
     }
 
