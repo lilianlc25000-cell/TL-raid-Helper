@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   UserRound,
   Users,
+  Map,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
@@ -62,6 +63,16 @@ const tools = [
     accent: "from-amber-500/20 via-amber-500/10 to-red-500/10",
     border: "border-amber-400/40",
     text: "text-amber-200",
+    gate: "admin_only",
+  },
+  {
+    title: "Table de Commandement",
+    description: "Carte tactique pour la stratégie de guilde",
+    href: "/admin/strategy",
+    icon: Map,
+    accent: "from-zinc-500/20 via-zinc-500/10 to-emerald-400/10",
+    border: "border-emerald-400/40",
+    text: "text-emerald-200",
     gate: "admin_only",
   },
   {
